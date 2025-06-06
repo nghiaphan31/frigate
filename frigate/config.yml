@@ -1,0 +1,126 @@
+mqtt:
+  host: 192.168.1.24
+  port: 1883
+  user: mosquito
+  password: mosquito
+  topic_prefix: frigate
+
+
+# ─────────────── SIX RING SNAPSHOT CAMERAS ───────────────
+cameras:
+
+  allee_sur_le_cote:
+    ffmpeg:
+      inputs:
+        - path: http://192.168.1.24:8123/api/camera_proxy/camera.camera_allee_sur_le_cote_snapshot
+          roles: [detect]
+          input_args:
+            - "-re"
+            - "-headers"
+            - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
+            - "-loop"
+            - "1"                                               # quoted → stays string
+            - "-f"
+            - "image2pipe"
+    detect:
+      width: 1280
+      height: 720
+      fps: 1
+    objects:
+      track: [person]
+    record:
+      enabled: false
+    snapshots:
+      enabled: false
+
+  jardin_devant:
+    ffmpeg:
+      inputs:
+        - path: http://192.168.1.24:8123/api/camera_proxy/camera.camera_jardin_devant_snapshot
+          roles: [detect]
+          input_args:
+            - "-re"
+            - "-headers"
+            - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
+            - "-loop"
+            - "1"                                               # quoted → stays string
+            - "-f"
+            - "image2pipe"
+    detect: {width: 1280, height: 720, fps: 1}
+    objects: {track: [person]}
+    record: {enabled: false}
+    snapshots: {enabled: false}
+
+  piscine_vue_toit:
+    ffmpeg:
+      inputs:
+        - path: http://192.168.1.24:8123/api/camera_proxy/camera.camera_piscine_vue_toit_snapshot
+          roles: [detect]
+          input_args:
+            - "-re"
+            - "-headers"
+            - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
+            - "-loop"
+            - "1"                                               # quoted → stays string
+            - "-f"
+            - "image2pipe"
+    detect: {width: 1280, height: 720, fps: 1}
+    objects: {track: [person]}
+    record: {enabled: false}
+    snapshots: {enabled: false}
+
+  vue_sur_entree_dev:
+    ffmpeg:
+      inputs:
+        - path: http://192.168.1.24:8123/api/camera_proxy/camera.camera_vue_sur_entree_dev_snapshot
+          roles: [detect]
+          input_args:
+            - "-re"
+            - "-headers"
+            - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
+            - "-loop"
+            - "1"                                               # quoted → stays string
+            - "-f"
+            - "image2pipe"
+    detect: {width: 1280, height: 720, fps: 1}
+    objects: {track: [person]}
+    record: {enabled: false}
+    snapshots: {enabled: false}
+
+  jardin_arriere:
+    ffmpeg:
+      inputs:
+        - path: http://192.168.1.24:8123/api/camera_proxy/camera.camera_jardin_arriere_snapshot
+          roles: [detect]
+          input_args:
+            - "-re"
+            - "-headers"
+            - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
+            - "-loop"
+            - "1"                                               # quoted → stays string
+            - "-f"
+            - "image2pipe"
+    detect: {width: 1280, height: 720, fps: 1}
+    objects: {track: [person]}
+    record: {enabled: false}
+    snapshots: {enabled: false}
+
+  sonnette_video_wired:
+    ffmpeg:
+      inputs:
+        - path: http://192.168.1.24:8123/api/camera_proxy/camera.sonnette_video_wired_snapshot
+          roles: [detect]
+          input_args:
+            - "-re"
+            - "-headers"
+            - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
+            - "-loop"
+            - "1"                                               # quoted → stays string
+            - "-f"
+            - "image2pipe"
+    detect: {width: 1280, height: 720, fps: 1}
+    objects: {track: [person]}
+    record: {enabled: false}
+    snapshots: {enabled: false}
+version: 0.15-1
+
