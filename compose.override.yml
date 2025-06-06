@@ -1,0 +1,72 @@
+
+# ------------------------------
+# All other services you had commented out stay untouched
+# ------------------------------
+
+# ------------------------------
+# All other services are disabled for now
+# ------------------------------
+
+#  redis:
+#    image: redis:alpine
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "redis-cli", "ping"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 5
+#      start_period: 30s
+
+#  mariadb:
+#    image: mariadb:10
+#    restart: unless-stopped
+#    environment:
+#      MYSQL_ROOT_PASSWORD: paperless
+#      MYSQL_DATABASE: paperless
+#      MYSQL_USER: paperless
+#      MYSQL_PASSWORD: paperless
+#    volumes:
+#      - ./data/mariadb:/var/lib/mysql
+#    healthcheck:
+#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 5
+#      start_period: 30s
+
+#  paperless:
+#    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+#    restart: unless-stopped
+#    ports:
+#      - "8000:8000"
+#    volumes:
+#      - /volume1/paperless/data:/usr/src/paperless/data
+#      - /volume1/paperless/media:/usr/src/paperless/media
+#      - /volume1/paperless/export:/usr/src/paperless/export
+#      - /volume1/paperless/consume:/usr/src/paperless/consume
+#    environment:
+#      PAPERLESS_ADMIN_USER: "admin"
+#      PAPERLESS_ADMIN_PASSWORD: "adminpass"
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#      start_period: 30s
+
+#  photoprism:
+#    image: photoprism/photoprism:latest
+#    restart: unless-stopped
+#    ports:
+#      - "2342:2342"
+#    volumes:
+#      - /volume1/photo:/photoprism/originals
+#      - /volume1/photoprism:/photoprism/storage
+#    environment:
+#      PHOTOPRISM_ADMIN_PASSWORD: "photopass"
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:2342"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#      start_period: 30s

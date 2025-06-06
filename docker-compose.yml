@@ -1,0 +1,38 @@
+services:
+  frigate:
+    container_name: frigate
+    # you can stay on :stable or pin a specific 0.13+ tag
+    image: ghcr.io/blakeblackshear/frigate:stable
+    privileged: true
+    restart: unless-stopped
+    shm_size: "512mb"
+
+    # ────────▶ expose go2rtc & WebRTC ◀────────
+    ports:
+      - "5000:5000"         # Frigate UI / API (unchanged)
+      - "8554:8554"         # go2rtc RTSP proxy
+      - "8555:8555/tcp"     # go2rtc WebRTC TCP
+      - "8555:8555/udp"     # go2rtc WebRTC UDP
+      - "1984:1984"         # go2rtc HTTP API & Web UI
+    # ───────────────────────────────────────────
+
+    volumes:
+      - ./frigate/config.yml:/config/config.yml
+      - ./frigate/go2rtc.yaml:/config/go2rtc.yaml   # if you keep it side-by-side
+      - /media/frigate:/media/frigate
+      - /dev/bus/usb:/dev/bus/usb
+      - /etc/localtime:/etc/localtime:ro
+
+    environment:
+      FRIGATE_RTSP_PASSWORD: "fG-56lui"
+      # allow Frigate to reach the Mosquitto broker on 192.168.1.24
+      MQTT_HOST: "192.168.1.24"
+      MQTT_USER: "mosquito"
+      MQTT_PASSWORD: "mosquito"
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
