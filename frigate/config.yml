@@ -18,8 +18,8 @@ cameras:
             - "-re"
             - "-headers"
             - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
-            - "-loop"
-            - "1"                                               # quoted → stays string
+            - "-r"
+            - "1"
             - "-f"
             - "image2pipe"
     detect:
@@ -42,8 +42,8 @@ cameras:
             - "-re"
             - "-headers"
             - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
-            - "-loop"
-            - "1"                                               # quoted → stays string
+            - "-r"
+            - "1"
             - "-f"
             - "image2pipe"
     detect: {width: 1280, height: 720, fps: 1}
@@ -60,8 +60,8 @@ cameras:
             - "-re"
             - "-headers"
             - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
-            - "-loop"
-            - "1"                                               # quoted → stays string
+            - "-r"
+            - "1"
             - "-f"
             - "image2pipe"
     detect: {width: 1280, height: 720, fps: 1}
@@ -78,8 +78,8 @@ cameras:
             - "-re"
             - "-headers"
             - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
-            - "-loop"
-            - "1"                                               # quoted → stays string
+            - "-r"
+            - "1"
             - "-f"
             - "image2pipe"
     detect: {width: 1280, height: 720, fps: 1}
@@ -96,8 +96,8 @@ cameras:
             - "-re"
             - "-headers"
             - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
-            - "-loop"
-            - "1"                                               # quoted → stays string
+            - "-r"
+            - "1"
             - "-f"
             - "image2pipe"
     detect: {width: 1280, height: 720, fps: 1}
@@ -114,8 +114,8 @@ cameras:
             - "-re"
             - "-headers"
             - "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NGYyYmI3M2UzNjE0ZTc5OTZiODU2ZDdlY2EzZWE5NyIsImlhdCI6MTc0OTIzNDg1OSwiZXhwIjoyMDY0NTk0ODU5fQ.SvQ8VNy0vLXjllKLgGOcH1mNffO-EIuXz_iVRHCii2g\r\n"   # <── keep the \r\n
-            - "-loop"
-            - "1"                                               # quoted → stays string
+            - "-r"
+            - "1"
             - "-f"
             - "image2pipe"
     detect: {width: 1280, height: 720, fps: 1}
