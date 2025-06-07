@@ -1,0 +1,12 @@
+# ► runtime data that should stay out of Git
+/data/**
+frigate/recordings/
+*.log
+
+# ► Docker artefacts
+**/tmp/
+**/*-cache/
+
+# ► OS noise
+.DS_Store
+Thumbs.db
