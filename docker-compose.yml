@@ -18,7 +18,8 @@ services:
 
     volumes:
       - ./frigate/config.yml:/config/config.yml
-      - ./frigate/go2rtc.yaml:/config/go2rtc.yaml   # if you keep it side-by-side
+      - ./frigate/go2rtc.yaml:/config/go2rtc.yaml:ro
+
       - /media/frigate:/media/frigate
       - /dev/bus/usb:/dev/bus/usb
       - /etc/localtime:/etc/localtime:ro

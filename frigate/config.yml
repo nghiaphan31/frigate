@@ -17,63 +17,90 @@ record:
 detect:
   enabled: true
 
-snapshots:
-  enabled: true
-  retain:
-    default: 7
-
-
 ffmpeg:
-  input_args: preset-rtsp-restream   # good for go2rtc / ring-mqtt
-  retry_interval: 30                 # wait 30 s before reconnect
-  # hwaccel_args: preset-intel-qsv   # uncomment if you have an iGPU
+  input_args: preset-rtsp-restream
+  retry_interval: 30
+
+go2rtc:
+  streams:
+    allee_sur_le_cote:
+      - rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74df743_live
+      - ffmpeg:cache=120
+    jardin_devant:
+      - rtsp://frigate:frigate@192.168.1.24:8554/10cea9f26407_live
+      - ffmpeg:cache=120
+    piscine_vue_toit:
+      - rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74f37f3_live
+      - ffmpeg:cache=120
+    vue_sur_entree_dev:
+      - rtsp://frigate:frigate@192.168.1.24:8554/9c761310bb9c_live
+      - ffmpeg:cache=120
+    jardin_arriere:
+      - rtsp://frigate:frigate@192.168.1.24:8554/9c761310afad_live
+      - ffmpeg:cache=120
+    sonnette_video_wired:
+      - rtsp://frigate:frigate@192.168.1.24:8554/343ea4da33f2_live
+      - ffmpeg:cache=120
 
 cameras:
-
   camera_allee_sur_le_cote:
     ffmpeg:
       inputs:
-        - path: rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74df743_live
+        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote
           roles: [detect, record]
-    detect: {width: 1920, height: 1080, fps: 5}
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
 
   camera_jardin_devant:
     ffmpeg:
       inputs:
-        - path: rtsp://frigate:frigate@192.168.1.24:8554/10cea9f26407_live
+        - path: rtsp://127.0.0.1:8554/jardin_devant
           roles: [detect, record]
-    detect: {width: 1920, height: 1080, fps: 5}
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
 
   camera_piscine_vue_toit:
     ffmpeg:
       inputs:
-        - path: rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74f37f3_live
+        - path: rtsp://127.0.0.1:8554/piscine_vue_toit
           roles: [detect, record]
-    detect: {width: 1920, height: 1080, fps: 5}
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
 
   camera_vue_sur_entree_dev:
     ffmpeg:
       inputs:
-        - path: rtsp://frigate:frigate@192.168.1.24:8554/9c761310bb9c_live
+        - path: rtsp://127.0.0.1:8554/vue_sur_entree_dev
           roles: [detect, record]
-    detect: {width: 1920, height: 1080, fps: 5}
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
 
   camera_jardin_arriere:
     ffmpeg:
       inputs:
-        - path: rtsp://frigate:frigate@192.168.1.24:8554/9c761310afad_live
+        - path: rtsp://127.0.0.1:8554/jardin_arriere
           roles: [detect, record]
-    detect: {width: 1920, height: 1080, fps: 5}
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
 
   sonnette_video_wired:
     ffmpeg:
       inputs:
-        - path: rtsp://frigate:frigate@192.168.1.24:8554/343ea4da33f2_live
+        - path: rtsp://127.0.0.1:8554/sonnette_video_wired
           roles: [detect, record]
-    detect: {width: 1920, height: 1080, fps: 5}
-version: 0.15-1
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
 
-# detectors:
-#   coral:
-#     type: edgetpu
-#     device: usb
+version: 0.15-1
