@@ -83,7 +83,7 @@ services:
     - 9090:9090
     restart: unless-stopped
     volumes:
-    - ./prometheus:/etc/prometheus
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     - prometheus_data:/prometheus
 volumes:
   grafana_data: {}
