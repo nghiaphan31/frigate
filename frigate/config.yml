@@ -21,26 +21,47 @@ ffmpeg:
   input_args: preset-rtsp-restream
   retry_interval: 30
 
+snapshots:
+  enabled: true
+  timestamp: true
+  bounding_box: true
+  retain:
+    default: 5
+    objects:
+      person: 30  
+
 go2rtc:
   streams:
     allee_sur_le_cote:
       - rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74df743_live
       - ffmpeg:cache=120
+      - ffmpeg:analyze_duration=0
+      - ffmpeg:video=copy#audio=none#analyze_duration=0
     jardin_devant:
       - rtsp://frigate:frigate@192.168.1.24:8554/10cea9f26407_live
       - ffmpeg:cache=120
+      - ffmpeg:analyze_duration=0
+      - ffmpeg:video=copy#audio=none#analyze_duration=0
     piscine_vue_toit:
       - rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74f37f3_live
       - ffmpeg:cache=120
+      - ffmpeg:analyze_duration=0
+      - ffmpeg:video=copy#audio=none#analyze_duration=0
     vue_sur_entree_dev:
       - rtsp://frigate:frigate@192.168.1.24:8554/9c761310bb9c_live
       - ffmpeg:cache=120
+      - ffmpeg:analyze_duration=0
+      - ffmpeg:video=copy#audio=none#analyze_duration=0
     jardin_arriere:
       - rtsp://frigate:frigate@192.168.1.24:8554/9c761310afad_live
       - ffmpeg:cache=120
+      - ffmpeg:analyze_duration=0
+      - ffmpeg:video=copy#audio=none#analyze_duration=0
     sonnette_video_wired:
       - rtsp://frigate:frigate@192.168.1.24:8554/343ea4da33f2_live
       - ffmpeg:cache=120
+      - ffmpeg:analyze_duration=0
+      - ffmpeg:video=copy#audio=none#analyze_duration=0
 
 cameras:
   camera_allee_sur_le_cote:
