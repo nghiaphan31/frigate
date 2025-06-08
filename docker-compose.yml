@@ -1,41 +1,90 @@
 services:
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+    - 8080:8080
+    restart: unless-stopped
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
   frigate:
     container_name: frigate
-    # you can stay on :stable or pin a specific 0.13+ tag
-    image: ghcr.io/blakeblackshear/frigate:stable
-    privileged: true
-    restart: unless-stopped
-    shm_size: "512mb"
     devices:
-      - /dev/dri:/dev/dri    
-      
-    # ────────▶ expose go2rtc & WebRTC ◀────────
-    ports:
-      - "5000:5000"         # Frigate UI / API (unchanged)
-      - "8554:8554"         # go2rtc RTSP proxy
-      - "8555:8555/tcp"     # go2rtc WebRTC TCP
-      - "8555:8555/udp"     # go2rtc WebRTC UDP
-      - "1984:1984"         # go2rtc HTTP API & Web UI
-    # ───────────────────────────────────────────
-
-    volumes:
-      - ./frigate/config.yml:/config/config.yml
-      - /media/frigate:/media/frigate
-      - /dev/bus/usb:/dev/bus/usb
-      - /etc/localtime:/etc/localtime:ro
-
+    - /dev/dri:/dev/dri
     environment:
-      FRIGATE_RTSP_PASSWORD: "fG-56lui"
-      # allow Frigate to reach the Mosquitto broker on 192.168.1.24
-      MQTT_HOST: "192.168.1.24"
-      MQTT_USER: "mosquito"
-      MQTT_PASSWORD: "mosquito"
-
+      FRIGATE_RTSP_PASSWORD: fG-56lui
+      MQTT_HOST: 192.168.1.24
+      MQTT_PASSWORD: mosquito
+      MQTT_USER: mosquito
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5000"]
       interval: 30s
-      timeout: 10s
       retries: 3
       start_period: 30s
-      
-      
+      test:
+      - CMD
+      - wget
+      - --spider
+      - -q
+      - http://localhost:5000
+      timeout: 10s
+    image: ghcr.io/blakeblackshear/frigate:stable
+    ports:
+    - 5000:5000
+    - 8554:8554
+    - 8555:8555/tcp
+    - 8555:8555/udp
+    - 1984:1984
+    privileged: true
+    restart: unless-stopped
+    shm_size: 512mb
+    volumes:
+    - ./frigate/config.yml:/config/config.yml
+    - /media/frigate:/media/frigate
+    - /dev/bus/usb:/dev/bus/usb
+    - /etc/localtime:/etc/localtime:ro
+  grafana:
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    image: grafana/grafana-oss:latest
+    ports:
+    - 3000:3000
+    restart: unless-stopped
+    volumes:
+    - grafana_data:/var/lib/grafana
+  node-exporter:
+    command:
+    - --path.procfs=/host/proc
+    - --path.sysfs=/host/sys
+    - --path.rootfs=/rootfs
+    - --collector.filesystem.ignored-mount-points
+    - ^/(sys|proc|dev|host|etc)($|/)
+    container_name: node-exporter
+    image: prom/node-exporter:latest
+    network_mode: host
+    pid: host
+    restart: unless-stopped
+    volumes:
+    - /proc:/host/proc:ro
+    - /sys:/host/sys:ro
+    - /:/rootfs:ro
+  prometheus:
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    - --storage.tsdb.path=/prometheus
+    - --web.enable-lifecycle
+    container_name: prometheus
+    image: prom/prometheus:latest
+    ports:
+    - 9090:9090
+    restart: unless-stopped
+    volumes:
+    - ./prometheus:/etc/prometheus
+    - prometheus_data:/prometheus
+volumes:
+  grafana_data: {}
+  prometheus_data: {}
