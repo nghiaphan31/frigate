@@ -122,6 +122,11 @@ cameras:
       height: 1080
       fps: 5
 
+    zones:
+      prive:
+        coordinates: 0.001,0.004,0,0.998,0.968,0.996,0.965,0
+        loitering_time: 0
+        objects: person
   camera_jardin_arriere:
     ffmpeg:
       inputs:
