@@ -1,4 +1,18 @@
 services:
+
+    go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: go2rtc
+    restart: unless-stopped
+    ports:
+      - "8554:8554"        # RTSP output
+      - "1984:1984"        # Web UI/API
+    volumes:
+      - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - frigate_net
+
   cadvisor:
     container_name: cadvisor
     image: gcr.io/cadvisor/cadvisor:latest
@@ -83,7 +97,7 @@ services:
     - 9090:9090
     restart: unless-stopped
     volumes:
-    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     - prometheus_data:/prometheus
 volumes:
   grafana_data: {}
