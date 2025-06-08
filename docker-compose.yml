@@ -6,6 +6,8 @@ services:
     privileged: true
     restart: unless-stopped
     shm_size: "512mb"
+    devices:
+      - /dev/dri:/dev/dri    
       
     # ────────▶ expose go2rtc & WebRTC ◀────────
     ports:
@@ -18,8 +20,6 @@ services:
 
     volumes:
       - ./frigate/config.yml:/config/config.yml
-      - ./frigate/go2rtc.yaml:/config/go2rtc.yaml:ro
-
       - /media/frigate:/media/frigate
       - /dev/bus/usb:/dev/bus/usb
       - /etc/localtime:/etc/localtime:ro

@@ -20,6 +20,13 @@ detect:
 ffmpeg:
   input_args: preset-rtsp-restream
   retry_interval: 30
+  hwaccel_args:
+  - -hwaccel
+  - vaapi
+  - -hwaccel_device
+  - /dev/dri/renderD128
+  - -hwaccel_output_format
+  - yuv420p
 
 snapshots:
   enabled: true
