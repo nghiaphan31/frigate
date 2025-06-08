@@ -1,6 +1,21 @@
 services:
+  ring-mqtt:
+    container_name: ring-mqtt
+    image: tsightler/ring-mqtt
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "8554:8554"
+    environment:
+      - MQTT_HOST=192.168.1.24
+      - MQTT_USER=mosquito
+      - MQTT_PASSWORD=mosquito
+      - RINGTOKEN_PATH=/data/ring_token.txt
+    volumes:
+      - ./ring-mqtt/data:/data
+      - /etc/localtime:/etc/localtime:ro
 
-    go2rtc:
+  go2rtc:
     image: alexxit/go2rtc:latest
     container_name: go2rtc
     restart: unless-stopped
