@@ -21,12 +21,12 @@ ffmpeg:
   input_args: preset-rtsp-restream
   retry_interval: 30
   hwaccel_args:
-  - -hwaccel
-  - vaapi
-  - -hwaccel_device
-  - /dev/dri/renderD128
-  - -hwaccel_output_format
-  - yuv420p
+    - -hwaccel
+    - vaapi
+    - -hwaccel_device
+    - /dev/dri/renderD128
+    - -hwaccel_output_format
+    - yuv420p
 
 snapshots:
   enabled: true
@@ -35,7 +35,7 @@ snapshots:
   retain:
     default: 5
     objects:
-      person: 30  
+      person: 30
 
 go2rtc:
   streams:
@@ -90,7 +90,18 @@ cameras:
       width: 1920
       height: 1080
       fps: 5
-
+    zones:
+      rodage:
+        coordinates: 
+          0.228,0.277,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.682,0.314,0.608,0.291,0.474,0.277,0.346,0.273
+        loitering_time: 10
+        inertia: 3
+        objects: person
+      prive:
+        coordinates: 
+          0.001,0.671,0.102,0.758,0.193,0.303,0.229,0.279,0.262,0.277,0.344,0.274,0.509,0.279,0.688,0.302,0.683,0.327,0.696,0.331,0.701,0.351,0.695,0.368,0.808,0.387,0.825,0.38,0.843,0.353,0.89,0.528,0.941,0.759,0.998,0.707,0.997,0.999,0.001,1
+        inertia: 3
+        loitering_time: 0
   camera_piscine_vue_toit:
     ffmpeg:
       inputs:
@@ -131,4 +142,10 @@ cameras:
       height: 1080
       fps: 5
 
+    zones:
+      rodage:
+        coordinates: 
+          0.002,0.665,0.082,0.765,0.199,0.849,0.303,0.903,0.438,0.946,0.551,0.95,0.67,0.921,0.753,0.878,0.818,0.84,0.892,0.777,0.933,0.745,0.975,0.693,0.996,0.661,0.996,0.995,0,0.995
+        loitering_time: 30
+        objects: person
 version: 0.15-1
