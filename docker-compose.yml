@@ -65,7 +65,7 @@ services:
       TZ: Europe/Paris
     privileged: false           # set true if you add a USB Coral
     volumes:
-      - ./frigate/config.yml:/config/config.yml:ro
+      - ./frigate/config.yml:/config/config.yml
       - ./frigate/storage:/media/frigate        # where clips & recordings land
       # tmpfs keeps frequent temp files off your SSD
       - type: tmpfs
