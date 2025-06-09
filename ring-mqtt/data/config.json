@@ -1,0 +1,11 @@
+{
+  "enable_cameras": true,
+  "enable_modes": false,
+  "livestream_user": "frigate",
+  "livestream_pass": "frigate",
+  "log_level": "info",
+  "enable_debug": false,
+  "enable_snapshots": false,
+  "snapshot_mode": "disabled",
+  "mqtt_url": "mqtt://mosquito:mosquito@192.168.1.24:1883"
+}

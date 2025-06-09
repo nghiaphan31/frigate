@@ -3,17 +3,17 @@ services:
     container_name: ring-mqtt
     image: tsightler/ring-mqtt
     restart: unless-stopped
-    network_mode: bridge
     ports:
-      - "8554:8554"
+      - "55123:55123"  # Web UI for token setup
     environment:
       - MQTT_HOST=192.168.1.24
+      - MQTT_PORT=1883
       - MQTT_USER=mosquito
       - MQTT_PASSWORD=mosquito
-      - RINGTOKEN_PATH=/data/ring_token.txt
     volumes:
       - ./ring-mqtt/data:/data
       - /etc/localtime:/etc/localtime:ro
+    network_mode: bridge    
 
   go2rtc:
     image: alexxit/go2rtc:latest
@@ -39,6 +39,7 @@ services:
     - /var/run:/var/run:rw
     - /sys:/sys:ro
     - /var/lib/docker/:/var/lib/docker:ro
+
   frigate:
     container_name: frigate
     devices:
@@ -114,6 +115,11 @@ services:
     volumes:
     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     - prometheus_data:/prometheus
+
 volumes:
   grafana_data: {}
   prometheus_data: {}
+
+networks:
+  frigate_net:
+    name: frigate_net  
