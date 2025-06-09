@@ -1,34 +1,51 @@
+# -------------------------------------------------------------------------
+# Frigate config.yml (annotated)
+# -------------------------------------------------------------------------
+# Frigate = NVR & real‑time object detection
+# This file is fully self‑contained and ready to drop into ./frigate/config.yml
+# -------------------------------------------------------------------------
+#  • MQTT section          – connection to Home‑Assistant broker for events
+#  • FFmpeg hw‑accel       – tells Frigate to use Intel VA‑API decode on the NUC
+#  • Record block          – controls clip retention (adjust to match disk size)
+#  • Detectors             – CPU only for now (add Coral or GPU if available)
+#  • Cameras               – each Ring stream appears twice:
+#                               * *_detect  :  low‑bitrate, low‑resolution feed
+#                               * *_record  :  full‑resolution feed for archiving
+# -------------------------------------------------------------------------
+
 mqtt:
-  host: 192.168.1.24
+  host: 192.168.1.24                # same broker ring‑mqtt uses
   user: mosquito
   password: mosquito
-  topic_prefix: frigate           # keep default or rename; HA will auto-discover
+  topic_prefix: frigate             # rename if you want multiple Frigate instances
 
 ffmpeg:
-  hwaccel_args: preset-vaapi      # use the NUC’s iGPU to decode H.264
+  # Use the NUC's iGPU for H.264 decode; keep preset‑vaapi unless you add NVIDIA
+  hwaccel_args: preset-vaapi
 
 record:
   enabled: true
   retain:
-    days: 3                       # keep clips for three days
-    mode: motion                  # full timeline uses a lot of space—motion is enough
+    days: 3                         # How long to keep motion clips
+    mode: motion                    # 'all' records 24/7; uses much more disk
 
-
-detectors:                        # use CPU by default; add coral/edgetpu later if you have one
+detectors:
   cpu1:
-    type: cpu
+    type: cpu                       # Change to 'edgetpu' if you add a Coral USB
 
 cameras:
 
   allee_sur_le_cote:
     ffmpeg:
       inputs:
+        # Detect stream – 1280×720 @ 5 fps keeps CPU low
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_detect
           roles: [detect]
+        # Record stream – full HD at Ring's native bitrate
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_record
           roles: [record]
     detect:
-      width: 1280                 # down-scaled copy keeps inference fast
+      width: 1280
       height: 720
       fps: 5
 

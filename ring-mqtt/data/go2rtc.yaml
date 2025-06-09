@@ -27,7 +27,7 @@ streams:
   9c761310bb9c_event: exec:/app/ring-mqtt/scripts/start-stream.sh 9c761310bb9c event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c761310bb9c {output}#killsignal=15
   0cb2b74df743_live: exec:/app/ring-mqtt/scripts/start-stream.sh 0cb2b74df743 live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/0cb2b74df743 {output}#killsignal=15
   0cb2b74df743_event: exec:/app/ring-mqtt/scripts/start-stream.sh 0cb2b74df743 event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/0cb2b74df743 {output}#killsignal=15
-  9c761366dadc_live: exec:/app/ring-mqtt/scripts/start-stream.sh 9c761366dadc live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c761366dadc {output}#killsignal=15
-  9c761366dadc_event: exec:/app/ring-mqtt/scripts/start-stream.sh 9c761366dadc event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c761366dadc {output}#killsignal=15
   10cea9f26407_live: exec:/app/ring-mqtt/scripts/start-stream.sh 10cea9f26407 live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/10cea9f26407 {output}#killsignal=15
   10cea9f26407_event: exec:/app/ring-mqtt/scripts/start-stream.sh 10cea9f26407 event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/10cea9f26407 {output}#killsignal=15
+  9c761366dadc_live: exec:/app/ring-mqtt/scripts/start-stream.sh 9c761366dadc live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c761366dadc {output}#killsignal=15
+  9c761366dadc_event: exec:/app/ring-mqtt/scripts/start-stream.sh 9c761366dadc event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c761366dadc {output}#killsignal=15
