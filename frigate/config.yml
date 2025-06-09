@@ -2,160 +2,92 @@ mqtt:
   host: 192.168.1.24
   user: mosquito
   password: mosquito
+  topic_prefix: frigate           # keep default or rename; HA will auto-discover
+
+ffmpeg:
+  hwaccel_args: preset-vaapi      # use the NUC’s iGPU to decode H.264
 
 record:
   enabled: true
   retain:
-    days: 3
-  alerts:
-    retain:
-      days: 30
-  detections:
-    retain:
-      days: 30
+    days: 3                       # keep clips for three days
+    mode: motion                  # full timeline uses a lot of space—motion is enough
 
-detect:
-  enabled: true
 
-ffmpeg:
-  input_args: preset-rtsp-restream
-  retry_interval: 30
-  hwaccel_args:
-    - -hwaccel
-    - vaapi
-    - -hwaccel_device
-    - /dev/dri/renderD128
-    - -hwaccel_output_format
-    - yuv420p
-
-snapshots:
-  enabled: true
-  timestamp: true
-  bounding_box: true
-  retain:
-    default: 5
-    objects:
-      person: 30
-
-go2rtc:
-  streams:
-    allee_sur_le_cote:
-      - rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74df743_live
-      - ffmpeg:cache=120
-      - ffmpeg:analyze_duration=0
-      - ffmpeg:video=copy#audio=none#analyze_duration=0
-    jardin_devant:
-      - rtsp://frigate:frigate@192.168.1.24:8554/10cea9f26407_live
-      - ffmpeg:cache=120
-      - ffmpeg:analyze_duration=0
-      - ffmpeg:video=copy#audio=none#analyze_duration=0
-    piscine_vue_toit:
-      - rtsp://frigate:frigate@192.168.1.24:8554/0cb2b74f37f3_live
-      - ffmpeg:cache=120
-      - ffmpeg:analyze_duration=0
-      - ffmpeg:video=copy#audio=none#analyze_duration=0
-    vue_sur_entree_dev:
-      - rtsp://frigate:frigate@192.168.1.24:8554/9c761310bb9c_live
-      - ffmpeg:cache=120
-      - ffmpeg:analyze_duration=0
-      - ffmpeg:video=copy#audio=none#analyze_duration=0
-    jardin_arriere:
-      - rtsp://frigate:frigate@192.168.1.24:8554/9c761310afad_live
-      - ffmpeg:cache=120
-      - ffmpeg:analyze_duration=0
-      - ffmpeg:video=copy#audio=none#analyze_duration=0
-    sonnette_video_wired:
-      - rtsp://frigate:frigate@192.168.1.24:8554/343ea4da33f2_live
-      - ffmpeg:cache=120
-      - ffmpeg:analyze_duration=0
-      - ffmpeg:video=copy#audio=none#analyze_duration=0
+detectors:                        # use CPU by default; add coral/edgetpu later if you have one
+  cpu1:
+    type: cpu
 
 cameras:
-  camera_allee_sur_le_cote:
+
+  allee_sur_le_cote:
     ffmpeg:
       inputs:
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_detect
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_record
+          roles: [record]
     detect:
-      width: 1920
-      height: 1080
+      width: 1280                 # down-scaled copy keeps inference fast
+      height: 720
       fps: 5
 
-    zones:
-      prive:
-        coordinates: 
-          0.001,0.6,0.054,0.411,0.044,0.398,0.047,0.383,0.055,0.382,0.043,0.347,0.052,0.337,0.105,0.305,0.164,0.285,0.243,0.258,0.336,0.24,0.442,0.228,0.532,0.228,0.631,0.226,0.721,0.237,0.815,0.256,0.872,0.274,0.915,0.286,0.956,0.302,0.998,0.309,0.997,0.995,-0.001,0.999
-        loitering_time: 0
-  camera_jardin_devant:
+  jardin_arriere:
     ffmpeg:
       inputs:
-        - path: rtsp://127.0.0.1:8554/jardin_devant
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_detect
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_record
+          roles: [record]
     detect:
-      width: 1920
-      height: 1080
-      fps: 5
-    zones:
-      rodage:
-        coordinates: 
-          0.228,0.277,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.682,0.314,0.608,0.291,0.474,0.277,0.346,0.273
-        loitering_time: 10
-        inertia: 3
-        objects: person
-      prive:
-        coordinates: 
-          0.001,0.671,0.102,0.758,0.193,0.303,0.229,0.279,0.262,0.277,0.344,0.274,0.509,0.279,0.688,0.302,0.683,0.327,0.696,0.331,0.701,0.351,0.695,0.368,0.808,0.387,0.825,0.38,0.843,0.353,0.89,0.528,0.941,0.759,0.998,0.707,0.997,0.999,0.001,1
-        inertia: 3
-        loitering_time: 0
-  camera_piscine_vue_toit:
-    ffmpeg:
-      inputs:
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit
-          roles: [detect, record]
-    detect:
-      width: 1920
-      height: 1080
+      width: 1280
+      height: 720
       fps: 5
 
-  camera_vue_sur_entree_dev:
+  jardin_devant:
     ffmpeg:
       inputs:
-        - path: rtsp://127.0.0.1:8554/vue_sur_entree_dev
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
+          roles: [record]
     detect:
-      width: 1920
-      height: 1080
+      width: 1280
+      height: 720
       fps: 5
 
-    zones:
-      prive:
-        coordinates: 0.001,0.004,0,0.998,0.968,0.996,0.965,0
-        loitering_time: 0
-        objects: person
-  camera_jardin_arriere:
+  piscine_vue_toit:
     ffmpeg:
       inputs:
-        - path: rtsp://127.0.0.1:8554/jardin_arriere
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_detect
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_record
+          roles: [record]
     detect:
-      width: 1920
-      height: 1080
+      width: 1280
+      height: 720
+      fps: 5
+
+  vue_sur_entree_dev:
+    ffmpeg:
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_detect
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_record
+          roles: [record]
+    detect:
+      width: 1280
+      height: 720
       fps: 5
 
   sonnette_video_wired:
     ffmpeg:
       inputs:
-        - path: rtsp://127.0.0.1:8554/sonnette_video_wired
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/sonnette_video_wired_detect
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/sonnette_video_wired_record
+          roles: [record]
     detect:
-      width: 1920
-      height: 1080
+      width: 1280
+      height: 720
       fps: 5
-
-    zones:
-      rodage:
-        coordinates: 
-          0.002,0.665,0.082,0.765,0.199,0.849,0.303,0.903,0.438,0.946,0.551,0.95,0.67,0.921,0.753,0.878,0.818,0.84,0.892,0.777,0.933,0.745,0.975,0.693,0.996,0.661,0.996,0.995,0,0.995
-        loitering_time: 30
-        objects: person
-version: 0.15-1

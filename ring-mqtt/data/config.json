@@ -1,11 +1,16 @@
 {
   "enable_cameras": true,
   "enable_modes": false,
-  "livestream_user": "frigate",
-  "livestream_pass": "frigate",
-  "log_level": "info",
-  "enable_debug": false,
-  "enable_snapshots": false,
-  "snapshot_mode": "disabled",
+
+  "livestream_user": "go2rtc",
+  "livestream_pass": "go2rtc",
+  "livestream_startup": "all",
+  "log_level": "debug",
+  "enable_debug": true,
+
+  "enable_snapshots": true,
+  "snapshot_mode": "interval",
+  "snapshot_time": 30,
+
   "mqtt_url": "mqtt://mosquito:mosquito@192.168.1.24:1883"
 }

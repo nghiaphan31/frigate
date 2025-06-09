@@ -1,32 +1,38 @@
-services:
-  ring-mqtt:
-    container_name: ring-mqtt
-    image: tsightler/ring-mqtt
-    restart: unless-stopped
-    ports:
-      - "55123:55123"  # Web UI for token setup
-    environment:
-      - MQTT_HOST=192.168.1.24
-      - MQTT_PORT=1883
-      - MQTT_USER=mosquito
-      - MQTT_PASSWORD=mosquito
-    volumes:
-      - ./ring-mqtt/data:/data
-      - /etc/localtime:/etc/localtime:ro
-    network_mode: bridge    
+networks:
+  cctv_net: {}          # isolated network for Ring traffic & RTSP proxy
 
+services:
+# ───────────────────────────── ring-mqtt ─────────────────────────────
+  ring-mqtt:
+    image: tsightler/ring-mqtt:latest
+    container_name: ring-mqtt
+    restart: unless-stopped
+    networks:
+      - default              # keep existing (optional)
+      - cctv_net             # ← NEW: same as go2rtc
+    ports:
+      - "8558:8554"        # host 8558 → container 8554 (debug only)
+      - "55123:55123"      # token-helper Web UI
+    environment:
+      MQTT_URL: mqtt://mosquito:mosquito@192.168.1.24:1883
+      LIVESTREAM_USER: go2rtc           # **must match go2rtc.yaml**
+      LIVESTREAM_PASS: go2rtc
+    volumes:
+      - ./ring-mqtt/data:/data           # contains config.json & tokens
+      - /etc/localtime:/etc/localtime:ro
+
+# ───────────────────────────── go2rtc proxy ──────────────────────────
   go2rtc:
-    image: alexxit/go2rtc:latest
+    image: ghcr.io/alexxit/go2rtc:latest
     container_name: go2rtc
     restart: unless-stopped
+    networks: { cctv_net: {} }           # can reach “ring-mqtt:8554”
     ports:
-      - "8554:8554"        # RTSP output
-      - "1984:1984"        # Web UI/API
+      - "8556:8554"        # host 8556 → container 8554 (RTSP out)
+      - "1985:1984"        # host 1985 → container 1984 (Web/API)
     volumes:
       - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
       - /etc/localtime:/etc/localtime:ro
-    networks:
-      - frigate_net
 
   cadvisor:
     container_name: cadvisor
@@ -41,40 +47,26 @@ services:
     - /var/lib/docker/:/var/lib/docker:ro
 
   frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable   # or :0.13.2 when pinned
     container_name: frigate
-    devices:
-    - /dev/dri:/dev/dri
-    environment:
-      FRIGATE_RTSP_PASSWORD: fG-56lui
-      MQTT_HOST: 192.168.1.24
-      MQTT_PASSWORD: mosquito
-      MQTT_USER: mosquito
-    healthcheck:
-      interval: 30s
-      retries: 3
-      start_period: 30s
-      test:
-      - CMD
-      - wget
-      - --spider
-      - -q
-      - http://localhost:5000
-      timeout: 10s
-    image: ghcr.io/blakeblackshear/frigate:stable
-    ports:
-    - 5000:5000
-    - 8554:8554
-    - 8555:8555/tcp
-    - 8555:8555/udp
-    - 1984:1984
-    privileged: true
     restart: unless-stopped
-    shm_size: 512mb
+    privileged: false               # no USB Coral here; set true if you add one
+    network_mode: host              # makes 192.168.1.36:8556 reachable without extra ports
+    shm_size: "512m"                # FFmpeg needs some shared-mem for six 1080p feeds
+    environment:
+      TZ: Europe/Paris
     volumes:
-    - ./frigate/config.yml:/config/config.yml
-    - /media/frigate:/media/frigate
-    - /dev/bus/usb:/dev/bus/usb
-    - /etc/localtime:/etc/localtime:ro
+      - ./frigate/config.yml:/config/config.yml:ro       # put the file from step 2 here
+      - ./frigate/storage:/media/frigate                 # recordings / snapshots
+      - type: tmpfs                                      # avoids SSD wear
+        target: /tmp/ramdisk
+        tmpfs:
+          size: 256000000
+    devices:                                             # VA-API hardware decode
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    depends_on:
+      - go2rtc                                           # wait for the proxy
+
   grafana:
     container_name: grafana
     environment:
@@ -118,8 +110,4 @@ services:
 
 volumes:
   grafana_data: {}
-  prometheus_data: {}
-
-networks:
-  frigate_net:
-    name: frigate_net  
+  prometheus_data: {}      
