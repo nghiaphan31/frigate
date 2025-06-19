@@ -68,3 +68,4 @@ __pycache__/
 # macOS
 .AppleDouble
 .LSOverride
+ring-mqtt/data/ring-state.json
