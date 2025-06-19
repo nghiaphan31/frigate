@@ -31,6 +31,7 @@ record:
     days: 3                         # How long to keep motion clips
     mode: motion                    # 'all' records 24/7; uses much more disk
 
+
 detectors:
   cpu1:
     type: cpu                       # Change to 'edgetpu' if you add a Coral USB
@@ -48,7 +49,7 @@ cameras:
           roles: [detect]
         # Record stream – full HD at Ring's native bitrate
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_record
-          roles: [record]
+          roles: [record, audio]
     detect:
       width: 1280
       height: 720
