@@ -1,0 +1,60 @@
+[1mdiff --git a/frigate/config.yml b/frigate/config.yml[m
+[1mindex 00f6b0a..0b3b0c9 100755[m
+[1m--- a/frigate/config.yml[m
+[1m+++ b/frigate/config.yml[m
+[36m@@ -44,6 +44,11 @@[m [mcameras:[m
+         # Record stream – full HD at Ring's native bitrate[m
+         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_record[m
+           roles: [record][m
+[32m+[m[32m    zones:[m
+[32m+[m[32m      prive:[m
+[32m+[m[32m        coordinates:[m
+[32m+[m[32m          0.001,0.6,0.054,0.411,0.044,0.398,0.047,0.383,0.055,0.382,0.043,0.347,0.052,0.337,0.105,0.305,0.164,0.285,0.243,0.258,0.336,0.24,0.442,0.228,0.532,0.228,0.631,0.226,0.721,0.237,0.815,0.256,0.872,0.274,0.915,0.286,0.956,0.302,0.998,0.309,0.997,0.995,-0.001,0.999[m
+[32m+[m[32m        loitering_time: 0[m[41m      [m
+     detect:[m
+       width: 1280[m
+       height: 720[m
+[36m@@ -68,6 +73,18 @@[m [mcameras:[m
+           roles: [detect][m
+         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record[m
+           roles: [record][m
+[32m+[m[32m    zones:[m
+[32m+[m[32m      rodage:[m
+[32m+[m[32m        coordinates:[m[41m [m
+[32m+[m[32m          0.228,0.277,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.682,0.314,0.608,0.291,0.474,0.277,0.346,0.273[m
+[32m+[m[32m        loitering_time: 10[m
+[32m+[m[32m        inertia: 3[m
+[32m+[m[32m        objects: person[m
+[32m+[m[32m      prive:[m
+[32m+[m[32m        coordinates:[m[41m [m
+[32m+[m[32m          0.001,0.671,0.102,0.758,0.193,0.303,0.229,0.279,0.262,0.277,0.344,0.274,0.509,0.279,0.688,0.302,0.683,0.327,0.696,0.331,0.701,0.351,0.695,0.368,0.808,0.387,0.825,0.38,0.843,0.353,0.89,0.528,0.941,0.759,0.998,0.707,0.997,0.999,0.001,1[m
+[32m+[m[32m        inertia: 3[m
+[32m+[m[32m        loitering_time: 0[m[41m          [m
+     detect:[m
+       width: 1280[m
+       height: 720[m
+[36m@@ -92,6 +109,11 @@[m [mcameras:[m
+           roles: [detect][m
+         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_record[m
+           roles: [record][m
+[32m+[m[32m    zones:[m
+[32m+[m[32m      prive:[m
+[32m+[m[32m        coordinates: 0.001,0.004,0,0.998,0.968,0.996,0.965,0[m
+[32m+[m[32m        loitering_time: 0[m
+[32m+[m[32m        objects: person[m[41m          [m
+     detect:[m
+       width: 1280[m
+       height: 720[m
+[36m@@ -104,6 +126,12 @@[m [mcameras:[m
+           roles: [detect][m
+         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/sonnette_video_wired_record[m
+           roles: [record][m
+[32m+[m[32m    zones:[m
+[32m+[m[32m      rodage:[m
+[32m+[m[32m        coordinates:[m[41m [m
+[32m+[m[32m          0.002,0.665,0.082,0.765,0.199,0.849,0.303,0.903,0.438,0.946,0.551,0.95,0.67,0.921,0.753,0.878,0.818,0.84,0.892,0.777,0.933,0.745,0.975,0.693,0.996,0.661,0.996,0.995,0,0.995[m
+[32m+[m[32m        loitering_time: 30[m
+[32m+[m[32m        objects: person[m[41m          [m
+     detect:[m
+       width: 1280[m
+       height: 720[m

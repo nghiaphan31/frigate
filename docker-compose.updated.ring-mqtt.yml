@@ -1,0 +1,69 @@
+version: '3.9'
+services:
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: go2rtc
+    restart: unless-stopped
+    ports:
+      - "8554:8554"
+      - "1984:1984"
+    volumes:
+      - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - frigate_net
+
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    ports:
+      - 9090:9090
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:latest
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  ring-mqtt:
+    container_name: ring-mqtt
+    image: tsightler/ring-mqtt
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "8554:8554"
+    environment:
+      - MQTT_HOST=192.168.1.24
+      - MQTT_USER=mosquito
+      - MQTT_PASSWORD=mosquito
+      - RINGTOKEN_PATH=/data/ring_token.txt
+    volumes:
+      - ./ring-mqtt/data:/data
+      - /etc/localtime:/etc/localtime:ro
+
+volumes:
+  grafana_data: {}
+  prometheus_data: {}
+
+networks:
+  frigate_net:
+    driver: bridge

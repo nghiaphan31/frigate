@@ -1,0 +1,70 @@
+# -------------------------------------------------------------------------
+# go2rtc.yaml (annotated)
+# -------------------------------------------------------------------------
+# This stand‑alone go2rtc instance pulls RTSP from ring‑mqtt (:8554 inside its
+# container) and proxies each stream back out on host port 8556.
+#
+#  • *_detect  – low‑latency copy used by Frigate for motion / AI inference
+#  • *_record  – high‑bitrate copy (plus optional transcode) for recording
+#
+#  Any 'ffmpeg:hwaccel=vaapi' line tells go2rtc to transcode using the NUC's
+#  Intel iGPU when that profile is requested (i.e. by Frigate 'record' role).
+# -------------------------------------------------------------------------
+
+log:
+  level: debug                 # change to 'info' in production
+
+api:
+  listen: :1984                # container port; mapped to host 1985
+  origin: '*'                  # allow any Origin header in browser UI
+
+rtsp:
+  listen: :8554                # container port; mapped to host 8556
+  username: go2rtc             # must match ring‑mqtt LIVESTREAM_USER/PASS
+  password: go2rtc
+
+ffmpeg:
+  bin: /usr/bin/ffmpeg         # system ffmpeg inside the image
+
+streams:
+  # ── Allee sur le Côté ─────────────────────────────────────────────
+  allee_sur_le_cote_detect:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
+  allee_sur_le_cote_record:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
+    - ffmpeg:hwaccel=vaapi#analyze_duration=0   # hardware decode for record job
+
+  # ── Jardin Arrière ───────────────────────────────────────────────
+  jardin_arriere_detect:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live
+  jardin_arriere_record:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live
+    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+
+  # ── Jardin Devant ────────────────────────────────────────────────
+  jardin_devant_detect:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live
+  jardin_devant_record:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live
+    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+
+  # ── Piscine vue toit ─────────────────────────────────────────────
+  piscine_vue_toit_detect:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
+  piscine_vue_toit_record:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
+    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+
+  # ── Entrée ───────────────────────────────────────────────────────
+  vue_sur_entree_dev_detect:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
+  vue_sur_entree_dev_record:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
+    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+
+  # ── Sonnette ────────────────────────────────────────────────────
+  sonnette_video_wired_detect:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/343ea4da33f2_live
+  sonnette_video_wired_record:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/343ea4da33f2_live
+    - ffmpeg:hwaccel=vaapi#analyze_duration=0
