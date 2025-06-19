@@ -31,6 +31,13 @@ record:
     days: 3                         # How long to keep motion clips
     mode: motion                    # 'all' records 24/7; uses much more disk
 
+objects:
+  track:
+    - person
+  filters:
+    person:
+      min_score: 0.72      # Only consider detections with confidence ≥ 0.75
+      threshold: 0.72       # Require sustained confidence ≥ 0.8 to trigger event
 
 detectors:
   cpu1:
