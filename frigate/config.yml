@@ -22,7 +22,9 @@ mqtt:
 ffmpeg:
   # Use the NUC's iGPU for H.264 decode; keep preset‑vaapi unless you add NVIDIA
   hwaccel_args: preset-vaapi
-
+  output_args:
+    # Copy video as-is and transcode the audio to AAC so every browser can play it
+    record: preset-record-generic-audio-aac
 record:
   enabled: true
   retain:
