@@ -45,27 +45,27 @@ streams:
   # ── Jardin Devant ────────────────────────────────────────────────
   jardin_devant_detect:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live
+  # jardin_devant: force hardware decode with VAAPI for recording
   jardin_devant_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+    - ffmpeg:hwaccel=vaapi#rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live
 
   # ── Piscine vue toit ─────────────────────────────────────────────
   piscine_vue_toit_detect:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
+  # piscine_vue_toit: force hardware decode with VAAPI for recording
   piscine_vue_toit_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+    - ffmpeg:hwaccel=vaapi#rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
 
   # ── Entrée ───────────────────────────────────────────────────────
   vue_sur_entree_dev_detect:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
+  # vue_sur_entree_dev: force hardware decode with VAAPI for recording
   vue_sur_entree_dev_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+    - ffmpeg:hwaccel=vaapi#rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
 
   # ── Sonnette ────────────────────────────────────────────────────
   sonnette_video_wired_detect:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/343ea4da33f2_live
+  # sonnette_video_wired: force hardware decode with VAAPI for recording
   sonnette_video_wired_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/343ea4da33f2_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+    - ffmpeg:hwaccel=vaapi#rtsp://go2rtc:go2rtc@ring-mqtt:8554/343ea4da33f2_live
