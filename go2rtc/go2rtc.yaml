@@ -30,9 +30,10 @@ streams:
   # ── Allee sur le Côté ─────────────────────────────────────────────
   allee_sur_le_cote_detect:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
+  # Use (forces VAAPI pipelines if transcoding needed):
   allee_sur_le_cote_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0   # hardware decode for record job
+    - ffmpeg:hwaccel=vaapi#rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
+  # But go2rtc will fallback to direct if no filter is needed, which is optimal.
 
   # ── Jardin Arrière ───────────────────────────────────────────────
   jardin_arriere_detect:
