@@ -165,6 +165,8 @@ cameras:
       detections: {}
 
   jardin_arriere:
+    audio:
+      enabled: true
     ffmpeg:
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_detect
@@ -177,17 +179,23 @@ cameras:
       fps: 5
     snapshots:
       enabled: true
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_score: 0.72
+          threshold: 0.72
     zones:
       prive:
-        coordinates: 
-          0,0.982,0,0,0.202,-0.001,0.206,0.052,0.238,0.064,0.245,0.072,0.282,0.083,0.28,0.11,0.273,0.122,0.269,0.15,0.277,0.155,0.277,0.175,0.269,0.183,0.245,0.388,0.254,0.447,0.264,0.448,0.287,0.248,0.303,0.25,0.301,0.295,0.302,0.313,0.387,0.34,0.391,0.327,0.403,0.329,0.406,0.345,0.452,0.358,0.491,0.412,0.477,0.436,0.472,0.52,0.497,0.532,0.514,0.549,0.507,0.594,0.555,0.602,0.557,0.58,0.564,0.565,0.672,0.569,0.68,0.507,0.71,0.504,0.748,0.503,0.998,0.51,1,1,0,1
+        coordinates: 0,0.982,0,0,0.202,-0.001,0.206,0.052,0.238,0.064,0.245,0.072,0.282,0.083,0.28,0.11,0.273,0.122,0.269,0.15,0.277,0.155,0.277,0.175,0.269,0.183,0.245,0.388,0.254,0.447,0.264,0.448,0.287,0.248,0.303,0.25,0.301,0.295,0.302,0.313,0.387,0.34,0.391,0.327,0.403,0.329,0.406,0.345,0.452,0.358,0.491,0.412,0.477,0.436,0.472,0.52,0.497,0.532,0.514,0.549,0.507,0.594,0.555,0.602,0.557,0.58,0.564,0.565,0.672,0.569,0.68,0.507,0.71,0.504,0.748,0.503,0.998,0.51,1,1,0,1
         loitering_time: 0
     review:
       alerts:
         required_zones: prive
 
   piscine_vue_toit:
-    snapshots:
+    audio:
       enabled: true
     ffmpeg:
       inputs:
@@ -199,9 +207,22 @@ cameras:
       width: 1280
       height: 720
       fps: 5
+    snapshots:
+      enabled: true
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_score: 0.72
+          threshold: 0.72
+    zones: {}
+    review:
+      alerts:
+        required_zones: []
 
   vue_sur_entree_dev:
-    snapshots:
+    audio:
       enabled: true
     ffmpeg:
       inputs:
@@ -213,17 +234,25 @@ cameras:
       width: 1280
       height: 720
       fps: 5
-
+    snapshots:
+      enabled: true
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_score: 0.72
+          threshold: 0.72
     zones:
       prive:
-        coordinates: 
-          0.001,0.996,0,0.001,0.268,0.005,0.174,0.195,0.14,0.279,0.234,0.362,0.24,0.347,0.303,0.349,0.313,0.243,0.326,0.169,0.369,0.097,0.408,0.062,0.425,0.001,0.997,0.001,0.998,0.996
+        coordinates: 0.001,0.996,0,0.001,0.268,0.005,0.174,0.195,0.14,0.279,0.234,0.362,0.24,0.347,0.303,0.349,0.313,0.243,0.326,0.169,0.369,0.097,0.408,0.062,0.425,0.001,0.997,0.001,0.998,0.996
         loitering_time: 0
     review:
       alerts:
         required_zones: prive
+
   sonnette_video_wired:
-    snapshots:
+    audio:
       enabled: true
     ffmpeg:
       inputs:
@@ -235,18 +264,27 @@ cameras:
       width: 1280
       height: 720
       fps: 5
+    snapshots:
+      enabled: true
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_score: 0.72
+          threshold: 0.72
     zones:
       rodage:
-        coordinates: 
-          0.002,0.665,0.082,0.765,0.199,0.849,0.303,0.903,0.438,0.946,0.551,0.95,0.67,0.921,0.753,0.878,0.818,0.84,0.892,0.777,0.933,0.745,0.975,0.693,0.996,0.661,0.996,0.995,0,0.995
+        coordinates: 0.002,0.665,0.082,0.765,0.199,0.849,0.303,0.903,0.438,0.946,0.551,0.95,0.67,0.921,0.753,0.878,0.818,0.84,0.892,0.777,0.933,0.745,0.975,0.693,0.996,0.661,0.996,0.995,0,0.995
         loitering_time: 30
         objects: person
         filters:
           person:
             threshold: 150
     review:
-      detections:
+      alerts:
         required_zones: rodage
+        
 version: 0.15-1
 semantic_search:
   enabled: true
