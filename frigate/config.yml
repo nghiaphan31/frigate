@@ -48,8 +48,8 @@ objects:
     - person
   filters:
     person:
-      min_score: 0.72      # Only consider detections with confidence ≥ 0.75
-      threshold: 0.72       # Require sustained confidence ≥ 0.8 to trigger event
+      min_score: 0.72      # Only consider detections with confidence ≥ 0.72
+      threshold: 0.72       # Require sustained confidence ≥ 0.72 to trigger event
 
 detectors:
   cpu1:
@@ -58,41 +58,51 @@ detectors:
 cameras:
 
   allee_sur_le_cote:
+    # Audio
     audio:
-      enabled: true          # just permits the track
-    # listen: []            # leave empty unless you want siren/bark/speech detection
+      enabled: true
+
+    # Streams (RTSP input for detection and recording)
     ffmpeg:
       inputs:
-        # Detect stream – 1280×720 @ 5 fps keeps CPU low
+        # Detect stream – low bitrate/resolution for efficient detection
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_detect
           roles: [detect]
-        # Record stream – full HD at Ring's native bitrate
+        # Record stream – high quality for storage
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_record
           roles: [record, audio]
+
+    # Detection configuration
     detect:
       width: 1280
       height: 720
       fps: 5
+
+    # Snapshots (enable snapshots and use defaults from the top-level snapshots block)
     snapshots:
       enabled: true
+
+    # Motion zones
     zones:
       prive:
-        coordinates: 
-          0.276,1,0.342,0.464,0.053,0.41,0.045,0.395,0.054,0.371,0.045,0.35,0.05,0.335,0.128,0.293,0.226,0.259,0.353,0.237,0.468,0.229,0.6,0.228,0.689,0.232,0.814,0.254,0.885,0.275,0.975,0.319,0.999,0.331,0.999,0.996
+        coordinates: 0.276,1,0.342,0.464,0.053,0.41,0.045,0.395,0.054,0.371,0.045,0.35,0.05,0.335,0.128,0.293,0.226,0.259,0.353,0.237,0.468,0.229,0.6,0.228,0.689,0.232,0.814,0.254,0.885,0.275,0.975,0.319,0.999,0.331,0.999,0.996
         loitering_time: 0
         inertia: 3
         objects: person
       rodage:
         coordinates: 0.062,0.424,0.331,0.482,0.266,0.998,0,0.994
         loitering_time: 30
-        objects: person
         inertia: 3
+        objects: person
+
+    # Review/alert requirements
     review:
       alerts:
         required_zones:
           - prive
           - rodage
       detections: {}
+      
   jardin_arriere:
     ffmpeg:
       inputs:
