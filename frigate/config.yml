@@ -102,6 +102,52 @@ cameras:
           - prive
           - rodage
       detections: {}
+
+  jardin_devant:
+    # Audio
+    audio:
+      enabled: true
+
+    # Streams (RTSP input for detection and recording)
+    ffmpeg:
+      inputs:
+        # Detect stream – low bitrate/resolution for efficient detection
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect
+          roles: [detect]
+        # Record stream – high quality for storage
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
+          roles: [record]
+
+    # Detection configuration
+    detect:
+      width: 1280
+      height: 720
+      fps: 5
+
+    # Snapshots (enable snapshots and use defaults from the top-level snapshots block)
+    snapshots:
+      enabled: true
+
+    # Motion zones
+    zones:
+      prive:
+        coordinates: 0,0.659,0.098,0.748,0.122,0.616,0.153,0.484,0.192,0.355,0.202,0.312,0.216,0.274,0.262,0.408,0.306,0.408,0.412,0.407,0.644,0.42,0.688,0.297,0.683,0.308,0.696,0.326,0.701,0.346,0.695,0.363,0.808,0.382,0.825,0.375,0.843,0.348,0.894,0.523,0.941,0.754,0.998,0.702,1,1,0,1
+        loitering_time: 0
+        inertia: 3
+        objects: person
+      rodage:
+        coordinates: 0.225,0.284,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.679,0.309,0.644,0.409,0.498,0.404,0.264,0.4
+        loitering_time: 10
+        inertia: 3
+        objects: person
+
+    # Review/alert requirements
+    review:
+      alerts:
+        required_zones:
+          - prive
+          - rodage
+      detections: {}
       
   jardin_arriere:
     ffmpeg:
@@ -124,42 +170,7 @@ cameras:
     review:
       alerts:
         required_zones: prive
-  jardin_devant:
-    ffmpeg:
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
-          roles: [record]
-    detect:
-      width: 1280
-      height: 720
-      fps: 5
-    snapshots:
-      enabled: true
-    zones:
-      rodage:
-        coordinates: 
-          0.225,0.284,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.679,0.309,0.644,0.409,0.498,0.404,0.264,0.4
-        loitering_time: 10
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 150
-      prive:
-        coordinates: 
-          0,0.659,0.098,0.748,0.122,0.616,0.153,0.484,0.192,0.355,0.202,0.312,0.216,0.274,0.262,0.408,0.306,0.408,0.412,0.407,0.644,0.42,0.688,0.297,0.683,0.308,0.696,0.326,0.701,0.346,0.695,0.363,0.808,0.382,0.825,0.375,0.843,0.348,0.894,0.523,0.941,0.754,0.998,0.702,1,1,0,1
-        inertia: 3
-        loitering_time: 0
 
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones:
-          - rodage
-          - prive
   piscine_vue_toit:
     snapshots:
       enabled: true
