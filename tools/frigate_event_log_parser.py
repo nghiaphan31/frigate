@@ -53,6 +53,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Assumption: you have subsscribed to the frigate events and have pipe it out to a jsonl")
         print("Example: mosquitto_sub -h 192.168.1.24 -u mosquito -P mosquito -t 'frigate/events' > frigate_event_dump.jsonl")
-        print("Usage: python frigate_event_log_parser.py <events.jsonl>")
+        print("Usage: python3 frigate_event_log_parser.py <events.jsonl>")
+        print("python3 ../tools/frigate_event_log_parser.py frigate_event_dump.jsonl | grep allee")
         sys.exit(1)
     parse_events_file(sys.argv[1])
