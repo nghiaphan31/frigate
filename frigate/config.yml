@@ -116,7 +116,7 @@ cameras:
           roles: [detect]
         # Record stream – high quality for storage
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
-          roles: [record]
+          roles: [record, audio]
 
     # Detection configuration
     detect:
@@ -148,7 +148,7 @@ cameras:
           - prive
           - rodage
       detections: {}
-      
+
   jardin_arriere:
     ffmpeg:
       inputs:
