@@ -93,16 +93,16 @@ cameras:
         objects: person
       rodage:
         coordinates: 0.062,0.424,0.331,0.482,0.266,0.998,0,0.994
-        loitering_time: 30
+        loitering_time: 10
         inertia: 1         # Lower inertia for faster zone entry/exit detection
         objects: person
 
     # Review/alert requirements
     review:
       alerts:
-        required_zones:
-          - prive
-          - rodage
+        required_zones: []
+        # An empty required_zones list means alerts are sent for any zone event
+        # (subject to each zone’s own loitering_time and config)
       detections: {}
 
   jardin_devant:
@@ -164,9 +164,9 @@ cameras:
     # Review/alert requirements
     review:
       alerts:
-        required_zones:
-          - prive
-          - rodage
+        required_zones: []
+        # An empty required_zones list means alerts are sent for any zone event
+        # (subject to each zone’s own loitering_time and config)
       detections: {}
 
   jardin_arriere:
@@ -201,7 +201,9 @@ cameras:
         objects: person
     review:
       alerts:
-        required_zones: prive
+        required_zones: []
+        # An empty required_zones list means alerts are sent for any zone event
+        # (subject to each zone’s own loitering_time and config)
 
   piscine_vue_toit:
     audio:
@@ -230,6 +232,8 @@ cameras:
     review:
       alerts:
         required_zones: []
+        # An empty required_zones list means alerts are sent for any zone event
+        # (subject to each zone’s own loitering_time and config)
 
   vue_sur_entree_dev:
     audio:
@@ -262,7 +266,9 @@ cameras:
         inertia: 1         # Lower inertia for faster zone entry/exit detection
     review:
       alerts:
-        required_zones: prive
+        required_zones: []
+        # An empty required_zones list means alerts are sent for any zone event
+        # (subject to each zone’s own loitering_time and config)
 
   sonnette_video_wired:
     audio:
@@ -299,7 +305,9 @@ cameras:
             threshold: 150
     review:
       alerts:
-        required_zones: rodage
+        required_zones: []
+        # An empty required_zones list means alerts are sent for any zone event
+        # (subject to each zone’s own loitering_time and config)
 
 version: 0.15-1
 semantic_search:
