@@ -128,6 +128,21 @@ cameras:
     snapshots:
       enabled: true
 
+    objects:
+      # List of object types Frigate will track for this camera
+      track:
+        - person
+
+      filters:
+        person:
+          # Minimum confidence score from detection model for initial person detection.
+          # Lower value increases sensitivity, may increase false positives.
+          min_score: 0.6 # Lowered from 0.72 for increased sensitivity
+
+          # Minimum sustained tracking confidence required to trigger a true event.
+          # Lowering this makes "person" detection more likely but also less strict.
+          threshold: 0.6 # Lowered for quicker/more sensitive triggering
+          
     # Motion zones
     zones:
       prive:
