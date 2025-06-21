@@ -49,14 +49,16 @@ objects:
   filters:
     person:
       min_score: 0.72      # Only consider detections with confidence ≥ 0.72
-      threshold: 0.72       # Require sustained confidence ≥ 0.72 to trigger event
+      threshold: 0.72      # Require sustained confidence ≥ 0.72 to trigger event
 
 detectors:
   cpu1:
     type: cpu                       # Change to 'edgetpu' if you add a Coral USB
 
 cameras:
-
+# ----------------------------------------------------------------------
+# Camera: allee_sur_le_cote
+# ----------------------------------------------------------------------
   allee_sur_le_cote:
     # Audio
     audio:
@@ -84,14 +86,24 @@ cameras:
 
     # Motion zones
     zones:
+      # "prive" zone:
+      # - Defines a polygonal area on the image (see coordinates).
+      # - loitering_time: 0 → An alert can trigger immediately when a person enters this zone.
+      # - inertia: 3 → Event persists for 3 seconds after the person leaves the zone.
+      # - objects: person → Only 'person' objects are considered for this zone.
       prive:
         coordinates: 0.276,1,0.342,0.464,0.053,0.41,0.045,0.395,0.054,0.371,0.045,0.35,0.05,0.335,0.128,0.293,0.226,0.259,0.353,0.237,0.468,0.229,0.6,0.228,0.689,0.232,0.814,0.254,0.885,0.275,0.975,0.319,0.999,0.331,0.999,0.996
         loitering_time: 0
         inertia: 3
         objects: person
+      # "rodage" zone:
+      #   - Polygon area defined below.
+      #   - loitering_time: 10 → 'Person' must be in the zone for at least 10 seconds to trigger.
+      #   - inertia: Event persists for 3 seconds after last detection leaves.
+      #   - objects: Only 'person' will trigger zone events.
       rodage:
         coordinates: 0.062,0.424,0.331,0.482,0.266,0.998,0,0.994
-        loitering_time: 30
+        loitering_time: 10
         inertia: 3
         objects: person
 
@@ -99,10 +111,16 @@ cameras:
     review:
       alerts:
         required_zones:
+          # List of zones that can trigger an alert for this camera (OR condition!):
+          # - If a person event occurs in EITHER "prive" OR "rodage" zone, an alert is triggered.
+          # - You do NOT need both zones present in the same event (either one is sufficient).
           - prive
           - rodage
       detections: {}
-      
+# ----------------------------------------------------------------------
+# END Camera: allee_sur_le_cote
+# ----------------------------------------------------------------------    
+
   jardin_arriere:
     ffmpeg:
       inputs:
