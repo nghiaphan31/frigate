@@ -53,6 +53,8 @@ services:
     volumes:
       - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro   # proxy mapping rules
       - /etc/localtime:/etc/localtime:ro
+    devices:
+      - /dev/dri:/dev/dri  # <-- Add for full iGPU (VA-API) passthrough
 
 # ───────────────────────────── Frigate NVR ───────────────────────────
   frigate:
@@ -73,7 +75,7 @@ services:
         tmpfs:
           size: 256000000
     devices:
-      - /dev/dri/renderD128:/dev/dri/renderD128  # Intel VA‑API hardware decode
+      - /dev/dri:/dev/dri  # <-- Add for full iGPU (VA-API) passthrough
     depends_on:
       - go2rtc
 
