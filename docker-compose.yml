@@ -75,7 +75,7 @@ services:
         tmpfs:
           size: 256000000
     devices:
-      - /dev/dri/renderD128:/dev/dri/renderD128  # Intel VA‑API hardware decode
+      - /dev/dri:/dev/dri            # Map entire /dev/dri for all VA-API nodes
     depends_on:
       - go2rtc
 
