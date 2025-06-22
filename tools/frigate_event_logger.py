@@ -63,6 +63,7 @@ import sys
 # Ensure the parser is importable
 sys.path.append(os.path.dirname(__file__))
 from frigate_event_log_parser import human_readable_log
+from datetime import datetime, timedelta
 
 BROKER = "192.168.1.24"  # MQTT broker from working CLI
 MQTT_USER = "mosquito"
@@ -81,6 +82,31 @@ if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
     with open(LOG_FILE, "a") as f:
         f.write(human_readable_log({}, header=True) + "\n")
 
+def prune_old_logs(logfile, days=30):
+    """Keep only log entries (except the header) from the last 'days' days."""
+    if not os.path.exists(logfile):
+        return
+    with open(logfile, 'r') as f:
+        lines = f.readlines()
+    if not lines:
+        return
+    header = lines[0]
+    now = datetime.now()
+    cutoff = now - timedelta(days=days)
+    kept_lines = [header]
+    for line in lines[1:]:
+        try:
+            date_str = line.split('|')[0].strip()
+            line_time = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+            if line_time >= cutoff:
+                kept_lines.append(line)
+        except Exception:
+            # Malformed line or unparsable date: keep it to avoid data loss
+            kept_lines.append(line)
+    # Rewrite the log file with kept lines only
+    with open(logfile, 'w') as f:
+        f.writelines(kept_lines)
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connected to MQTT Broker.")
@@ -94,6 +120,7 @@ def on_message(client, userdata, msg):
         try:
             parsed = json.loads(event)
             logline = human_readable_log(parsed)
+            prune_old_logs(LOG_FILE, days=30)   # <-- Add this here
             logging.info(logline)
         except Exception as e:
             logging.error(f"Parse error: {e} -- raw: {event}")
