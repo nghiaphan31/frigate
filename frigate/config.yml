@@ -126,13 +126,9 @@ cameras:
     # Review/alert requirements
     review:
       alerts:
-        required_zones:
-          # List of zones that can trigger an alert for this camera (OR condition!):
-          # - If a person event occurs in EITHER "prive" OR "rodage" zone, an alert is triggered.
-          # - You do NOT need both zones present in the same event (either one is sufficient).
-          - prive
-          - rodage
-      detections: {}
+        required_zones: prive
+      detections:
+        required_zones: rodage
 # ----------------------------------------------------------------------
 # END Camera: allee_sur_le_cote
 # ----------------------------------------------------------------------    
@@ -189,9 +185,8 @@ cameras:
       alerts:
         required_zones: prive
       detections:
-        required_zones:
-          - rodage
-          - prive
+        required_zones: rodage
+
   piscine_vue_toit:
     snapshots:
       enabled: true
