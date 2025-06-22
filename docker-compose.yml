@@ -63,6 +63,8 @@ services:
     shm_size: "512m"            # shared‑mem for FFmpeg decode pipelines
     environment:
       TZ: Europe/Paris
+      LIBVA_DRIVER_NAME: iHD         # Ensures use of Intel iGPU VA-API driver
+      FRIGATE_HWACCEL: vaapi         # (Optional, for explicit Frigate config)
     privileged: false           # set true if you add a USB Coral
     volumes:
       - ./frigate/config.yml:/config/config.yml
