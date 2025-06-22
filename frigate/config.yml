@@ -80,6 +80,21 @@ cameras:
       height: 720
       fps: 5
 
+    # ----------------------------------------------------------------------
+    # Per-camera detection object settings override (applies ONLY to this camera)
+    # This completely replaces any global 'objects:' config for allee_sur_le_cote.
+    objects:
+      # Only track 'person' objects on this camera:
+      track:
+        - person
+      filters:
+        person:
+          # Only recognize detections with at least this confidence score:
+          min_score: 0.51     # Ignore detections below 0.51 confidence
+          # Require the detection to sustain this confidence to fire an event:
+          threshold: 0.6     # Event triggers only when confidence remains ≥ 0.6
+    # ----------------------------------------------------------------------
+
     # Snapshots (enable snapshots and use defaults from the top-level snapshots block)
     snapshots:
       enabled: true
@@ -92,7 +107,8 @@ cameras:
       # - inertia: 3 → Event persists for 3 seconds after the person leaves the zone.
       # - objects: person → Only 'person' objects are considered for this zone.
       prive:
-        coordinates: 0.276,1,0.342,0.464,0.053,0.41,0.045,0.395,0.054,0.371,0.045,0.35,0.05,0.335,0.128,0.293,0.226,0.259,0.353,0.237,0.468,0.229,0.6,0.228,0.689,0.232,0.814,0.254,0.885,0.275,0.975,0.319,0.999,0.331,0.999,0.996
+        coordinates: 
+          0.276,1,0.342,0.464,0.053,0.41,0.045,0.395,0.054,0.371,0.045,0.35,0.05,0.335,0.128,0.293,0.226,0.259,0.353,0.237,0.468,0.229,0.6,0.228,0.689,0.232,0.814,0.254,0.885,0.275,0.975,0.319,0.999,0.331,0.999,0.996
         loitering_time: 0
         inertia: 3
         objects: person
@@ -134,14 +150,12 @@ cameras:
       fps: 5
     snapshots:
       enabled: true
-    zones:
-      prive:
-        coordinates: 
-          0,0.982,0,0,0.202,-0.001,0.206,0.052,0.238,0.064,0.245,0.072,0.282,0.083,0.28,0.11,0.273,0.122,0.269,0.15,0.277,0.155,0.277,0.175,0.269,0.183,0.245,0.388,0.254,0.447,0.264,0.448,0.287,0.248,0.303,0.25,0.301,0.295,0.302,0.313,0.387,0.34,0.391,0.327,0.403,0.329,0.406,0.345,0.452,0.358,0.491,0.412,0.477,0.436,0.472,0.52,0.497,0.532,0.514,0.549,0.507,0.594,0.555,0.602,0.557,0.58,0.564,0.565,0.672,0.569,0.68,0.507,0.71,0.504,0.748,0.503,0.998,0.51,1,1,0,1
-        loitering_time: 0
-    review:
-      alerts:
-        required_zones: prive
+    zones: {}
+    review: {}
+    motion:
+      threshold: 11
+      contour_area: 10
+      improve_contrast: true
   jardin_devant:
     ffmpeg:
       inputs:
