@@ -36,6 +36,7 @@ snapshots:
   enabled: true            # master switch
   timestamp: true          # print date/time on the image
   bounding_box: true       # draw the red box around the person
+  clean_copy: false        # keep the annotated copy (don’t overwrite it with a “clean” PNG)
   crop: false              # set true if you want only the box area
   retain:                  # housekeeping
     default: 0             # keep *non-person* shots 0 d (you track only person anyway)
@@ -73,6 +74,12 @@ cameras:
         # Record stream – high quality for storage
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_record
           roles: [record, audio]
+
+    mqtt:
+      enabled: true          # optional—overrides the global default
+      timestamp: true        # burn timestamp on MQTT snapshot
+      bounding_box: true     # draw box + label + score + area
+      crop: false
 
     # Detection configuration
     detect:
