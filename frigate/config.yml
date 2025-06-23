@@ -248,6 +248,10 @@ cameras:
     review:
       detections:
         required_zones: rodage
+    objects:
+      filters:
+        person:
+          mask: 0.626,0.565,0.638,0.323,0.565,0.328,0.534,0.56
 version: 0.15-1
 semantic_search:
   enabled: true
