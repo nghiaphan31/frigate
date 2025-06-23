@@ -99,7 +99,7 @@ cameras:
           # Only recognize detections with at least this confidence score:
           min_score: 0.51     # Ignore detections below 0.51 confidence
           # Require the detection to sustain this confidence to fire an event:
-          threshold: 0.6     # Event triggers only when confidence remains ≥ 0.6
+          threshold: 0.7     # Event triggers only when confidence remains ≥ 0.7
     # ----------------------------------------------------------------------
 
     # Snapshots (enable snapshots and use defaults from the top-level snapshots block)
