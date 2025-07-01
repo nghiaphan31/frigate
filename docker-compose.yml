@@ -39,6 +39,12 @@ services:
     volumes:
       - ./ring-mqtt/data:/data            # holds config.json, Ring token & runtime state
       - /etc/localtime:/etc/localtime:ro  # keep logs in host timezone
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8554"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 # ───────────────────────────── go2rtc proxy ──────────────────────────
   go2rtc:
@@ -53,6 +59,9 @@ services:
     volumes:
       - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro   # proxy mapping rules
       - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      ring-mqtt:
+        condition: service_healthy
 
 # ───────────────────────────── Frigate NVR ───────────────────────────
   frigate:
