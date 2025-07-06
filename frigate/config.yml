@@ -143,7 +143,7 @@ cameras:
   jardin_arriere:
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_detect
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_record
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_record
           roles: [record]
@@ -162,7 +162,7 @@ cameras:
   jardin_devant:
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
           roles: [record]
@@ -170,6 +170,14 @@ cameras:
       width: 1280
       height: 720
       fps: 5
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_area: 3000
+          min_score: 0.6         # lower to catch more detections
+          threshold: 0.6
     snapshots:
       enabled: true
     zones:
@@ -184,7 +192,7 @@ cameras:
             threshold: 150
       prive:
         coordinates: 
-          0,0.676,0.112,0.765,0.134,0.616,0.162,0.484,0.196,0.357,0.21,0.321,0.219,0.304,0.262,0.415,0.306,0.418,0.412,0.421,0.644,0.436,0.675,0.341,0.687,0.341,0.682,0.358,0.683,0.377,0.812,0.399,0.829,0.385,0.84,0.36,0.889,0.528,0.935,0.77,1,0.716,1,1,0,1
+          0.015,0.728,0.136,0.808,0.161,0.629,0.193,0.501,0.211,0.396,0.249,0.355,0.282,0.429,0.262,0.415,0.306,0.418,0.412,0.421,0.644,0.436,0.675,0.341,0.687,0.341,0.682,0.358,0.676,0.403,0.807,0.433,0.829,0.445,0.83,0.42,0.872,0.554,0.913,0.817,1,0.785,1,1,0,1
         inertia: 3
         loitering_time: 0
 
@@ -200,7 +208,7 @@ cameras:
       enabled: true
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_detect
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_record
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_record
           roles: [record]
