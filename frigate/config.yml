@@ -115,7 +115,7 @@ cameras:
       # - objects: person → Only 'person' objects are considered for this zone.
       prive:
         coordinates: 
-          0.276,1,0.342,0.464,0.063,0.412,0.059,0.397,0.065,0.376,0.053,0.35,0.063,0.34,0.129,0.305,0.229,0.269,0.353,0.249,0.47,0.241,0.6,0.238,0.69,0.248,0.815,0.273,0.886,0.292,0.975,0.34,1,0.35,0.999,0.996
+          0.276,1,0,1,0,0.616,0.066,0.396,0.065,0.376,0.053,0.35,0.063,0.34,0.132,0.31,0.232,0.287,0.356,0.264,0.473,0.254,0.602,0.259,0.694,0.264,0.818,0.283,0.889,0.306,0.975,0.34,1,0.35,0.999,0.996
         loitering_time: 0
         inertia: 3
         objects: person
@@ -125,7 +125,7 @@ cameras:
       #   - inertia: Event persists for 3 seconds after last detection leaves.
       #   - objects: Only 'person' will trigger zone events.
       rodage:
-        coordinates: 0.062,0.424,0.331,0.482,0.266,0.998,0,0.994
+        coordinates: 0.041,0.372,0.05,0.362,0.06,0.385,0,0.587,0,0.496
         loitering_time: 10
         inertia: 3
         objects: person
@@ -162,13 +162,18 @@ cameras:
   jardin_devant:
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record
           roles: [record]
+      # Override the global record args to re-encode using the iGPU
+      # This allows the timestamp to be burned into the video.
+      output_args:
+        record: preset-vaapi
     detect:
-      width: 1280
-      height: 720
+      # Use a higher resolution for detection to better identify distant objects.
+      width: 1920
+      height: 1080
       fps: 5
     objects:
       track:
@@ -176,8 +181,8 @@ cameras:
       filters:
         person:
           min_area: 3000
-          min_score: 0.6         # lower to catch more detections
-          threshold: 0.6
+          min_score: 0.7         # lower to catch more detections
+          threshold: 0.7
     snapshots:
       enabled: true
     zones:
