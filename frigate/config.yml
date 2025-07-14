@@ -51,7 +51,7 @@ objects:
     person:
       min_score: 0.72      # Only consider detections with confidence ≥ 0.72
       threshold: 0.72      # Require sustained confidence ≥ 0.72 to trigger event
-
+      max_area: 200000     # Ignore detections larger than this area (in pixels)
 detectors:
   cpu1:
     type: cpu                       # Change to 'edgetpu' if you add a Coral USB
@@ -143,7 +143,7 @@ cameras:
   jardin_arriere:
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_record
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_detect
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_record
           roles: [record]
@@ -213,7 +213,7 @@ cameras:
       enabled: true
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_record
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_detect
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_record
           roles: [record]
