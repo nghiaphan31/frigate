@@ -19,5 +19,6 @@
   "_snapshot_mode": "'interval' = grab a frame every N seconds; 'motion' = only on events",
   "snapshot_time": 30,
   "_mqtt_url": "Format: mqtt://user:pass@host:port",
-  "mqtt_url": "mqtt://mosquito:mosquito@192.168.1.24:1883"
+  "mqtt_url": "mqtt://mosquito:mosquito@192.168.1.24:1883",
+  "enable_extended_discovery": true
 }
