@@ -62,9 +62,3 @@ streams:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
-  # ── Sonnette ────────────────────────────────────────────────────
-  sonnette_video_wired_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/343ea4da33f2_live
-  sonnette_video_wired_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/343ea4da33f2_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0

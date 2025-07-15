@@ -377,53 +377,6 @@ cameras:
       alerts:
         required_zones: prive    # Skip notifications unless someone is on porch
 
-  # ========================================================================
-  # 2.6 CAMERA: SONNETTE_VIDEO_WIRED – FRONT DOORBELL
-  #           * Ring Doorbell Pro 2
-  #           * Frigate supplements Ring cloud; higher frame‑rate RTSP feed
-  # ========================================================================
-  sonnette_video_wired:
-    # --- STREAM INPUTS -----------------------------------------------------
-    #  Doorbell provides dual streams via go2rtc; audio ignored because detections
-    #  don’t need it and it breaks some browsers.
-    ffmpeg:
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/sonnette_video_wired_detect  # [DETECT stream]
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/sonnette_video_wired_record  # [RECORD stream]
-          roles: [record]
-
-    # --- DETECTION SETTINGS ----------------------------------------------
-    detect:
-      width: 1280
-      height: 720
-      fps: 5
-
-    # --- SNAPSHOTS --------------------------------------------------------
-    snapshots:
-      enabled: true             # Needed for HA doorbell notifications
-
-    # --- ZONES -----------------------------------------------------------
-    zones:
-      rodage:
-        coordinates: 0.002,0.665,0.082,0.765,0.199,0.849,0.303,0.903,0.438,0.946,0.551,0.95,0.67,0.921,0.753,0.878,0.818,0.84,0.892,0.777,0.933,0.745,0.975,0.693,0.996,0.661,0.996,0.995,0,0.995
-        loitering_time: 30       # Require 30 s linger to avoid parcels/bugs
-        objects: person
-        filters:
-          person:
-            threshold: 150      # Legacy Ring setting kept for backwards compat
-
-    # --- REVIEW RULES ----------------------------------------------------
-    review:
-      detections:
-        required_zones: rodage   # Only record events in rodage zone
-
-    # --- OBJECT FILTER OVERRIDES ----------------------------------------
-    objects:
-      filters:
-        person:
-          mask: 0.626,0.565,0.638,0.323,0.565,0.328,0.534,0.56  # Mask moving trees
-
 # ============================================================================
 # 3. ADVANCED FEATURES AND MISCELLANEOUS
 # ============================================================================

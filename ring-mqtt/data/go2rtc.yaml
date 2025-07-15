@@ -13,12 +13,10 @@ rtsp:
 webrtc:
   listen: ''
 streams:
-  343ea4da33f2_live: exec:/app/ring-mqtt/scripts/start-stream.sh 343ea4da33f2 live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/343ea4da33f2 {output}#killsignal=15
-  343ea4da33f2_event: exec:/app/ring-mqtt/scripts/start-stream.sh 343ea4da33f2 event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/343ea4da33f2 {output}#killsignal=15
-  0cb2b74f37f3_live: exec:/app/ring-mqtt/scripts/start-stream.sh 0cb2b74f37f3 live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/0cb2b74f37f3 {output}#killsignal=15
-  0cb2b74f37f3_event: exec:/app/ring-mqtt/scripts/start-stream.sh 0cb2b74f37f3 event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/0cb2b74f37f3 {output}#killsignal=15
   9c761310afad_live: exec:/app/ring-mqtt/scripts/start-stream.sh 9c761310afad live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c761310afad {output}#killsignal=15
   9c761310afad_event: exec:/app/ring-mqtt/scripts/start-stream.sh 9c761310afad event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c761310afad {output}#killsignal=15
+  0cb2b74f37f3_live: exec:/app/ring-mqtt/scripts/start-stream.sh 0cb2b74f37f3 live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/0cb2b74f37f3 {output}#killsignal=15
+  0cb2b74f37f3_event: exec:/app/ring-mqtt/scripts/start-stream.sh 0cb2b74f37f3 event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/0cb2b74f37f3 {output}#killsignal=15
   9c7613fbc400_live: exec:/app/ring-mqtt/scripts/start-stream.sh 9c7613fbc400 live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c7613fbc400 {output}#killsignal=15
   9c7613fbc400_event: exec:/app/ring-mqtt/scripts/start-stream.sh 9c7613fbc400 event ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c7613fbc400 {output}#killsignal=15
   9c76136bc99d_live: exec:/app/ring-mqtt/scripts/start-stream.sh 9c76136bc99d live ring/0edde554-e5be-45a7-5583-0b05661ea2e5/camera/9c76136bc99d {output}#killsignal=15
