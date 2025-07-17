@@ -88,9 +88,10 @@ objects:
     - person                 # Detect only human beings by default
   filters:
     person:
+      min_area: 3000         # Ignore tiny objects (e.g. insects, leaves)     
       min_score: 0.72        # Ignore detections below this confidence
       threshold: 0.72        # Sustained confidence required to trigger event
-      max_area: 200000       # Discard blobs bigger than this pixel area
+      max_area: 200000       # Discard blobs bigger than this pixel area (e.g. stalled images due top network issues)
 
 # ---------------------------------------------------------------------------
 # 1.6 DETECTORS – CHOOSE THE HARDWARE INFERENCE ACCELERATOR
@@ -160,18 +161,18 @@ cameras:
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
-      width: 1280               # Must match low‑res *DETECT* stream dimensions
+      width: 1280               
       height: 720
       fps: 5                    # Higher FPS ➜ smoother but more CPU
 
     # --- OBJECT FILTER OVERRIDE (APPLIES ONLY TO THIS CAMERA) ------------
-    objects:
-      track:
-        - person                # Detect people only on this cam
-      filters:
-        person:
-          min_score: 0.51       # Lower than global to be more sensitive
-          threshold: 0.70       # Require sustained 0.70
+    #objects:
+    #  track:
+    #    - person                # Detect people only on this cam
+    #  filters:
+    #    person:
+    #      min_score: 0.51       # Lower than global to be more sensitive
+    #      threshold: 0.70       # Require sustained 0.70
 
     # --- SNAPSHOTS --------------------------------------------------------
     snapshots:
@@ -221,8 +222,8 @@ cameras:
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
-      width: 1280               # 720p is enough to recognise a person in garden
-      height: 720
+      width: 1920               # Full‑HD needed for persons who are further out
+      height: 1080
       fps: 5                    # Any higher ➜ battery hit + more CPU
 
     # --- SNAPSHOTS --------------------------------------------------------
@@ -263,19 +264,19 @@ cameras:
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
-      width: 1920               # Full‑HD needed for faces & licence plates
+      width: 1920               # Full‑HD needed for persons who are further out
       height: 1080
       fps: 5
 
     # --- OBJECT FILTERS --------------------------------------------------
-    objects:
-      track:
-        - person                # Only track people (ignore cars for privacy)
-      filters:
-        person:
-          min_area: 3000        # Disregard tiny silhouettes in the road area
-          min_score: 0.70       # Confidence threshold
-          threshold: 0.70
+    #objects:
+    #  track:
+    #    - person                # Only track people (ignore cars for privacy)
+    #  filters:
+    #    person:
+    #      min_area: 3000        # Disregard tiny silhouettes in the road area
+    #      min_score: 0.70       # Confidence threshold
+    #      threshold: 0.70
 
     # --- SNAPSHOTS --------------------------------------------------------
     snapshots:
@@ -326,8 +327,8 @@ cameras:
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
-      width: 1280               # 720p is enough – cam is top‑down
-      height: 720
+      width: 1920               # Full‑HD needed for persons who are further out
+      height: 1080
       fps: 5
 
     # --- SNAPSHOTS --------------------------------------------------------
@@ -357,7 +358,7 @@ cameras:
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
-      width: 1280               # Align with detect stream
+      width: 1280               # Persons are quite close-up
       height: 720
       fps: 5
 
