@@ -106,6 +106,17 @@ detectors:
   cpu1:
     type: cpu              # Using CPU only – upgrade to Coral for speed
 
+# ---------------------------------------------------------------------------
+# 1.7 MOTION PRE‑FILTER (BEFORE ML) – default pre‑filter for all cameras
+# These parameters let Frigate reject obvious noise (trees, rain) before
+# sending frames to the object detector, saving CPU and false positives.
+# ---------------------------------------------------------------------------
+motion:
+  threshold: 11           # Higher → less sensitive. # Higher ➜ require bigger pixel change
+  contour_area: 10        # Ignore blobs < 10 px²
+  improve_contrast: true  # Helps night scenes, more sensitive by day.  Histogram equalisation for low‑light frames
+
+
 # ============================================================================
 # 2. CAMERA DEFINITIONS – ONE BLOCK PER PHYSICAL CAMERA
 # ============================================================================
