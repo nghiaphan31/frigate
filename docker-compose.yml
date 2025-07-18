@@ -59,6 +59,12 @@ services:
     volumes:
       - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro   # proxy mapping rules
       - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:1984/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       ring-mqtt:
         condition: service_healthy
@@ -86,7 +92,8 @@ services:
     devices:
       - /dev/dri:/dev/dri            # Map entire /dev/dri for all VA-API nodes
     depends_on:
-      - go2rtc
+      go2rtc:
+        condition: service_healthy
 
 # ───────────────────────────── Monitoring stack (optional) ───────────
   cadvisor:
