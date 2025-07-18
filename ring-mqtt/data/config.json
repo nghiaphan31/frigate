@@ -1,23 +1,36 @@
 {
-  "_info": "Ring\u2011MQTT configuration with inline comments (keys starting with _ are ignored by ring\u2011mqtt)",
+  "_info": "Ring-MQTT configuration with inline comments (keys starting with _ are ignored by ring-mqtt)",
   "_note": "Only keep the real keys (without underscore) in production if you prefer a strict JSON.",
+
+
   "_enable_cameras": "true = publish camera/doorbell devices and all their entities to MQTT",
   "enable_cameras": true,
+
   "_enable_modes": "Set to true if you want Home Assistant tiles to change Ring Modes (Home/Away/Disarmed)",
   "enable_modes": false,
-  "_livestream_user_pass": "Username/password embedded in every RTSP URL ring\u2011mqtt serves",
+
+
+  "_livestream_user_pass": "Username/password embedded in every RTSP URL ring-mqtt serves",
   "livestream_user": "go2rtc",
   "livestream_pass": "go2rtc",
+
   "_livestream_startup": "'all' = open a cloud session for every camera at container start; 'none' waits for demand",
   "livestream_startup": "all",
+  "livestream_keepalive": true,
+
+
   "_logging": "Set log_level to 'info' and enable_debug false once things are stable",
   "log_level": "debug",
   "enable_debug": true,
+
+
   "_snapshots": "Ring still images pushed to MQTT/HTTP",
   "enable_snapshots": true,
   "snapshot_mode": "interval",
   "_snapshot_mode": "'interval' = grab a frame every N seconds; 'motion' = only on events",
   "snapshot_time": 30,
+
+
   "_mqtt_url": "Format: mqtt://user:pass@host:port",
   "mqtt_url": "mqtt://mosquito:mosquito@192.168.1.24:1883",
   "enable_extended_discovery": true

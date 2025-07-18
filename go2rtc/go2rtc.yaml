@@ -29,36 +29,33 @@ ffmpeg:
 streams:
   # ── Allee sur le Côté ─────────────────────────────────────────────
   allee_sur_le_cote_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live#prebuffer:10s
   allee_sur_le_cote_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0   # hardware decode for record job
 
   # ── Jardin Arrière ───────────────────────────────────────────────
   jardin_arriere_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live#prebuffer:10s
   jardin_arriere_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
+
   # ── Jardin Devant ────────────────────────────────────────────────
   jardin_devant_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live
-  jardin_devant_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
-
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live#prebuffer:10s
+  
   # ── Piscine vue toit ─────────────────────────────────────────────
   piscine_vue_toit_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live#prebuffer:10s
   piscine_vue_toit_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
   # ── Entrée ───────────────────────────────────────────────────────
   vue_sur_entree_dev_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live#prebuffer:10s
   vue_sur_entree_dev_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
-
