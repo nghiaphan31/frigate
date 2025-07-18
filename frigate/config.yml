@@ -144,12 +144,8 @@ cameras:
     #     after the fact.
     ffmpeg:
       inputs:
-        # LOW‑BANDWIDTH SUB‑STREAM → faster object detection (less CPU)
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_detect  # [DETECT stream]
-          roles: [detect]
-        # FULL‑RES MAIN STREAM → archival recording / playback
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_record  # [RECORD stream, +audio]
-          roles: [record, audio]
+          roles: [detect, record, audio]
 
     # --- PER‑CAMERA MQTT SNAPSHOTS VS REGULAR SNAPSHOTS --------------------
     #  Frigate supports *two* ways to generate still images:
@@ -174,7 +170,7 @@ cameras:
     detect:
       width: 1280               
       height: 720
-      fps: 5                    # Higher FPS ➜ smoother but more CPU
+      fps: 2                    # Higher FPS ➜ smoother but more CPU
 
     # --- OBJECT FILTER OVERRIDE (APPLIES ONLY TO THIS CAMERA) ------------
     #objects:
@@ -218,7 +214,9 @@ cameras:
   #           * Covers children’s play area and garden shed
   # ========================================================================
   jardin_arriere:
-    # NOTE: This camera does not carry an audio stream, so we omit the `audio:` key.
+    # --- AUDIO -------------------------------------------------------------
+    audio:
+      enabled: true            # Keep mic track – useful for analytics later 
 
     # --- STREAM INPUTS -----------------------------------------------------
     #   Uses the same dual‑stream pattern as the driveway cam:
@@ -227,15 +225,13 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_detect   # [DETECT stream]
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_record   # [RECORD stream]
-          roles: [record]
+          roles: [detect, record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
       width: 1920               # Full‑HD needed for persons who are further out
       height: 1080
-      fps: 5                    # Any higher ➜ battery hit + more CPU
+      fps: 2                    # Any higher ➜ battery hit + more CPU
 
     # --- SNAPSHOTS --------------------------------------------------------
     snapshots:
@@ -261,17 +257,20 @@ cameras:
   #           * Faces a public road – needs stricter privacy filters
   # ========================================================================
   jardin_devant:
+    # --- AUDIO -------------------------------------------------------------
+    audio:
+      enabled: true            # Keep mic track – useful for analytics later 
+
     # --- STREAM INPUTS -----------------------------------------------------
     #   We override the global `output_args` to use VAAPI so the timestamp is
     #   burned into the recorded video.  Handy when reviewing car drive‑bys.
     ffmpeg:
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect  # [DETECT stream]
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_record  # [RECORD stream]
-          roles: [record]
-      output_args:              # Override global – re‑encode to burn timestamp
-        record: preset-vaapi
+          roles: [detect, record, audio]
+
+#      output_args:              # Override global – re‑encode to burn timestamp
+#        record: preset-vaapi
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
@@ -326,21 +325,22 @@ cameras:
   #           * Primary purpose: safety – detect unauthorised pool access
   # ========================================================================
   piscine_vue_toit:
-    # NOTE: This camera has no audio channel.
+    # --- AUDIO -------------------------------------------------------------
+    audio:
+      enabled: true            # Keep mic track – useful for analytics later 
+
 
     # --- STREAM INPUTS -----------------------------------------------------
     ffmpeg:
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_detect  # [DETECT stream]
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_record  # [RECORD stream]
-          roles: [record]
+          roles: [detect, record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
       width: 1920               # Full‑HD needed for persons who are further out
       height: 1080
-      fps: 5
+      fps: 2
 
     # --- SNAPSHOTS --------------------------------------------------------
     snapshots:
@@ -359,13 +359,14 @@ cameras:
   #           * Ring Spotlight Cam
   # ========================================================================
   vue_sur_entree_dev:
+    # --- AUDIO -------------------------------------------------------------
+    audio:
+      enabled: true            # Keep mic track – useful for analytics later 
     # --- STREAM INPUTS -----------------------------------------------------
     ffmpeg:
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_detect  # [DETECT stream]
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_record  # [RECORD stream]
-          roles: [record]
+          roles: [detect, record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
