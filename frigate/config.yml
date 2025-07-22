@@ -116,6 +116,31 @@ motion:
   contour_area: 10        # Ignore blobs < 10 px²
   improve_contrast: true  # Helps night scenes, more sensitive by day.  Histogram equalisation for low‑light frames
 
+# --- Frigate audio section tuned for security-only events -------------------
+audio:
+  enabled: true            # Turn on audio analysis for all cameras
+  # The louder the ambient noise, the higher you set min_volume
+  #   ≈200  very sensitive (quiet room)
+  #   ≈350  typical living-room background
+  #   ≈700+ noisy street-facing cam
+  min_volume: 350
+
+  # Frigate will ONLY publish events whose label is in this list ----------------
+  listen:
+    # ── Group 1: forced-entry / violence ───────────────────────────────────────
+    - glass_breaking        # Window/door smash
+    - gunshot_gunfire       # Handgun or rifle report
+    - explosion             # Large bang (can include fireworks)
+    - scream                # Human distress
+    - yell                  # Aggressive shouting
+
+    # ── Group 2: life-safety alarms ────────────────────────────────────────────
+    - smoke_alarm           # Residential smoke detector pattern
+    - fire_alarm            # Commercial horn-strobe tone
+    - carbon_monoxide_alarm # CO detector beeps
+    - car_alarm             # Vehicle alarm siren
+    - siren                 # Police / ambulance siren nearby
+
 
 # ============================================================================
 # 2. CAMERA DEFINITIONS – ONE BLOCK PER PHYSICAL CAMERA
