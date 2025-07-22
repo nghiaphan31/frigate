@@ -17,6 +17,7 @@
   "_livestream_startup": "'all' = open a cloud session for every camera at container start; 'none' waits for demand",
   "livestream_startup": "all",
   "livestream_keepalive": true,
+  "livestream_keepalive_interval": 45,
 
 
   "_logging": "Set log_level to 'info' and enable_debug false once things are stable",
@@ -29,7 +30,7 @@
   "snapshot_mode": "interval",
   "_snapshot_mode": "'interval' = grab a frame every N seconds; 'motion' = only on events",
   "snapshot_time": 30,
-
+  "warmup_snapshot_interval": 300,
 
   "_mqtt_url": "Format: mqtt://user:pass@host:port",
   "mqtt_url": "mqtt://mosquito:mosquito@192.168.1.24:1883",

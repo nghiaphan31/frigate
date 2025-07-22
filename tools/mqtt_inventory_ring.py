@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+mqtt logs -to be parsed by this script- are typically in /var/log/mqtt folder
+
 mqtt_inventory_ring.py – Ring topic inventory ➜ clean YAML
 ========================================================
 
