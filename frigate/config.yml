@@ -415,6 +415,123 @@ cameras:
       alerts:
         required_zones: prive    # Skip notifications unless someone is on porch
 
+  cuisine_ete:
+    # --- AUDIO -------------------------------------------------------------
+    audio:
+      enabled: true            # Keep mic track – useful for analytics later 
+
+    # --- STREAM INPUTS -----------------------------------------------------
+    #   Uses the same dual‑stream pattern as the driveway cam:
+    #     • Lower‑res sub‑stream ➜ detection
+    #     • Full‑res main stream ➜ archival recording
+    ffmpeg:
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/cuisine_ete_detect   # [DETECT stream]
+          roles: [detect, record, audio]
+
+    # --- DETECTION SETTINGS ----------------------------------------------
+    detect:
+      width: 1920               # Full‑HD needed for persons who are further out
+      height: 1080
+      fps: 2                    # Any higher ➜ battery hit + more CPU
+
+    # --- SNAPSHOTS --------------------------------------------------------
+    snapshots:
+      enabled: true             # Stick with global snapshot policy
+
+    # --- MOTION PRE‑FILTER (BEFORE ML) ------------------------------------
+    #  These parameters let Frigate reject obvious noise (trees, rain) before
+    #  sending frames to the object detector, saving CPU and false positives.
+    motion:
+      threshold: 11             # Higher ➜ require bigger pixel change
+      contour_area: 10          # Ignore extremely small blobs <10 px²
+      improve_contrast: true    # Histogram equalisation for low‑light frames
+
+    # --- ZONES -----------------------------------------------------------
+    zones: {}                   # Full frame monitoring – no zone gating
+
+    # --- REVIEW RULES ----------------------------------------------------
+    review: {}                  # Every detection event is archived; no alerts
+
+  # cuisine:
+  #   # --- AUDIO -------------------------------------------------------------
+  #   audio:
+  #     enabled: true            # Keep mic track – useful for analytics later 
+
+  #   # --- STREAM INPUTS -----------------------------------------------------
+  #   #   Uses the same dual‑stream pattern as the driveway cam:
+  #   #     • Lower‑res sub‑stream ➜ detection
+  #   #     • Full‑res main stream ➜ archival recording
+  #   ffmpeg:
+  #     inputs:
+  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/cuisine_detect   # [DETECT stream]
+  #         roles: [detect, record, audio]
+
+  #   # --- DETECTION SETTINGS ----------------------------------------------
+  #   detect:
+  #     width: 1920               # Full‑HD needed for persons who are further out
+  #     height: 1080
+  #     fps: 2                    # Any higher ➜ battery hit + more CPU
+
+  #   # --- SNAPSHOTS --------------------------------------------------------
+  #   snapshots:
+  #     enabled: true             # Stick with global snapshot policy
+
+  #   # --- MOTION PRE‑FILTER (BEFORE ML) ------------------------------------
+  #   #  These parameters let Frigate reject obvious noise (trees, rain) before
+  #   #  sending frames to the object detector, saving CPU and false positives.
+  #   motion:
+  #     threshold: 11             # Higher ➜ require bigger pixel change
+  #     contour_area: 10          # Ignore extremely small blobs <10 px²
+  #     improve_contrast: true    # Histogram equalisation for low‑light frames
+
+  #   # --- ZONES -----------------------------------------------------------
+  #   zones: {}                   # Full frame monitoring – no zone gating
+
+  #   # --- REVIEW RULES ----------------------------------------------------
+  #   review: {}                  # Every detection event is archived; no alerts
+
+
+  # canape_salon:
+  #   # --- AUDIO -------------------------------------------------------------
+  #   audio:
+  #     enabled: true            # Keep mic track – canapé_salonuseful for analytics later 
+
+  #   # --- STREAM INPUTS -----------------------------------------------------
+  #   #   Uses the same dual‑stream pattern as the driveway cam:
+  #   #     • Lower‑res sub‑stream ➜ detection
+  #   #     • Full‑res main stream ➜ archival recording
+  #   ffmpeg:
+  #     inputs:
+  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/canape_salon_detect   # [DETECT stream]
+  #         roles: [detect, record, audio]
+
+  #   # --- DETECTION SETTINGS ----------------------------------------------
+  #   detect:
+  #     width: 1920               # Full‑HD needed for persons who are further out
+  #     height: 1080
+  #     fps: 2                    # Any higher ➜ battery hit + more CPU
+
+  #   # --- SNAPSHOTS --------------------------------------------------------
+  #   snapshots:
+  #     enabled: true             # Stick with global snapshot policy
+
+  #   # --- MOTION PRE‑FILTER (BEFORE ML) ------------------------------------
+  #   #  These parameters let Frigate reject obvious noise (trees, rain) before
+  #   #  sending frames to the object detector, saving CPU and false positives.
+  #   motion:
+  #     threshold: 11             # Higher ➜ require bigger pixel change
+  #     contour_area: 10          # Ignore extremely small blobs <10 px²
+  #     improve_contrast: true    # Histogram equalisation for low‑light frames
+
+  #   # --- ZONES -----------------------------------------------------------
+  #   zones: {}                   # Full frame monitoring – no zone gating
+
+  #   # --- REVIEW RULES ----------------------------------------------------
+  #   review: {}                  # Every detection event is archived; no alerts
+
+
+
 # ============================================================================
 # 3. ADVANCED FEATURES AND MISCELLANEOUS
 # ============================================================================

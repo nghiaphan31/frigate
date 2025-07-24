@@ -59,3 +59,24 @@ streams:
   vue_sur_entree_dev_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
+
+  # ── Cuisine Ete ───────────────────────────────────────────────────────
+  cuisine_ete_detect:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live#prebuffer:10s
+  cuisine_ete_record:
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live
+    - ffmpeg:hwaccel=vaapi#analyze_duration=0         
+    
+  # # ── Salon ───────────────────────────────────────────────────────
+  # canape_salon_detect:
+  #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761366dadc_live#prebuffer:10s
+  # canape_salon_record:
+  #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761366dadc_live
+  #   - ffmpeg:hwaccel=vaapi#analyze_duration=0
+
+  # # ── Cuisine ───────────────────────────────────────────────────────
+  # cuisine_detect:
+  #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c76136bc99d_live#prebuffer:10s
+  # cuisine_record:
+  #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c76136bc99d_live
+  #   - ffmpeg:hwaccel=vaapi#analyze_duration=0         
