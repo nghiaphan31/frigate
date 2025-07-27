@@ -32,7 +32,7 @@ services:
       - "55123:55123"            # Token-helper Web UI (only needed on first login)
     environment:
       # MQTT broker URL the addon will publish all Ring topics to
-      MQTT_URL: mqtt://mosquito:mosquito@192.168.1.24:1883
+      MQTT_URL: mqtt://mosquito:mosquito@192.168.50.125:1883
       # Credentials must match go2rtc.yaml so the proxy can subscribe
       LIVESTREAM_USER: go2rtc
       LIVESTREAM_PASS: go2rtc
