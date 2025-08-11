@@ -1,0 +1,12 @@
+[Unit]
+Description=NUC daily system audit and git commit
+Documentation=man:systemd.timer(5)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=REPO=/opt/sys-audit
+# Set GIT_PUSH=1 to push to 'origin' if configured.
+Environment=GIT_PUSH=
+ExecStart=/opt/sys-audit/nuc_audit_commit.sh

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run NUC audit daily and commit if changed
+
+[Timer]
+OnCalendar=*-*-* 07:30
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target
