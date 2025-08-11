@@ -108,22 +108,37 @@ services:
       RESTIC_REPOSITORY: sftp:nuc_backup@192.168.1.14:/backups/nuc
 
       # What to back up (inside the container). These paths come from volumes below.
-      RESTIC_BACKUP_SOURCES: "/host_etc /host_home /srv/docker-vols /docker_vols"
+      RESTIC_BACKUP_SOURCES: "/host_etc /host_root /host_home /stack_repo /srv/docker-vols /docker_vols"
+      # Keep things lean:
+      RESTIC_BACKUP_ARGS: >
+        --exclude '/host_home/*/.cache'
+        --exclude '/host_root/.cache'
+        --exclude '/stack_repo/**/.git'
+        --exclude '/srv/docker-vols/**/cache'
+        --exclude '/srv/docker-vols/**/tmp'
+        --exclude '/docker_vols/*/_data/tmp'
+        --exclude '/docker_vols/*/_data/cache'
+        # Optional: Frigate recordings can be massive; uncomment to skip
+        --exclude '/host_home/nghia-phan/git/nuc-docker-stack/frigate/storage/**'
+
 
       # Schedule + retention
       BACKUP_CRON: "0 3 * * *"
       RESTIC_FORGET_ARGS: "--keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune"
 
     volumes:
-      # Mount our key as /root/.ssh/id_ed25519 (read-only)
-      - ./restic/ssh:/root/.ssh:ro
+      # Mount our key as /root/.ssh/id_ed25519 
+      - ./restic/ssh:/root/.ssh:rw
       # Pass restic.env into the container at a stable path
       - ./restic/restic.env:/host/restic.env:ro
 
       # Host data to protect (adjust to your setup)
       - /etc:/host_etc:ro
+      - /root:/host_root:ro
       - /home:/host_home:ro
+      - /home/nghia-phan/git/nuc-docker-stack:/stack_repo:ro
       - /srv/docker-vols:/srv/docker-vols:ro
+      - /var/lib/docker/volumes:/docker_vols:ro
 
       # (Optional) include named Docker volumes (crash-consistent unless you dump DBs)
       - /var/lib/docker/volumes:/docker_vols:ro
