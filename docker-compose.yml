@@ -95,6 +95,42 @@ services:
       go2rtc:
         condition: service_healthy
 
+  restic-backup:
+    image: ghcr.io/lobaro/restic-backup-docker:latest
+    container_name: restic-backup
+    hostname: restic
+    restart: unless-stopped
+
+    env_file:
+      - ./restic/restic.env
+    environment:
+      # Use Synology share path (SFTP chroot): backups/nuc
+      RESTIC_REPOSITORY: sftp:nuc_backup@192.168.1.14:/backups/nuc
+
+      # What to back up (inside the container). These paths come from volumes below.
+      RESTIC_BACKUP_SOURCES: "/host_etc /host_home /srv/docker-vols /docker_vols"
+
+      # Schedule + retention
+      BACKUP_CRON: "0 3 * * *"
+      RESTIC_FORGET_ARGS: "--keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune"
+
+    volumes:
+      # Mount our key as /root/.ssh/id_ed25519 (read-only)
+      - ./restic/ssh:/root/.ssh:ro
+      # Pass restic.env into the container at a stable path
+      - ./restic/restic.env:/host/restic.env:ro
+
+      # Host data to protect (adjust to your setup)
+      - /etc:/host_etc:ro
+      - /home:/host_home:ro
+      - /srv/docker-vols:/srv/docker-vols:ro
+
+      # (Optional) include named Docker volumes (crash-consistent unless you dump DBs)
+      - /var/lib/docker/volumes:/docker_vols:ro
+
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
 # ───────────────────────────── Monitoring stack (optional) ───────────
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
