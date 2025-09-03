@@ -29,14 +29,14 @@ ffmpeg:
 streams:
   # ── Allee sur le Côté ─────────────────────────────────────────────
   allee_sur_le_cote_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live?rtsp_transport=tcp#prebuffer:10s
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live#prebuffer:10s
   allee_sur_le_cote_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0   # hardware decode for record job
 
   # ── Jardin Arrière ───────────────────────────────────────────────
   jardin_arriere_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live?rtsp_transport=tcp#prebuffer:10s
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live#prebuffer:10s
   jardin_arriere_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
@@ -44,25 +44,25 @@ streams:
 
   # ── Jardin Devant ────────────────────────────────────────────────
   jardin_devant_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live?rtsp_transport=tcp#prebuffer:10s
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live#prebuffer:10s
   
   # ── Piscine vue toit ─────────────────────────────────────────────
   piscine_vue_toit_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live?rtsp_transport=tcp#prebuffer:10s
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live#prebuffer:10s
   piscine_vue_toit_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
   # ── Entrée ───────────────────────────────────────────────────────
   vue_sur_entree_dev_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live?rtsp_transport=tcp#prebuffer:10s
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live#prebuffer:10s
   vue_sur_entree_dev_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
   # ── Cuisine Ete ───────────────────────────────────────────────────────
   cuisine_ete_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live?rtsp_transport=tcp#prebuffer:10s
+    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live#prebuffer:10s
   cuisine_ete_record:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live
     - ffmpeg:hwaccel=vaapi#analyze_duration=0         
@@ -79,11 +79,4 @@ streams:
   #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c76136bc99d_live#prebuffer:10s
   # cuisine_record:
   #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c76136bc99d_live
-  #   - ffmpeg:hwaccel=vaapi#analyze_duration=0
-
-  # ── Vue Sud ─────────────────────────────────────────────
-  tc41_vue_sud_detect:
-    - rtsp://frigate_nghia:_KLGWG*WwLbiS4z@192.168.50.19/stream1?rtsp_transport=tcp#prebuffer:10s
-  tc41_vue_sud_record:
-    - rtsp://frigate_nghia:_KLGWG*WwLbiS4z@192.168.50.19/stream1#prebuffer:10s
-         
+  #   - ffmpeg:hwaccel=vaapi#analyze_duration=0         
