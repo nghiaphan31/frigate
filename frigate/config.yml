@@ -34,14 +34,11 @@
 # 1. GLOBAL SETTINGS – APPLY TO EVERY CAMERA UNLESS OVERRIDDEN
 # ============================================================================
 
-go2rtc:
-  enabled: false
-
 # ---------------------------------------------------------------------------
 # 1.1 MQTT – CONNECTION DETAILS TO YOUR HOME‑ASSISTANT BROKER
 # ---------------------------------------------------------------------------
 mqtt:
-  host: 192.168.50.125         # IP/hostname of the MQTT broker (Mosquitto on HA)
+  host: 192.168.1.24         # IP/hostname of the MQTT broker (Mosquitto on HA)
   user: mosquito             # Frigate‑only MQTT username
   password: mosquito         # …and its matching password
   topic_prefix: frigate      # Change if you plan multiple Frigate instances
@@ -54,49 +51,11 @@ ffmpeg:
   # This offloads work from CPU so detections stay real‑time.
   hwaccel_args: preset-vaapi
 
-  input_args:
-    - "-an"
-    # RTSP over TCP, 5 s connect timeout
-    - "-rtsp_transport"
-    - "tcp"
-    - "-timeout"
-    - "5000000"
-
-    # Make PTS/DTS monotonic, drop corrupted frames
-    - "-avoid_negative_ts"
-    - "make_zero"
-    - "-fflags"
-    - "+genpts+discardcorrupt"
-
-    # Low-latency / no internal buffering
-    - "-flags"
-    - "low_delay"
-    - "-fflags"
-    - "nobuffer"
-
-    - "-thread_queue_size"
-    - "512"
-
-    # Global header for certain formats
-    - "-flags"
-    - "global_header"
-
-    # Increase probe/analyze sizes so the stream is detected quickly
-    - "-probesize"
-    - "1000000"
-    - "-analyzeduration"
-    - "1000000"
-
-    # Use wallclock timestamps (helpful for some IP cams)
-    - "-use_wallclock_as_timestamps"
-    - "1"
-
   output_args:
     # The built‑in record preset below:
     #   • copies the original video (no re‑encode) – fast & lossless
     #   • transcodes audio ➜ AAC – to satisfy browsers that reject G.711/PCMU
     record: preset-record-generic-audio-aac
-
 
 # ---------------------------------------------------------------------------
 # 1.3 RECORD – HOW LONG TO KEEP VIDEO CLIPS
@@ -159,7 +118,7 @@ motion:
 
 # --- Frigate audio section tuned for security-only events -------------------
 audio:
-  enabled: false            # Turn on audio analysis for all cameras
+  enabled: true            # Turn on audio analysis for all cameras
   # The louder the ambient noise, the higher you set min_volume
   #   ≈200  very sensitive (quiet room)
   #   ≈350  typical living-room background
@@ -198,7 +157,7 @@ cameras:
   allee_sur_le_cote:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: false            # Keep mic track – useful for analytics later
+      enabled: true            # Keep mic track – useful for analytics later
 
     # --- STREAM INPUTS -----------------------------------------------------
     #   • The *DETECT* stream is a secondary/sub‑stream configured on the camera at a
@@ -210,8 +169,8 @@ cameras:
     #     after the fact.
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@localhost:8556/allee_sur_le_cote_detect  # [DETECT stream]
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_detect  # [DETECT stream]
+          roles: [detect, record, audio]
 
     # --- PER‑CAMERA MQTT SNAPSHOTS VS REGULAR SNAPSHOTS --------------------
     #  Frigate supports *two* ways to generate still images:
@@ -282,7 +241,7 @@ cameras:
   jardin_arriere:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: false            # Keep mic track – useful for analytics later 
+      enabled: true            # Keep mic track – useful for analytics later 
 
     # --- STREAM INPUTS -----------------------------------------------------
     #   Uses the same dual‑stream pattern as the driveway cam:
@@ -290,8 +249,8 @@ cameras:
     #     • Full‑res main stream ➜ archival recording
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@localhost:8556/jardin_arriere_detect   # [DETECT stream]
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_detect   # [DETECT stream]
+          roles: [detect, record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
@@ -325,15 +284,15 @@ cameras:
   jardin_devant:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: false            # Keep mic track – useful for analytics later 
+      enabled: true            # Keep mic track – useful for analytics later 
 
     # --- STREAM INPUTS -----------------------------------------------------
     #   We override the global `output_args` to use VAAPI so the timestamp is
     #   burned into the recorded video.  Handy when reviewing car drive‑bys.
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@localhost:8556/jardin_devant_detect  # [DETECT stream]
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect  # [DETECT stream]
+          roles: [detect, record, audio]
 
 #      output_args:              # Override global – re‑encode to burn timestamp
 #        record: preset-vaapi
@@ -393,14 +352,14 @@ cameras:
   piscine_vue_toit:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: false            # Keep mic track – useful for analytics later 
+      enabled: true            # Keep mic track – useful for analytics later 
 
 
     # --- STREAM INPUTS -----------------------------------------------------
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@localhost:8556/piscine_vue_toit_detect  # [DETECT stream]
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_detect  # [DETECT stream]
+          roles: [detect, record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
@@ -427,12 +386,12 @@ cameras:
   vue_sur_entree_dev:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: false            # Keep mic track – useful for analytics later 
+      enabled: true            # Keep mic track – useful for analytics later 
     # --- STREAM INPUTS -----------------------------------------------------
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@localhost:8556/vue_sur_entree_dev_detect  # [DETECT stream]
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_detect  # [DETECT stream]
+          roles: [detect, record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
@@ -459,7 +418,7 @@ cameras:
   cuisine_ete:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: false            # Keep mic track – useful for analytics later 
+      enabled: true            # Keep mic track – useful for analytics later 
 
     # --- STREAM INPUTS -----------------------------------------------------
     #   Uses the same dual‑stream pattern as the driveway cam:
@@ -467,8 +426,8 @@ cameras:
     #     • Full‑res main stream ➜ archival recording
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@localhost:8556/cuisine_ete_detect   # [DETECT stream]
-          roles: [detect, record]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/cuisine_ete_detect   # [DETECT stream]
+          roles: [detect, record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
@@ -493,46 +452,6 @@ cameras:
 
     # --- REVIEW RULES ----------------------------------------------------
     review: {}                  # Every detection event is archived; no alerts
-
-
-  tc41_vue_sud_detect:
-    # --- AUDIO -------------------------------------------------------------
-    audio:
-      enabled: false            # Keep mic track – useful for analytics later 
-
-    # --- STREAM INPUTS -----------------------------------------------------
-    #   Uses the same dual‑stream pattern as the driveway cam:
-    #     • Lower‑res sub‑stream ➜ detection
-    #     • Full‑res main stream ➜ archival recording
-    ffmpeg:
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@localhost:8556/tc41_vue_sud_detect  # [DETECT stream]
-          roles: [detect, record]
-
-    # --- DETECTION SETTINGS ----------------------------------------------
-    detect:
-      width: 1920               # Full‑HD needed for persons who are further out
-      height: 1080
-      fps: 2                    # Any higher ➜ battery hit + more CPU
-
-    # --- SNAPSHOTS --------------------------------------------------------
-    snapshots:
-      enabled: true             # Stick with global snapshot policy
-
-    # --- MOTION PRE‑FILTER (BEFORE ML) ------------------------------------
-    #  These parameters let Frigate reject obvious noise (trees, rain) before
-    #  sending frames to the object detector, saving CPU and false positives.
-    motion:
-      threshold: 11             # Higher ➜ require bigger pixel change
-      contour_area: 10          # Ignore extremely small blobs <10 px²
-      improve_contrast: true    # Histogram equalisation for low‑light frames
-
-    # --- ZONES -----------------------------------------------------------
-    zones: {}                   # Full frame monitoring – no zone gating
-
-    # --- REVIEW RULES ----------------------------------------------------
-    review: {}                  # Every detection event is archived; no alerts
-
 
   # cuisine:
   #   # --- AUDIO -------------------------------------------------------------
@@ -545,8 +464,8 @@ cameras:
   #   #     • Full‑res main stream ➜ archival recording
   #   ffmpeg:
   #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@localhost:8556/cuisine_detect   # [DETECT stream]
-  #         roles: [detect, record]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/cuisine_detect   # [DETECT stream]
+  #         roles: [detect, record, audio]
 
   #   # --- DETECTION SETTINGS ----------------------------------------------
   #   detect:
@@ -584,8 +503,8 @@ cameras:
   #   #     • Full‑res main stream ➜ archival recording
   #   ffmpeg:
   #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@localhost:8556/canape_salon_detect   # [DETECT stream]
-  #         roles: [detect, record]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/canape_salon_detect   # [DETECT stream]
+  #         roles: [detect, record, audio]
 
   #   # --- DETECTION SETTINGS ----------------------------------------------
   #   detect:
