@@ -157,7 +157,7 @@ cameras:
   allee_sur_le_cote:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: true            # Keep mic track – useful for analytics later
+      enabled: false            # Keep mic track – useful for analytics later
 
     # --- STREAM INPUTS -----------------------------------------------------
     #   • The *DETECT* stream is a secondary/sub‑stream configured on the camera at a
@@ -169,9 +169,10 @@ cameras:
     #     after the fact.
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/allee_sur_le_cote_detect  # [DETECT stream]
-          roles: [detect, record, audio]
-
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_allee_cote_sub
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_allee_cote_main
+          roles: [record, audio]
     # --- PER‑CAMERA MQTT SNAPSHOTS VS REGULAR SNAPSHOTS --------------------
     #  Frigate supports *two* ways to generate still images:
     #    1. **Standard snapshots** – produced automatically for every detection
@@ -193,8 +194,8 @@ cameras:
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
-      width: 1280               
-      height: 720
+      width: 1536               
+      height: 432
       fps: 2                    # Higher FPS ➜ smoother but more CPU
 
     # --- OBJECT FILTER OVERRIDE (APPLIES ONLY TO THIS CAMERA) ------------
@@ -344,40 +345,42 @@ cameras:
       detections:
         required_zones: rodage   # Record events if loitering near sidewalk
 
-  # # ========================================================================
-  # # 2.4 CAMERA: PISCINE_VUE_TOIT – POOL, ROOFTOP VIEW
-  # #           * Ring Floodlight Cam
-  # #           * Primary purpose: safety – detect unauthorised pool access
-  # # ========================================================================
-  # piscine_vue_toit:
-  #   # --- AUDIO -------------------------------------------------------------
-  #   audio:
-  #     enabled: true            # Keep mic track – useful for analytics later 
+  # ========================================================================
+  # 2.4 CAMERA: PISCINE_VUE_TOIT – POOL, ROOFTOP VIEW
+  #           * Ring Floodlight Cam
+  #           * Primary purpose: safety – detect unauthorised pool access
+  # ========================================================================
+  piscine_vue_toit:
+    # --- AUDIO -------------------------------------------------------------
+    audio:
+      enabled: true            # Keep mic track – useful for analytics later 
 
 
-  #   # --- STREAM INPUTS -----------------------------------------------------
-  #   ffmpeg:
-  #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/piscine_vue_toit_detect  # [DETECT stream]
-  #         roles: [detect, record, audio]
+    # --- STREAM INPUTS -----------------------------------------------------
+    ffmpeg:
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_vue_sud_sub
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_vue_sud_main
+          roles: [record, audio]
 
-  #   # --- DETECTION SETTINGS ----------------------------------------------
-  #   detect:
-  #     width: 1920               # Full‑HD needed for persons who are further out
-  #     height: 1080
-  #     fps: 2
+    # --- DETECTION SETTINGS ----------------------------------------------
+    detect:
+      width: 1536               # Full‑HD needed for persons who are further out
+      height: 432
+      fps: 2
 
-  #   # --- SNAPSHOTS --------------------------------------------------------
-  #   snapshots:
-  #     enabled: true             # Use global settings (retain person snaps)
+    # --- SNAPSHOTS --------------------------------------------------------
+    snapshots:
+      enabled: true             # Use global settings (retain person snaps)
 
-  #   # --- ZONES -----------------------------------------------------------
-  #   #  Full frame detection – if someone is in frame, they’re in the pool area
-  #   zones: {}
+    # --- ZONES -----------------------------------------------------------
+    #  Full frame detection – if someone is in frame, they’re in the pool area
+    zones: {}
 
-  #   # --- REVIEW RULES ----------------------------------------------------
-  #   #  Every detection event is archived; Home‑Assistant decides on notifications
-  #   review: {}
+    # --- REVIEW RULES ----------------------------------------------------
+    #  Every detection event is archived; Home‑Assistant decides on notifications
+    review: {}
 
   # ========================================================================
   # 2.5 CAMERA: VUE_SUR_ENTREE_DEV – DEV ENTRY WAY
@@ -491,7 +494,6 @@ cameras:
 
   #   # --- REVIEW RULES ----------------------------------------------------
   #   review: {}                  # Every detection event is archived; no alerts
-
 
 
 # ============================================================================

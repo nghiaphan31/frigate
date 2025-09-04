@@ -79,4 +79,22 @@ streams:
   #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c76136bc99d_live#prebuffer:10s
   # cuisine_record:
   #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c76136bc99d_live
-  #   - ffmpeg:hwaccel=vaapi#analyze_duration=0         
+  #   - ffmpeg:hwaccel=vaapi#analyze_duration=0
+
+  reolink_duo_allee_cote_main:
+    - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120
+  reolink_duo_allee_cote_sub:
+    - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120         
+
+  reolink_duo_vue_sud_main:
+    - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120
+  reolink_duo_vue_sud_sub:
+    - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120         
