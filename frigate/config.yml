@@ -149,7 +149,7 @@ cameras:
 
   # ========================================================================
   # 2.1 CAMERA: ALLEE_SUR_LE_COTE – DRIVEWAY SIDE VIEW
-  #           * Ring Floodlight Cam
+  #           * Reolink Duo 3 Wifi Ethernet
   #           * Has microphone + speaker
   #           * Primary outdoor security feed
   # ========================================================================
@@ -236,13 +236,13 @@ cameras:
 
   # ========================================================================
   # 2.2 CAMERA: JARDIN_ARRIERE – BACK GARDEN
-  #           * Ring Spotlight Cam (battery, no microphone feed)
+  #           * Reolink RLC-811WA Cam
   #           * Covers children’s play area and garden shed
   # ========================================================================
   jardin_arriere:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: true            # Keep mic track – useful for analytics later 
+      enabled: false            # Keep mic track – useful for analytics later 
 
     # --- STREAM INPUTS -----------------------------------------------------
     #   Uses the same dual‑stream pattern as the driveway cam:
@@ -250,13 +250,15 @@ cameras:
     #     • Full‑res main stream ➜ archival recording
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_arriere_detect   # [DETECT stream]
-          roles: [detect, record, audio]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_nord_sur_maison_sub
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_nord_sur_maison_main
+          roles: [record, audio]
 
     # --- DETECTION SETTINGS ----------------------------------------------
     detect:
-      width: 1920               # Full‑HD needed for persons who are further out
-      height: 1080
+      width: 640               # Full‑HD needed for persons who are further out
+      height: 360
       fps: 2                    # Any higher ➜ battery hit + more CPU
 
     # --- SNAPSHOTS --------------------------------------------------------
@@ -349,13 +351,12 @@ cameras:
 
   # ========================================================================
   # 2.4 CAMERA: PISCINE_VUE_TOIT – POOL, ROOFTOP VIEW
-  #           * Ring Floodlight Cam
-  #           * Primary purpose: safety – detect unauthorised pool access
+  #           * Reolink Duo Wifi Ethernet 3 
   # ========================================================================
   piscine_vue_toit:
     # --- AUDIO -------------------------------------------------------------
     audio:
-      enabled: true            # Keep mic track – useful for analytics later 
+      enabled: false            # Keep mic track – useful for analytics later 
 
 
     # --- STREAM INPUTS -----------------------------------------------------
