@@ -83,7 +83,8 @@ services:
     privileged: false           # set true if you add a USB Coral
     volumes:
       - ./frigate/config.yml:/config/config.yml
-      - ./frigate/storage:/media/frigate        # where clips & recordings land
+      #- ./frigate/storage:/media/frigate        # where clips & recordings land
+      - /mnt/nas/video/frigate:/media/frigate # where clips & recordings land
       # tmpfs keeps frequent temp files off your SSD
       - type: tmpfs
         target: /tmp/ramdisk
