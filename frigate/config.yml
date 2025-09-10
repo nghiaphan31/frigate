@@ -358,6 +358,81 @@ cameras:
       detections:
         required_zones: rodage   # Record events if loitering near sidewalk
 
+
+  # ========================================================================
+  # 2.3 CAMERA: JARDIN_DEVANT – FRONT GARDEN / ROAD
+  #           * Ring Floodlight Cam
+  #           * Faces a public road – needs stricter privacy filters
+  # ========================================================================
+  jardin_devant2:
+    # --- AUDIO -------------------------------------------------------------
+    audio:
+      enabled: true            # Keep mic track – useful for analytics later 
+
+    # --- STREAM INPUTS -----------------------------------------------------
+    #   We override the global `output_args` to use VAAPI so the timestamp is
+    #   burned into the recorded video.  Handy when reviewing car drive‑bys.
+    ffmpeg:
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_jardin_devant_sub
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_jardin_devant_main
+          roles: [record, audio]
+
+#      output_args:              # Override global – re‑encode to burn timestamp
+#        record: preset-vaapi
+
+    # --- DETECTION SETTINGS ----------------------------------------------
+    detect:
+      width: 1536               # Full‑HD needed for persons who are further out
+      height: 432
+      fps: 2
+
+    # --- OBJECT FILTERS --------------------------------------------------
+    #objects:
+    #  track:
+    #    - person                # Only track people (ignore cars for privacy)
+    #  filters:
+    #    person:
+    #      min_area: 3000        # Disregard tiny silhouettes in the road area
+    #      min_score: 0.70       # Confidence threshold
+    #      threshold: 0.70
+
+    # --- SNAPSHOTS --------------------------------------------------------
+    snapshots:
+      enabled: true             # Standard snapshot behaviour
+
+    # --- ZONES (PRIVACY & LOITERING) -------------------------------------
+    zones:
+      # "rodage" – Extended perimeter near public sidewalk
+      rodage:
+        coordinates: 
+          0.228,0.298,0.261,0.197,0.436,0.215,0.611,0.277,0.664,0.302,0.665,0.367,0.678,0.376,0.69,0.41,0.757,0.449,0.768,0.394,0.782,0.445,0.79,0.453,0.776,0.526,0.678,0.467,0.671,0.404,0.661,0.417,0.642,0.599,0.513,0.564,0.249,0.463,0.24,0.397
+        loitering_time: 10      # Person must loiter ≥ 10 s before event
+        inertia: 3              # Keep event open for 3 s after leaving zone
+        objects: person
+        # Legacy Ring people filter (kept for backwards compat)
+        filters:
+          person:
+            threshold: 150
+
+      # "prive" – Area inside fence close to house
+      prive:
+        coordinates: 
+          0,0.407,0.081,0.745,0.17,0.5,0.196,0.417,0.226,0.337,0.24,0.463,0.258,0.488,0.286,0.499,0.325,0.512,0.402,0.55,0.646,0.624,0.667,0.397,0.671,0.466,0.683,0.476,0.691,0.483,0.778,0.534,0.788,0.469,0.813,0.563,0.89,0.801,0.929,0.894,0.971,0.937,1,0.827,1,1,0,1
+        loitering_time: 0       # Immediate intrusion alert
+        inertia: 3
+        objects: person
+
+    # --- REVIEW RULES ----------------------------------------------------
+    review:
+      alerts:
+        required_zones: prive    # Only push notifications inside private zone
+      detections:
+        required_zones: rodage   # Record events if loitering near sidewalk
+
+
+
   # ========================================================================
   # 2.4 CAMERA: PISCINE_VUE_TOIT – POOL, ROOFTOP VIEW
   #           * Reolink Duo Wifi Ethernet 3 

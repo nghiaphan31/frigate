@@ -106,4 +106,13 @@ streams:
   reolink_vue_nord_sur_maison_sub:
     - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub
     - ffmpeg:rtsp_transport=tcp  
-    - ffmpeg:cache=120          
+    - ffmpeg:cache=120
+
+  reolink_duo_jardin_devant_main:
+    - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120
+  reolink_duo_jardin_devant_sub:
+    - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120               
