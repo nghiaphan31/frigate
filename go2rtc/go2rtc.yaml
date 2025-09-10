@@ -28,18 +28,18 @@ ffmpeg:
 
 streams:
   # ── Allee sur le Côté ─────────────────────────────────────────────
-  allee_sur_le_cote_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live#prebuffer:10s
-  allee_sur_le_cote_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0   # hardware decode for record job
+#  allee_sur_le_cote_detect:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live#prebuffer:10s
+#  allee_sur_le_cote_record:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74df743_live
+#    - ffmpeg:hwaccel=vaapi#analyze_duration=0   # hardware decode for record job
 
   # ── Jardin Arrière ───────────────────────────────────────────────
-  jardin_arriere_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live#prebuffer:10s
-  jardin_arriere_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+#  jardin_arriere_detect:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live#prebuffer:10s
+#  jardin_arriere_record:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310afad_live
+#    - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
 
   # ── Jardin Devant ────────────────────────────────────────────────
@@ -47,11 +47,11 @@ streams:
     - rtsp://go2rtc:go2rtc@ring-mqtt:8554/10cea9f26407_live#prebuffer:10s
   
   # ── Piscine vue toit ─────────────────────────────────────────────
-  piscine_vue_toit_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live#prebuffer:10s
-  piscine_vue_toit_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+#  piscine_vue_toit_detect:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live#prebuffer:10s
+#  piscine_vue_toit_record:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/0cb2b74f37f3_live
+#    - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
   # ── Entrée ───────────────────────────────────────────────────────
   vue_sur_entree_dev_detect:
@@ -61,11 +61,11 @@ streams:
     - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
   # ── Cuisine Ete ───────────────────────────────────────────────────────
-  cuisine_ete_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live#prebuffer:10s
-  cuisine_ete_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0         
+#  cuisine_ete_detect:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live#prebuffer:10s
+#  cuisine_ete_record:
+#    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c7613fbc400_live
+#    - ffmpeg:hwaccel=vaapi#analyze_duration=0         
     
   # # ── Salon ───────────────────────────────────────────────────────
   # canape_salon_detect:
@@ -100,10 +100,10 @@ streams:
     - ffmpeg:cache=120
 
   reolink_vue_nord_sur_maison_main:
-    - rtsp://admin:fG-56lui@192.168.50.2:8554/h264Preview_01_main
+    - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_main
     - ffmpeg:rtsp_transport=tcp  
     - ffmpeg:cache=120
   reolink_vue_nord_sur_maison_sub:
-    - rtsp://admin:fG-56lui@192.168.50.2:8554/h264Preview_01_sub
+    - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub
     - ffmpeg:rtsp_transport=tcp  
     - ffmpeg:cache=120          
