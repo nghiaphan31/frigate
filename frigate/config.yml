@@ -460,46 +460,73 @@ cameras:
         required_zones: rodage  # Keep events when someone loiters at 'rodage'
 
   # ========================================================================
-  # 2.4 CAMERA: PISCINE_VUE_TOIT – POOL, ROOFTOP VIEW
-  #           * Reolink Duo Wifi Ethernet 3 
+  # CAMERA: PISCINE_VUE_TOIT — Pool rooftop view (Reolink Duo 3 Wi-Fi ETH)
+  # - Substream → detection (ultra-wide 1536x432, light for ML)
+  # - Main stream → recording + audio
+  # - Full-frame is essentially private zone (pool area)
   # ========================================================================
   piscine_vue_toit:
-    # --- AUDIO -------------------------------------------------------------
-    audio:
-      enabled: true            # Keep mic track – useful for analytics later 
 
-
-    # --- STREAM INPUTS -----------------------------------------------------
+    # ---------------------------- STREAM INPUTS -----------------------------
     ffmpeg:
+      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_vue_sud_sub
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_vue_sud_main
           roles: [record, audio]
 
-    # --- DETECTION SETTINGS ----------------------------------------------
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: true              # Keep mic channel in recordings
+
+    # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 1536               # Full‑HD needed for persons who are further out
+      width: 1536
       height: 432
-      fps: 2
+      fps: 4                     # Slightly higher than 2 for more chances to catch poses
 
-    # --- SNAPSHOTS --------------------------------------------------------
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track: [person]
+      filters:
+        person:
+          min_area: 2000         # People are generally mid-frame, not tiny
+          max_area: 200000
+          min_ratio: 0.20
+          max_ratio: 3.8
+          threshold: 0.60        # Slightly relaxed to catch partial/bust views
+
+    # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
-      enabled: true             # Use global settings (retain person snaps)
+      enabled: true              # Use global settings for retention
 
-    # --- ZONES -----------------------------------------------------------
-    #  Full frame detection – if someone is in frame, they’re in the pool area
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
     zones:
+      # ---- 'prive' — Pool rooftop area (full frame) ----------------------
       prive:
-        coordinates: 
-          0.097,1,0.178,0.715,0.249,0.38,0.245,0.3,0.243,0.249,0.239,0.199,0.279,0.11,0.296,0.077,0.308,0.045,0.316,0.059,0.37,0.03,0.374,0.059,0.387,0.059,0.4,0.059,0.405,0.021,0.495,0.021,0.534,0.098,0.587,0.257,0.615,0.338,0.629,0.406,0.642,0.445,0.652,0.454,0.666,0.453,0.681,0.499,0.691,0.576,0.703,0.609,0.713,0.611,0.796,0.006,0.999,0,0.998,0.994
+        coordinates:
+          0.097,1,0.178,0.715,0.249,0.38,0.245,0.3,0.243,0.249,0.239,0.199,
+          0.279,0.11,0.296,0.077,0.308,0.045,0.316,0.059,0.37,0.03,0.374,0.059,
+          0.387,0.059,0.4,0.059,0.405,0.021,0.495,0.021,0.534,0.098,0.587,0.257,
+          0.615,0.338,0.629,0.406,0.642,0.445,0.652,0.454,0.666,0.453,0.681,0.499,
+          0.691,0.576,0.703,0.609,0.713,0.611,0.796,0.006,0.999,0,0.998,0.994
+        loitering_time: 0        # Immediate alert if person appears
+        inertia: 3               # Hold event for 3s after leaving
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55      # More permissive for bust-only or awkward poses
+            min_area: 1000       # Allow smaller boxes (upper body only)
+            min_ratio: 0.15      # Accept tall/narrow shapes
+            max_ratio: 4.0       # Accept more square-ish boxes
 
-    # --- REVIEW RULES ----------------------------------------------------
-    #  Every detection event is archived; Home‑Assistant decides on notifications
-        loitering_time: 0
-        inertia: 3
-        objects: person
-    review: {}
+    # ----------------------------- REVIEW RULES -----------------------------
+    review:
+      alerts:
+        required_zones: prive    # Only alert if event is inside the pool area
+      detections:
+        required_zones: prive    # Only keep detections when inside pool area
 
   # ========================================================================
   # 2.5 CAMERA: VUE_SUR_ENTREE_DEV – DEV ENTRY WAY
