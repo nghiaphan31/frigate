@@ -152,91 +152,91 @@ audio:
 cameras:
 
   # ========================================================================
-  # 2.1 CAMERA: ALLEE_SUR_LE_COTE – DRIVEWAY SIDE VIEW
-  #           * Reolink Duo 3 Wifi Ethernet
-  #           * Has microphone + speaker
-  #           * Primary outdoor security feed
+  # CAMERA: ALLEE_SUR_LE_COTE — Driveway side view (Reolink Duo 3 Wi-Fi ETH)
+  # - Substream → detection (ultra-wide 1536x432, light for ML)
+  # - Main stream → recording + audio
+  # - Primary outdoor security feed (with mic + speaker)
   # ========================================================================
   allee_sur_le_cote:
-    # --- AUDIO -------------------------------------------------------------
-    audio:
-      enabled: true            # Keep mic track – useful for analytics later
 
-    # --- STREAM INPUTS -----------------------------------------------------
-    #   • The *DETECT* stream is a secondary/sub‑stream configured on the camera at a
-    #     lower resolution and bitrate.  Using a lighter stream keeps the Frigate ML
-    #     inference pipeline light on CPU/GPU while still giving enough detail to
-    #     recognise a person.
-    #   • The *RECORD* stream is the camera's full‑fat primary stream.  It is copied
-    #     bit‑for‑bit into the clip archive so you can zoom in and read licence plates
-    #     after the fact.
+    # ---------------------------- STREAM INPUTS -----------------------------
     ffmpeg:
+      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_allee_cote_sub
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_allee_cote_main
           roles: [record, audio]
-    # --- PER‑CAMERA MQTT SNAPSHOTS VS REGULAR SNAPSHOTS --------------------
-    #  Frigate supports *two* ways to generate still images:
-    #    1. **Standard snapshots** – produced automatically for every detection
-    #       event and stored on disk according to the global `snapshots:` policy.
-    #    2. **MQTT on‑demand snapshots** – created *only* when another service
-    #       (e.g. Home‑Assistant) publishes a message like:
-    #         `frigate/alle_sur_le_cote/snapshot/set` ➜ "ON"
-    #       Frigate then publishes the image payload back on the topic
-    #         `frigate/alle_sur_le_cote/snapshot`
-    #       This is handy if you want a *live* photo in notifications without
-    #       saving it permanently.
-    #  The `mqtt:` section below only affects the *on‑demand* path.  Regular
-    #  snapshots still follow the global and per‑camera `snapshots:` settings.
-    mqtt:
-      enabled: true             # Allow MQTT snapshot overrides here
-      timestamp: true           # Burn timestamp on MQTT images
-      bounding_box: true        # Draw annotated boxes on MQTT images
-      crop: false               # Keep whole frame for MQTT snapshots
 
-    # --- DETECTION SETTINGS ----------------------------------------------
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: true              # Keep mic channel in recordings
+
+    # --------------------------- MQTT SNAPSHOTS -----------------------------
+    # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
+    mqtt:
+      enabled: true              # Enable MQTT snapshots
+      timestamp: true            # Add timestamp overlay
+      bounding_box: true         # Draw bounding boxes
+      crop: false                # Send whole frame (not cropped to object)
+
+    # --------------------------- DETECTION CORE -----------------------------
     detect:
       width: 1536
       height: 432
-      fps: 2                    # Higher FPS ➜ smoother but more CPU
+      fps: 5                     # Balanced; raise if NUC load is fine
 
-    # --- OBJECT FILTER OVERRIDE (APPLIES ONLY TO THIS CAMERA) ------------
-    #objects:
-    #  track:
-    #    - person                # Detect people only on this cam
-    #  filters:
-    #    person:
-    #      min_score: 0.51       # Lower than global to be more sensitive
-    #      threshold: 0.70       # Require sustained 0.70
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track: [person]            # Focus only on people
+      filters:
+        person:
+          min_area: 2500         # Ignore tiny blobs (far away, street)
+          max_area: 200000       # Prevent runaway boxes from broken frames
+          min_ratio: 0.20        # Allow tall, narrow shapes
+          max_ratio: 3.5         # Disallow extreme vertical poles etc.
+          threshold: 0.65        # Base detection threshold
 
-    # --- SNAPSHOTS --------------------------------------------------------
+    # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
-      enabled: true             # Inherit global settings
+      enabled: true              # Standard snapshot behaviour
 
-    # --- ZONES (VIRTUAL TRIPWIRES) ---------------------------------------
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
     zones:
-      # Zone: "prive" – Private driveway; alert immediately
+      # ---- 'prive' — Private driveway (immediate alerts) ------------------
       prive:
-        coordinates: 
+        coordinates:
           0.276,1,0,1,0,0.539,0.064,0.645,0.104,0.361,0.102,0.329,0.092,0.31,0.131,0.248,0.225,0.112,0.323,0,0.478,0,0.65,0,0.693,0.053,0.762,0.129,0.827,0.22,0.887,0.323,0.908,0.362,0.925,0.332,0.95,0.331,0.963,0.395,0.972,0.439,0.989,0.588,1,0.573,0.999,0.996
-        loitering_time: 0        # Trigger instantly – anyone in driveway
-        inertia: 3              # Keep event "open" 3 s after object leaves
-        objects: person         # Only consider people
+        loitering_time: 0        # Trigger immediately when person enters
+        inertia: 3               # Hold event for 3s after leaving
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55      # Allow lower-confidence partial views
+            min_area: 1000       # Allow smaller (bust-only) boxes
+            min_ratio: 0.15      # Allow tall, narrow boxes
+            max_ratio: 4.0       # Allow more square boxes
 
-      # Zone: "rodage" – Loitering detection near fence line
+      # ---- 'rodage' — Fence line / loitering detection --------------------
       rodage:
-        coordinates: 0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
-        loitering_time: 10      # Person must stay 10 s before event
+        coordinates:
+          0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
+        loitering_time: 10       # Require ≥10s loitering before event
         inertia: 3
-        objects: person
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.62
+            min_area: 2000
+            min_ratio: 0.20
+            max_ratio: 3.8
 
-    # --- REVIEW RULES – TIE ZONES TO ALERT TYPES -------------------------
+    # ----------------------------- REVIEW RULES -----------------------------
     review:
       alerts:
-        required_zones: prive    # Only alert if object passed through "prive"
+        required_zones: prive    # Only alert if event entered private zone
       detections:
-        required_zones: rodage   # Record detection events if in "rodage"
+        required_zones: rodage   # Keep events when someone lingers at rodage
 
   # ========================================================================
   # 2.2 CAMERA: JARDIN_ARRIERE – BACK GARDEN
