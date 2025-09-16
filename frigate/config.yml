@@ -293,145 +293,171 @@ cameras:
   #           * Ring Floodlight Cam
   #           * Faces a public road – needs stricter privacy filters
   # ========================================================================
-  jardin_devant:
-    # --- AUDIO -------------------------------------------------------------
-    audio:
-      enabled: true            # Keep mic track – useful for analytics later 
+#   jardin_devant:
+#     # --- AUDIO -------------------------------------------------------------
+#     audio:
+#       enabled: true            # Keep mic track – useful for analytics later 
 
-    # --- STREAM INPUTS -----------------------------------------------------
-    #   We override the global `output_args` to use VAAPI so the timestamp is
-    #   burned into the recorded video.  Handy when reviewing car drive‑bys.
-    ffmpeg:
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect  # [DETECT stream]
-          roles: [detect, record, audio]
+#     # --- STREAM INPUTS -----------------------------------------------------
+#     #   We override the global `output_args` to use VAAPI so the timestamp is
+#     #   burned into the recorded video.  Handy when reviewing car drive‑bys.
+#     ffmpeg:
+#       inputs:
+#         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect  # [DETECT stream]
+#           roles: [detect, record, audio]
 
-#      output_args:              # Override global – re‑encode to burn timestamp
-#        record: preset-vaapi
+# #      output_args:              # Override global – re‑encode to burn timestamp
+# #        record: preset-vaapi
 
-    # --- DETECTION SETTINGS ----------------------------------------------
-    detect:
-      width: 1920               # Full‑HD needed for persons who are further out
-      height: 1080
-      fps: 5
+#     # --- DETECTION SETTINGS ----------------------------------------------
+#     detect:
+#       width: 1920               # Full‑HD needed for persons who are further out
+#       height: 1080
+#       fps: 2
 
-    # --- OBJECT FILTERS --------------------------------------------------
-    #objects:
-    #  track:
-    #    - person                # Only track people (ignore cars for privacy)
-    #  filters:
-    #    person:
-    #      min_area: 3000        # Disregard tiny silhouettes in the road area
-    #      min_score: 0.70       # Confidence threshold
-    #      threshold: 0.70
+#     # --- OBJECT FILTERS --------------------------------------------------
+#     #objects:
+#     #  track:
+#     #    - person                # Only track people (ignore cars for privacy)
+#     #  filters:
+#     #    person:
+#     #      min_area: 3000        # Disregard tiny silhouettes in the road area
+#     #      min_score: 0.70       # Confidence threshold
+#     #      threshold: 0.70
 
-    # --- SNAPSHOTS --------------------------------------------------------
-    snapshots:
-      enabled: true             # Standard snapshot behaviour
+#     # --- SNAPSHOTS --------------------------------------------------------
+#     snapshots:
+#       enabled: true             # Standard snapshot behaviour
 
-    # --- ZONES (PRIVACY & LOITERING) -------------------------------------
-    zones:
-      # "rodage" – Extended perimeter near public sidewalk
-      rodage:
-        coordinates: 
-          0.225,0.284,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.679,0.309,0.644,0.425,0.5,0.418,0.264,0.407
-        loitering_time: 10      # Person must loiter ≥ 10 s before event
-        inertia: 3              # Keep event open for 3 s after leaving zone
-        objects: person
-        # Legacy Ring people filter (kept for backwards compat)
-        filters:
-          person:
-            threshold: 150
+#     # --- ZONES (PRIVACY & LOITERING) -------------------------------------
+#     zones:
+#       # "rodage" – Extended perimeter near public sidewalk
+#       rodage:
+#         coordinates: 
+#           0.225,0.284,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.679,0.309,0.644,0.425,0.5,0.418,0.264,0.407
+#         loitering_time: 10      # Person must loiter ≥ 10 s before event
+#         inertia: 3              # Keep event open for 3 s after leaving zone
+#         objects: person
+#         # Legacy Ring people filter (kept for backwards compat)
+#         filters:
+#           person:
+#             threshold: 150
 
-      # "prive" – Area inside fence close to house
-      prive:
-        coordinates: 
-          0.015,0.728,0.136,0.808,0.161,0.629,0.193,0.501,0.211,0.396,0.249,0.355,0.282,0.429,0.262,0.415,0.306,0.418,0.412,0.421,0.644,0.436,0.675,0.341,0.687,0.341,0.682,0.358,0.676,0.403,0.807,0.433,0.829,0.445,0.83,0.42,0.872,0.554,0.913,0.817,1,0.785,1,1,0,1
-        loitering_time: 0       # Immediate intrusion alert
-        inertia: 3
-        objects: person
+#       # "prive" – Area inside fence close to house
+#       prive:
+#         coordinates: 
+#           0.015,0.728,0.136,0.808,0.161,0.629,0.193,0.501,0.211,0.396,0.249,0.355,0.282,0.429,0.262,0.415,0.306,0.418,0.412,0.421,0.644,0.436,0.675,0.341,0.687,0.341,0.682,0.358,0.676,0.403,0.807,0.433,0.829,0.445,0.83,0.42,0.872,0.554,0.913,0.817,1,0.785,1,1,0,1
+#         loitering_time: 0       # Immediate intrusion alert
+#         inertia: 3
+#         objects: person
 
-    # --- REVIEW RULES ----------------------------------------------------
-    review:
-      alerts:
-        required_zones: prive    # Only push notifications inside private zone
-      detections:
-        required_zones: rodage   # Record events if loitering near sidewalk
+#     # --- REVIEW RULES ----------------------------------------------------
+#     review:
+#       alerts:
+#         required_zones: prive    # Only push notifications inside private zone
+#       detections:
+#         required_zones: rodage   # Record events if loitering near sidewalk
 
 
-  # ========================================================================
-  # 2.3 CAMERA: JARDIN_DEVANT – FRONT GARDEN / ROAD
-  #           * Ring Floodlight Cam
-  #           * Faces a public road – needs stricter privacy filters
-  # ========================================================================
+# ========================================================================
+# CAMERA: JARDIN_DEVANT2 — Front garden / road (Reolink Duo 3)
+# - Substream used for detection (ultra-wide 1536x432)
+# - Main stream used for recording + audio
+# - Faces a public road → stricter zoning, loitering band, and privacy rules
+# ========================================================================
   jardin_devant2:
-    # --- AUDIO -------------------------------------------------------------
-    audio:
-      enabled: true            # Keep mic track – useful for analytics later 
-
-    # --- STREAM INPUTS -----------------------------------------------------
-    #   We override the global `output_args` to use VAAPI so the timestamp is
-    #   burned into the recorded video.  Handy when reviewing car drive‑bys.
+    # ---------------------------- STREAM INPUTS -----------------------------
     ffmpeg:
+      # Tip: if VA-API crashes on detect for Duo 3, uncomment to force software decode ONLY for this cam:
+      # hwaccel_args: []
       inputs:
+        # Low-res substream → detection (lighter, faster)
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_jardin_devant_sub
           roles: [detect]
+        # High-res main stream → recording (and audio if present)
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_jardin_devant_main
           roles: [record, audio]
 
-#      output_args:              # Override global – re‑encode to burn timestamp
-#        record: preset-vaapi
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: true            # Keep mic channel in recordings (useful for later analytics/rules)
 
-    # --- DETECTION SETTINGS ----------------------------------------------
+    # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 1536               # Full‑HD needed for persons who are further out
-      height: 432
-      fps: 2
+      width: 1536              # Match substream width (ultra-wide)
+      height: 432              # Match substream height
+      fps: 5                   # Balanced: enough chances to catch a good pose, still light on CPU
 
-    # --- OBJECT FILTERS --------------------------------------------------
-    #objects:
-    #  track:
-    #    - person                # Only track people (ignore cars for privacy)
-    #  filters:
-    #    person:
-    #      min_area: 3000        # Disregard tiny silhouettes in the road area
-    #      min_score: 0.70       # Confidence threshold
-    #      threshold: 0.70
+    # ---------------------------- MOTION GATING -----------------------------
+    motion:
+      # Trim night foliage/IR sparkle so the detector isn’t spammed with useless frames.
+      threshold: 34            # Slightly stricter than default 30
+      contour_area: 120        # Ignore very small moving blobs
+      frame_alpha: 0.25        # Background blend factor
+      delta_alpha: 0.25        # Motion blend factor
 
-    # --- SNAPSHOTS --------------------------------------------------------
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track:
+        - person               # Only track people (ignore vehicles for privacy)
+      filters:
+        person:
+          # Global person filter (applies everywhere unless a zone overrides it)
+          min_area: 2500       # Drop tiny, far silhouettes (street)
+          max_area: 200000     # Safety cap for broken frames/huge blobs
+          min_ratio: 0.20      # Allow tall/narrow boxes (bust-only, seen from above)
+          max_ratio: 3.5       # Disallow ultra-thin poles / extreme aspect boxes
+          threshold: 0.65      # Base confidence; zones can override lower
+
+          # Optional: keep tracks alive when briefly occluded (bush/wall edge)
+          # max_disappeared: 30
+
+    # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
-      enabled: true             # Standard snapshot behaviour
+      enabled: true            # Standard snapshot behaviour (uses main stream quality if configured globally)
 
-    # --- ZONES (PRIVACY & LOITERING) -------------------------------------
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
     zones:
-      # "rodage" – Extended perimeter near public sidewalk
-      rodage:
-        coordinates: 
-          0.228,0.298,0.261,0.197,0.436,0.215,0.611,0.277,0.664,0.302,0.665,0.367,0.678,0.376,0.69,0.41,0.757,0.449,0.768,0.394,0.782,0.445,0.79,0.453,0.776,0.526,0.678,0.467,0.671,0.404,0.661,0.417,0.642,0.599,0.513,0.564,0.249,0.463,0.24,0.397
-        loitering_time: 10      # Person must loiter ≥ 10 s before event
-        inertia: 3              # Keep event open for 3 s after leaving zone
+
+      # ---- 'prive' — Inside the fence (your private area) ------------------
+      # More permissive: person may be partially seen (bust/edge/occluded).
+      prive:
+        coordinates:
+          0,0.407,0.081,0.745,0.17,0.5,0.196,0.417,0.226,0.337,0.24,0.463,0.258,0.488,0.286,0.499,0.325,0.512,0.402,0.55,0.646,0.624,0.667,0.397,0.671,0.466,0.683,0.476,0.691,0.483,0.778,0.534,0.788,0.469,0.813,0.563,0.89,0.801,0.929,0.894,0.971,0.937,1,0.827,1,1,0,1
+        loitering_time: 0      # Immediate alert when a person enters
+        inertia: 3             # Keep event open for 3 s after exit (avoid flicker)
         objects: person
-        # Legacy Ring people filter (kept for backwards compat)
         filters:
           person:
-            threshold: 150
+            # Night/bust-only friendly thresholds scoped to this private zone
+            threshold: 0.55    # Accept lower-confidence partial poses near wall/roof
+            min_area: 1000     # Permit smaller boxes (upper body only)
+            min_ratio: 0.15    # Allow very tall/narrow boxes (seen from above)
+            max_ratio: 4.0     # Allow squarer boxes (3/4 body, arm positions)
 
-      # "prive" – Area inside fence close to house
-      prive:
-        coordinates: 
-          0,0.407,0.081,0.745,0.17,0.5,0.196,0.417,0.226,0.337,0.24,0.463,0.258,0.488,0.286,0.499,0.325,0.512,0.402,0.55,0.646,0.624,0.667,0.397,0.671,0.466,0.683,0.476,0.691,0.483,0.778,0.534,0.788,0.469,0.813,0.563,0.89,0.801,0.929,0.894,0.971,0.937,1,0.827,1,1,0,1
-        loitering_time: 0       # Immediate intrusion alert
-        inertia: 3
+      # ---- 'rodage' — Sidewalk/approach band (outside fence) ---------------
+      # Stricter behaviour: only alert if someone lingers (loiters) here.
+      rodage:
+        coordinates:
+          0.228,0.298,0.261,0.197,0.436,0.215,0.611,0.277,0.664,0.302,0.665,0.367,0.678,0.376,0.69,0.41,0.757,0.449,0.768,0.394,0.782,0.445,0.79,0.453,0.776,0.526,0.678,0.467,0.671,0.404,0.661,0.417,0.642,0.599,0.513,0.564,0.249,0.463,0.24,0.397
+        loitering_time: 10     # Require ≥10 s inside before raising event
+        inertia: 3             # Debounce exit
         objects: person
+        filters:
+          person:
+            # Slightly more permissive than global, but still tighter than 'prive'
+            threshold: 0.62
+            min_area: 2000
+            min_ratio: 0.20
+            max_ratio: 3.8
 
-    # --- REVIEW RULES ----------------------------------------------------
+    # ----------------------------- REVIEW RULES -----------------------------
+    # These are your policy rules for what gets alerted vs merely recorded.
     review:
       alerts:
-        required_zones: prive    # Only push notifications inside private zone
+        required_zones: prive   # Push notifications only if the event entered 'prive'
       detections:
-        required_zones: rodage   # Record events if loitering near sidewalk
-
-
+        required_zones: rodage  # Keep events when someone loiters at 'rodage'
 
   # ========================================================================
   # 2.4 CAMERA: PISCINE_VUE_TOIT – POOL, ROOFTOP VIEW
@@ -479,38 +505,38 @@ cameras:
   # 2.5 CAMERA: VUE_SUR_ENTREE_DEV – DEV ENTRY WAY
   #           * Ring Spotlight Cam
   # ========================================================================
-  vue_sur_entree_dev:
-    # --- AUDIO -------------------------------------------------------------
-    audio:
-      enabled: true            # Keep mic track – useful for analytics later 
-    # --- STREAM INPUTS -----------------------------------------------------
-    ffmpeg:
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_detect  # [DETECT stream]
-          roles: [detect, record, audio]
+  # vue_sur_entree_dev:
+  #   # --- AUDIO -------------------------------------------------------------
+  #   audio:
+  #     enabled: true            # Keep mic track – useful for analytics later 
+  #   # --- STREAM INPUTS -----------------------------------------------------
+  #   ffmpeg:
+  #     inputs:
+  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_detect  # [DETECT stream]
+  #         roles: [detect, record, audio]
 
-    # --- DETECTION SETTINGS ----------------------------------------------
-    detect:
-      width: 1280               # Persons are quite close-up
-      height: 720
-      fps: 5
+  #   # --- DETECTION SETTINGS ----------------------------------------------
+  #   detect:
+  #     width: 1280               # Persons are quite close-up
+  #     height: 720
+  #     fps: 2
 
-    # --- SNAPSHOTS --------------------------------------------------------
-    snapshots:
-      enabled: true             # Retain snapshots per global policy
+  #   # --- SNAPSHOTS --------------------------------------------------------
+  #   snapshots:
+  #     enabled: true             # Retain snapshots per global policy
 
-    # --- ZONES -----------------------------------------------------------
-    zones:
-      # "prive" – Front porch area; instant alert if breached
-      prive:
-        coordinates: 
-          0.001,0.996,0,0.001,0.268,0.005,0.174,0.195,0.14,0.279,0.234,0.362,0.24,0.347,0.303,0.349,0.313,0.243,0.326,0.169,0.369,0.097,0.408,0.062,0.425,0.001,0.997,0.001,0.998,0.996
-        loitering_time: 0        # Alert immediately on entry
+  #   # --- ZONES -----------------------------------------------------------
+  #   zones:
+  #     # "prive" – Front porch area; instant alert if breached
+  #     prive:
+  #       coordinates: 
+  #         0.001,0.996,0,0.001,0.268,0.005,0.174,0.195,0.14,0.279,0.234,0.362,0.24,0.347,0.303,0.349,0.313,0.243,0.326,0.169,0.369,0.097,0.408,0.062,0.425,0.001,0.997,0.001,0.998,0.996
+  #       loitering_time: 0        # Alert immediately on entry
 
-    # --- REVIEW RULES ----------------------------------------------------
-    review:
-      alerts:
-        required_zones: prive    # Skip notifications unless someone is on porch
+  #   # --- REVIEW RULES ----------------------------------------------------
+  #   review:
+  #     alerts:
+  #       required_zones: prive    # Skip notifications unless someone is on porch
 
   # cuisine:
   #   # --- AUDIO -------------------------------------------------------------
