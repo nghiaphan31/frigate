@@ -239,54 +239,77 @@ cameras:
         required_zones: rodage   # Keep events when someone lingers at rodage
 
   # ========================================================================
-  # 2.2 CAMERA: JARDIN_ARRIERE – BACK GARDEN
-  #           * Reolink RLC-811WA Cam
-  #           * Covers children’s play area and garden shed
+  # CAMERA: JARDIN_ARRIERE — Back garden (Reolink RLC-811WA PoE)
+  # - Substream → detection (640x360, light for ML)
+  # - Main stream → recording + audio
+  # - Covers children’s play area + garden shed
   # ========================================================================
   jardin_arriere:
-    # --- AUDIO -------------------------------------------------------------
-    audio:
-      enabled: true            # Keep mic track – useful for analytics later 
 
-    # --- STREAM INPUTS -----------------------------------------------------
-    #   Uses the same dual‑stream pattern as the driveway cam:
-    #     • Lower‑res sub‑stream ➜ detection
-    #     • Full‑res main stream ➜ archival recording
+    # ---------------------------- STREAM INPUTS -----------------------------
     ffmpeg:
+      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_nord_sur_maison_sub
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_nord_sur_maison_main
           roles: [record, audio]
 
-    # --- DETECTION SETTINGS ----------------------------------------------
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: true              # Keep mic channel in recordings
+
+    # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 640               # Full‑HD needed for persons who are further out
+      width: 640
       height: 360
-      fps: 2                    # Any higher ➜ battery hit + more CPU
+      fps: 4                     # Raise from 2 → 4 for more frames without overloading
 
-    # --- SNAPSHOTS --------------------------------------------------------
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track: [person]
+      filters:
+        person:
+          min_area: 1200         # Adjusted for smaller frame; ~20x60 pixels
+          max_area: 150000       # Safety cap
+          min_ratio: 0.20
+          max_ratio: 3.8
+          threshold: 0.60        # Slightly more permissive (bust-only views of kids)
+
+    # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
-      enabled: true             # Stick with global snapshot policy
+      enabled: true              # Use global snapshot policy
 
-    # --- MOTION PRE‑FILTER (BEFORE ML) ------------------------------------
-    #  These parameters let Frigate reject obvious noise (trees, rain) before
-    #  sending frames to the object detector, saving CPU and false positives.
+    # ---------------------------- MOTION FILTER -----------------------------
     motion:
-      threshold: 11             # Higher ➜ require bigger pixel change
-      contour_area: 10          # Ignore extremely small blobs <10 px²
-      improve_contrast: true    # Histogram equalisation for low‑light frames
+      threshold: 20              # Stricter (reduce small movements from trees/rain)
+      contour_area: 30           # Ignore tiny blobs (<30 px²)
+      improve_contrast: true     # Histogram equalisation for low-light frames
 
-    # --- ZONES -----------------------------------------------------------
-    zones:                      # Full frame monitoring – no zone gating
-
-    # --- REVIEW RULES ----------------------------------------------------
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
+    zones:
+      # ---- 'prive' — Play area + shed ------------------------------------
       prive:
-        coordinates: 
-          0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.528,0.179,0.523,0.383,0.741,0.382,0.738,0.338,1,0.364,0.997,0.997
-        loitering_time: 0
-        objects: person
-    review: {}                  # Every detection event is archived; no alerts
+        coordinates:
+          0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,
+          0.314,0.115,0.524,0.124,0.537,0.166,0.528,0.179,0.523,0.383,
+          0.741,0.382,0.738,0.338,1,0.364,0.997,0.997
+        loitering_time: 0        # Immediate alert if person enters
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55      # Relaxed for partial/child-sized detections
+            min_area: 800        # Smaller minimum box allowed
+            min_ratio: 0.15
+            max_ratio: 4.0
+
+    # ----------------------------- REVIEW RULES -----------------------------
+    review:
+      alerts:
+        required_zones: prive    # Only alert if in private play/shed area
+      detections:
+        required_zones: prive    # Only keep events when in this area
 
   # ========================================================================
   # 2.3 CAMERA: JARDIN_DEVANT – FRONT GARDEN / ROAD
@@ -386,7 +409,7 @@ cameras:
     detect:
       width: 1536              # Match substream width (ultra-wide)
       height: 432              # Match substream height
-      fps: 5                   # Balanced: enough chances to catch a good pose, still light on CPU
+      fps: 4                   # Balanced: enough chances to catch a good pose, still light on CPU
 
     # ---------------------------- MOTION GATING -----------------------------
     motion:
