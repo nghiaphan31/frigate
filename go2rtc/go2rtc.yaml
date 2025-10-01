@@ -54,11 +54,11 @@ streams:
 #    - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
   # ── Entrée ───────────────────────────────────────────────────────
-  vue_sur_entree_dev_detect:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live#prebuffer:10s
-  vue_sur_entree_dev_record:
-    - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
-    - ffmpeg:hwaccel=vaapi#analyze_duration=0
+  # vue_sur_entree_dev_detect:
+  #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live#prebuffer:10s
+  # vue_sur_entree_dev_record:
+  #   - rtsp://go2rtc:go2rtc@ring-mqtt:8554/9c761310bb9c_live
+  #   - ffmpeg:hwaccel=vaapi#analyze_duration=0
 
   # ── Cuisine Ete ───────────────────────────────────────────────────────
 #  cuisine_ete_detect:
@@ -115,4 +115,13 @@ streams:
   reolink_duo_jardin_devant_sub:
     - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
     - ffmpeg:rtsp_transport=tcp  
-    - ffmpeg:cache=120               
+    - ffmpeg:cache=120     
+
+  reolink_vue_entree_main:
+    - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120
+  reolink_vue_entree_sub:
+    - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp  
+    - ffmpeg:cache=120                   
