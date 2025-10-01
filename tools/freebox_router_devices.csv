@@ -1,0 +1,60 @@
+hostname,mac,ip,iface,active
+,EA:9D:3F:24:9D:4C,192.168.1.117,,no
+,EA:9D:3F:24:9D:4C,fe80::10cb:16f:31ec:9898,,no
+,EA:9D:3F:24:9D:4C,2a01:e0a:2aa:c860:a972:2491:d9ac:6937,,no
+,EA:9D:3F:24:9D:4C,2a01:e0a:2aa:c860:10ed:a4d:ad08:9b17,,no
+dreame_vacuum_r2228o,70:C9:32:06:CA:20,192.168.1.44,,yes
+6b561dd1-f416-2aa3-7e42-3ff862f1c43f,30:D1:6B:80:6B:CD,192.168.1.134,,yes
+6b561dd1-f416-2aa3-7e42-3ff862f1c43f,30:D1:6B:80:6B:CD,fe80::16a7:94f7:961b:a3a8,,yes
+6b561dd1-f416-2aa3-7e42-3ff862f1c43f,30:D1:6B:80:6B:CD,2a01:e0a:2aa:c860:d4a2:9f3c:c635:bf25,,yes
+6b561dd1-f416-2aa3-7e42-3ff862f1c43f,30:D1:6B:80:6B:CD,2a01:e0a:2aa:c860:c863:4850:1781:89b3,,yes
+6b561dd1-f416-2aa3-7e42-3ff862f1c43f,30:D1:6B:80:6B:CD,2a01:e0a:2aa:c860:9c77:5740:8f27:1d9c,,yes
+BRW541379B22551,54:13:79:B2:25:51,192.168.1.11,,yes
+iPhone-de-nghia,28:02:2E:E1:16:16,192.168.1.185,,yes
+iPhone-de-nghia,28:02:2E:E1:16:16,fe80::895:103f:3a8e:85e7,,yes
+iPhone-de-nghia,28:02:2E:E1:16:16,fe80::4cc:a55f:f569:c78d,,yes
+iPhone-de-nghia,28:02:2E:E1:16:16,2a01:e0a:2aa:c860:9129:6f46:5fc7:20cc,,yes
+iPhone-de-nghia,28:02:2E:E1:16:16,2a01:e0a:2aa:c860:608a:1bb8:e5b5:9632,,yes
+iPhone-de-nghia,28:02:2E:E1:16:16,2a01:e0a:2aa:c860:604e:e5c1:6020:227e,,yes
+iPhone-de-nghia,28:02:2E:E1:16:16,2a01:e0a:2aa:c860:2c4e:3a5b:9be0:890,,yes
+Router ASUS,C8:7F:54:8B:F5:08,192.168.1.100,,yes
+Router ASUS,C8:7F:54:8B:F5:08,192.168.1.70,,yes
+Nvidia Shield,48:B0:2D:C2:12:AF,192.168.1.78,,yes
+Nvidia Shield,48:B0:2D:C2:12:AF,192.168.1.10,,yes
+Nvidia Shield,48:B0:2D:C2:12:AF,fe80::2db9:d76:c8d8:c274,,yes
+Nvidia Shield,48:B0:2D:C2:12:AF,2a01:e0a:2aa:c860:9538:170:b28c:a1ec,,yes
+Nvidia Shield,48:B0:2D:C2:12:AF,2a01:e0a:2aa:c860:7368:e1bf:68e:2fec,,yes
+Nvidia Shield,48:B0:2D:C2:12:AF,2a01:e0a:2aa:c860:38f2:80ad:e3f9:a52f,,yes
+NPH_DiskStation,00:11:32:CB:40:FD,192.168.1.51,,no
+Air-de-Nghia,F0:79:60:12:10:3E,192.168.1.18,,yes
+Air-de-Nghia,F0:79:60:12:10:3E,fe80::c2:ac0:c29:11a5,,yes
+Air-de-Nghia,F0:79:60:12:10:3E,2a01:e0a:2aa:c860:9177:1c4d:e8e9:8f24,,yes
+Air-de-Nghia,F0:79:60:12:10:3E,2a01:e0a:2aa:c860:c9d:a5f:3b4d:90c9,,yes
+Air-de-Nghia,F0:79:60:12:10:3E,2a01:e0a:2aa:c860:d1c9:9d1:7069:8b93,,yes
+Air-de-Nghia,F0:79:60:12:10:3E,2a01:e0a:2aa:c860:302e:9bac:ccb2:71aa,,yes
+,00:24:E4:FD:87:0E,192.168.1.149,,no
+GL-800,74:97:79:C3:58:B3,192.168.1.144,,yes
+GL-800,74:97:79:C3:58:B3,fe80::c6a8:ff53:594c:b749,,yes
+GL-800,74:97:79:C3:58:B3,2a01:e0a:2aa:c860:1b8a:ff97:7494:4d64,,yes
+GL-800,74:97:79:C3:58:B3,2a01:e0a:2aa:c860:1c57:f40c:6b27:ea9c,,yes
+FRUH113062,DC:21:48:C5:E2:61,192.168.1.135,,yes
+FRUH113062,DC:21:48:C5:E2:61,fe80::65c1:eef9:875a:75fa,,yes
+FRUH113062,DC:21:48:C5:E2:61,2a01:e0a:2aa:c860:e940:294a:444c:8237,,yes
+FRUH113062,DC:21:48:C5:E2:61,2a01:cb01:304d:4af6:38ee:f7dd:72d3:2563,,yes
+FRUH113062,DC:21:48:C5:E2:61,2a01:cb01:304d:4af6:e11a:2cd0:dc9:fb91,,yes
+FRUH113062,DC:21:48:C5:E2:61,2a01:e0a:2aa:c860:9384:e8fa:b4e7:55a5,,yes
+NPH_DiskStation,00:11:32:CB:40:FE,192.168.1.145,,yes
+NPH_DiskStation,00:11:32:CB:40:FE,192.168.1.14,,yes
+NGHIA-PHAN-NUC12WSKI5,E4:60:17:5E:36:A7,192.168.1.12,,yes
+NGHIA-PHAN-NUC12WSKI5,E4:60:17:5E:36:A7,192.168.1.36,,yes
+NGHIA-PHAN-NUC12WSKI5,E4:60:17:5E:36:A7,fe80::12d7:2def:1b1f:e7ad,,yes
+NGHIA-PHAN-NUC12WSKI5,E4:60:17:5E:36:A7,2a01:e0a:2aa:c860:6e37:54b0:2982:fee9,,yes
+NGHIA-PHAN-NUC12WSKI5,E4:60:17:5E:36:A7,2a01:e0a:2aa:c860:ebfe:6112:36f6:a6c1,,yes
+NGHIA-PHAN-NUC12WSKI5,E4:60:17:5E:36:A7,2a01:e0a:2aa:c860:62e6:84f0:c773:a6a9,,yes
+NGHIA-PHAN-NUC12WSKI5,E4:60:17:5E:36:A7,2a01:e0a:2aa:c860:cc46:fd4b:8bde:1515,,yes
+homeassistant,DC:A6:32:FE:EE:E0,192.168.1.90,,yes
+homeassistant,DC:A6:32:FE:EE:E0,192.168.1.24,,yes
+homeassistant,DC:A6:32:FE:EE:E0,fe80::f6a0:9f:b2e0:39ec,,yes
+homeassistant,DC:A6:32:FE:EE:E0,2a01:e0a:2aa:c860:b86e:5355:d059:6bc,,yes
+,A4:7E:FA:25:BE:72,192.168.1.77,,no
+quatix 7 PRO-4313ce9e309a,38:F9:F5:62:D1:C5,192.168.1.47,,no
