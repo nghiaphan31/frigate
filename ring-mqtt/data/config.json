@@ -33,6 +33,6 @@
   "warmup_snapshot_interval": 300,
 
   "_mqtt_url": "Format: mqtt://user:pass@host:port",
-  "mqtt_url": "mqtt://mosquito:mosquito@192.168.1.24:1883",
+  "mqtt_url": "mqtt://mosquito:mosquito@192.168.50.125:1883",
   "enable_extended_discovery": true
 }

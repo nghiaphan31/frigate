@@ -32,7 +32,7 @@ services:
       - "55123:55123"            # Token-helper Web UI (only needed on first login)
     environment:
       # MQTT broker URL the addon will publish all Ring topics to
-      MQTT_URL: mqtt://mosquito:mosquito@192.168.1.24:1883
+      MQTT_URL: mqtt://mosquito:mosquito@192.168.50.125:1883
       # Credentials must match go2rtc.yaml so the proxy can subscribe
       LIVESTREAM_USER: go2rtc
       LIVESTREAM_PASS: go2rtc
@@ -74,7 +74,7 @@ services:
     image: ghcr.io/blakeblackshear/frigate:stable
     container_name: frigate
     restart: unless-stopped
-    network_mode: host          # simplest way to reach go2rtc on 192.168.1.36:8556
+    network_mode: host          # simplest way to reach go2rtc on 192.168.50.112:8556
     shm_size: "512m"            # shared‑mem for FFmpeg decode pipelines
     environment:
       TZ: Europe/Paris
@@ -106,7 +106,7 @@ services:
       - ./restic/restic.env
     environment:
       # Use Synology share path (SFTP chroot): backups/nuc
-      RESTIC_REPOSITORY: sftp:nuc_backup@192.168.1.14:/backups/nuc
+      RESTIC_REPOSITORY: sftp:nuc_backup@192.168.50.232:/backups/nuc
 
       # What to back up (inside the container). These paths come from volumes below.
       RESTIC_BACKUP_SOURCES: "/host_etc /host_root /host_home /stack_repo /srv/docker-vols /docker_vols"

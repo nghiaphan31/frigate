@@ -37,7 +37,7 @@
 # 1.1 MQTT – CONNECTION DETAILS TO YOUR HOME‑ASSISTANT BROKER
 # ---------------------------------------------------------------------------
 mqtt:
-  host: 192.168.1.24         # IP/hostname of the MQTT broker (Mosquitto on HA)
+  host: 192.168.50.125         # IP/hostname of the MQTT broker (Mosquitto on HA)
   user: mosquito             # Frigate‑only MQTT username
   password: mosquito         # …and its matching password
   topic_prefix: frigate      # Change if you plan multiple Frigate instances
@@ -163,9 +163,9 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_allee_cote_sub
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
           roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_allee_cote_main
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
           roles: [record, audio]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
@@ -249,9 +249,9 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_nord_sur_maison_sub
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_sub
           roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_nord_sur_maison_main
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
           roles: [record, audio]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
@@ -319,9 +319,9 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_entree_sub
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_sub
           roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_vue_entree_main
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
           roles: [record, audio]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
@@ -394,7 +394,7 @@ cameras:
 #     #   burned into the recorded video.  Handy when reviewing car drive‑bys.
 #     ffmpeg:
 #       inputs:
-#         - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/jardin_devant_detect  # [DETECT stream]
+#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/jardin_devant_detect  # [DETECT stream]
 #           roles: [detect, record, audio]
 
 # #      output_args:              # Override global – re‑encode to burn timestamp
@@ -463,10 +463,10 @@ cameras:
       # hwaccel_args: []
       inputs:
         # Low-res substream → detection (lighter, faster)
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_jardin_devant_sub
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub
           roles: [detect]
         # High-res main stream → recording (and audio if present)
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_jardin_devant_main
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
           roles: [record, audio]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
@@ -562,9 +562,9 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_vue_sud_sub
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub
           roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/reolink_duo_vue_sud_main
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
           roles: [record, audio]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
@@ -628,7 +628,7 @@ cameras:
   #   # --- STREAM INPUTS -----------------------------------------------------
   #   ffmpeg:
   #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/vue_sur_entree_dev_detect  # [DETECT stream]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/vue_sur_entree_dev_detect  # [DETECT stream]
   #         roles: [detect, record, audio]
 
   #   # --- DETECTION SETTINGS ----------------------------------------------
@@ -665,7 +665,7 @@ cameras:
   #   #     • Full‑res main stream ➜ archival recording
   #   ffmpeg:
   #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/cuisine_detect   # [DETECT stream]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/cuisine_detect   # [DETECT stream]
   #         roles: [detect, record, audio]
 
   #   # --- DETECTION SETTINGS ----------------------------------------------
@@ -704,7 +704,7 @@ cameras:
   #   #     • Full‑res main stream ➜ archival recording
   #   ffmpeg:
   #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@192.168.1.36:8556/canape_salon_detect   # [DETECT stream]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/canape_salon_detect   # [DETECT stream]
   #         roles: [detect, record, audio]
 
   #   # --- DETECTION SETTINGS ----------------------------------------------
