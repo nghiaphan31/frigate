@@ -4,7 +4,7 @@ export_synology.py
 Generate Synology helper configs from the SoT.
 
 Outputs:
-  - out/synology/hosts.csv      → FQDN,IP,MAC,vendor
+  - out/synology/hosts.csv      → alias_human,fqdn,ip,mac,vendor
   - out/synology/backups.json   → restic/rsync job targets
 
 Usage:
@@ -19,6 +19,27 @@ def load_sot(path: Path):
         data = yaml.safe_load(f) or {}
     data.setdefault("devices", [])
     return data
+
+def first_ip(device: dict) -> str | None:
+    # Prefer dns.ip_current; fallback to first interface IP
+    dns = device.get("dns") or {}
+    if dns.get("ip_current"):
+        return dns["ip_current"]
+    for iface in (device.get("interfaces") or []):
+        ip = iface.get("ip")
+        if ip:
+            return ip
+    return None
+
+def first_mac(device: dict) -> str | None:
+    for iface in (device.get("interfaces") or []):
+        mac = iface.get("mac")
+        if mac:
+            return mac
+    return None
+
+def vendor_of(device: dict) -> str | None:
+    return device.get("vendor") or device.get("manufacturer")
 
 def main():
     ap = argparse.ArgumentParser()
@@ -36,13 +57,11 @@ def main():
         writer = csv.writer(f)
         writer.writerow(["alias_human", "fqdn", "ip", "mac", "vendor"])
         for d in sot["devices"]:
-            fqdn = d.get("fqdn", "")
             alias = d.get("alias_human", "")
-            dns = d.get("dns") or {}
-            ip = dns.get("ip_current") or ""
-            vendor = d.get("vendor", "")
-            macs = [i.get("mac") for i in (d.get("interfaces") or []) if i.get("mac")]
-            mac = macs[0] if macs else ""
+            fqdn = d.get("fqdn", "")
+            ip = first_ip(d) or ""
+            mac = first_mac(d) or ""
+            vendor = vendor_of(d) or ""
             writer.writerow([alias, fqdn, ip, mac, vendor])
 
     # --- backups.json (restic/rsync targets)
@@ -54,7 +73,7 @@ def main():
         job = {
             "alias": d.get("alias_human", ""),
             "fqdn": d.get("fqdn"),
-            "ip": d.get("dns", {}).get("ip_current"),
+            "ip": first_ip(d),
             "paths": backup.get("paths", []),
             "schedule": backup.get("schedule", "daily"),
             "method": backup.get("method", "rsync"),
