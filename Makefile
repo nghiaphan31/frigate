@@ -11,3 +11,6 @@ generate-dns:
 .PHONY: generate-ha
 generate-ha:
 	python3 tools/export_homeassistant.py sot/sot.yaml -o out/homeassistant
+
+generate-syno:
+	python3 tools/export_synology.py sot/sot.yaml -o out/synology
