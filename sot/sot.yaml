@@ -1,0 +1,7 @@
+meta:
+  schema_version: 5.0
+  zone_root: "home.arpa"
+  naming_policy: "human_semantic_v1"
+  last_updated: "2025-10-08T00:00:00Z"
+devices: []
+groups: []

@@ -1,0 +1,14 @@
+repos:
+- repo: https://github.com/adrienverge/yamllint
+  rev: v1.35.1
+  hooks:
+    - id: yamllint
+      files: ^sot/.*\.ya?ml$
+
+- repo: https://github.com/sirosen/check-jsonschema
+  rev: 0.28.6
+  hooks:
+    - id: check-jsonschema
+      name: validate SoT schema (v5)
+      files: ^sot/sot\.ya?ml$
+      args: ["--schemafile", "sot/schemas/sot_v5_with_groups.yaml"]

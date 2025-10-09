@@ -1,0 +1,37 @@
+---
+# =============================================================================
+# SoT v4 Schema — Human-semantic, Multi-protocol Devices
+# -----------------------------------------------------------------------------
+# - This schema validates SoT YAML files before any generation/deploy.
+# - It ensures required fields exist and follow expected types.
+# =============================================================================
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "SoT v4 Schema"
+type: object
+required: ["meta", "devices"]
+properties:
+  meta:
+    type: object
+    required: ["schema_version", "zone_root"]
+    properties:
+      schema_version: {type: number}
+      zone_root: {type: string}
+      naming_policy: {type: string}
+      last_updated: {type: string}
+  devices:
+    type: array
+    items:
+      type: object
+      required: ["sot_id", "alias_human", "hostname", "category"]
+      properties:
+        sot_id: {type: string}
+        alias_human: {type: string}
+        hostname: {type: string}
+        category: {type: string}
+        fqdn: {type: string}
+        location: {type: object}
+        interfaces: {type: array}
+        manufacturer: {type: string}
+        model: {type: string}
+        owner: {type: string}
+        status: {type: string}
