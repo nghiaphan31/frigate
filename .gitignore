@@ -1,71 +1,14 @@
-# OS & Editor Junk
-.DS_Store
-Thumbs.db
-*.swp
-.idea/
-.vscode/
-
-# Docker Compose override (user-specific config)
-compose.override.yml
-
-# Frigate - Database, Secrets, and Cache
-frigate.db*
-.frigate/
-.frigate_db/
-.frigate_db-shm
-.frigate_db-wal
-/frigate/model_cache/
-/frigate/storage/
-
-/frigate/.exports
-/frigate/.jwt_secret
-/frigate/.timeline
-/frigate/.vacuum
-
-# Frigate storage (recordings, exports, previews, etc.)
-/frigate/storage/
-/frigate/storage/clips/
-/frigate/storage/exports/
-/frigate/storage/recordings/
-/frigate/storage/clips/previews/
-/frigate/storage/clips/cache/
-/frigate/storage/clips/export/
-/frigate/storage/clips/review/
-/frigate/storage/clips/review/
-
-# Data directories (persistent app data)
-data/
-ring-mqtt/data/
-
-# Common environment files (secrets)
-/.env
-.env.*
-
-# Common log or temp files
-*.log
-*.bak
-*.tmp
-
-# Ignore generated config or backup variants
-*~ 
-*.old
-*.backup
-*.bak
-*.swp
-
-# Ignore DB/data in subfolders (sample: mariaDB, paperless, photoprism)
-data/mariadb/
-data/paperless/
-data/photoprism/
-
-# __pycache__ just in case of Python scripts
+# OS / Python
 __pycache__/
-*.py[cod]
+*.pyc
+.DS_Store
+.venv/
+venv/
 
-# pyenv
-.python-version
+# Logs & runtime (générés sur le NAS)
+*.log
+runs/
+logs/
 
-# macOS
-.AppleDouble
-.LSOverride
-ring-mqtt/data/ring-state.json
+# Sauvegardes locales de DSM/NAS
+nas-pipelines/
