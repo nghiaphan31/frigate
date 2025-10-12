@@ -60,96 +60,76 @@ families:
     - (^|/)WhatsApp/Media/.*/Sent(/|$)
     - (?i)(^|/)[^/]*(thumb|thumbnail|preview|edited)[^/]*\.(jpg|jpeg|png|gif|webp|heic|heif|tif|tiff|mp4|mov|m4v|mkv|avi|webm)(/|$)
     - (?i)(^|/)web_packages(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/FFLY4U(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Dropbox(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Ocean\ Skills(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Mes\ Documents\ 2007(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Virtual\ Machines\.localized(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Google\ Drive\ nghia\.phan@mobirider\.com(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/openshare/Content\ for\ noema\ technologies\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/FFLY4U(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Dropbox(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Ocean\ Skills(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Mes\ Documents\ 2007(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Virtual\ Machines\.localized(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Google\ Drive\ nghia\.phan@mobirider\.com(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/openshare/Content\ for\ noema\ technologies\
       web\ site(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/openshare/BackUp\ Nghia/TAGATTITUDE(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ user\ nghia/Music(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/UHT\ Factory(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/iMON_6_01_0122(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/iMON_7_20_0502(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/Azureus\ Downloads(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/iMON_7_40_0806_ANTEC(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/VIET\ NAM\ MOBILE\ MARKET(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/openshare/BackUp\ Nghia/TAGATTITUDE(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\ Up\
+      user\ nghia/Music(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\ documents_E/UHT\
+      Factory(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\ documents_E/iMON_6_01_0122(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\ documents_E/iMON_7_20_0502(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\ documents_E/Azureus\
+      Downloads(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\ documents_E/iMON_7_40_0806_ANTEC(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\ documents_E/VIET\
+      NAM\ MOBILE\ MARKET(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/Elena(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/Insync(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/\.cache(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/\.eagle(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/\.arista(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/\.config(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/\.mozilla(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/kdenlive(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/workspace(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/jre1\.7\.0_13(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/Development(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/android\-sdks(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/\.dropbox\-dist(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/gnuradio\-3\.4\.2(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/MyRepositories(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/libgcrypt\-1\.5\.0(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
       Linux\ user\ nghia\ 27\ june\ 2013/wireshark\-1\.8\.4(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/thong\ tin\ gioi\ thieu\ Cong\ ty\ Viet\ My_fichiers(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ user\ nghia/Documents/WebCam\ Media(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ user\ nghia/Documents/Vuze\ Downloads(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ NGHIA/Mes\ documents_E/Azureus\ Downloads(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/openshare/BackUp\ Cecile/cecile/Documents/elan\
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\ documents_E/thong\
+      tin\ gioi\ thieu\ Cong\ ty\ Viet\ My_fichiers(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\ Up\
+      user\ nghia/Documents/WebCam\ Media(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\ Up\
+      user\ nghia/Documents/Vuze\ Downloads(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\ Up\
+      NGHIA/Mes\ documents_E/Azureus\ Downloads(/|$)
+    - (?i)(^|/)homes/[^/]+/Drive/Archives/openshare/BackUp\ Cecile/cecile/Documents/elan\
       software(/|$)
+    - (?i)(^|/)[^/]*(Azureus|Vuze)[^/]*(/|$)
   keep:
   - id: KEEP-01
     name: user_photos_priority
     patterns:
     - (^|/)homes/nphan/Photos(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Photos(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Photos_Working_Folder(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Archives\ Google\ Drive\ nghia\.phan31@gmail\.com(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ user\ nghia/Videos(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ user\ nghia/Documents(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ NGHIA/Mes\ documents_E(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Back\
-      Up\ NGHIA/Back\ Up\ user\ nghia(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Mes\
-      documents_E/photo\ st\ jean\ de\ luz(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
-      Linux\ user\ nghia\ 27\ june\ 2013/Videos(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/Backups\ \-\ Previous\ Computers/Acer5820\
-      Linux\ user\ nghia\ 27\ june\ 2013/Dropbox(/|$)
-    - (?i)(^|/)homes/\[\^/\]\+/Drive/Archives/openshare/BackUp\ Cecile/cecile/Pictures(/|$)
 categories:
   images:
     exts:

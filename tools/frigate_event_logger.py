@@ -38,7 +38,7 @@ To run this script as a systemd background service:
 1. Created an MQTT Event Logger
 Language: Python
 Script: nuc-docker-stack/tools/frigate_event_logger.py
-Purpose: Listens to Frigate MQTT event messages (frigate/events topic) using credentials proven to work with your CLI (mosquito/mosquito on broker 192.168.1.24).
+Purpose: Listens to Frigate MQTT event messages (frigate/events topic) using credentials proven to work with your CLI (mosquito/mosquito on broker 192.168.50.125).
 2. Integrated a Custom Log Parser
 Parser file: nuc-docker-stack/tools/frigate_event_log_parser.py
 How it works: Each event is parsed and formatted into a fixed-width, human-readable log line using your 
@@ -65,7 +65,7 @@ sys.path.append(os.path.dirname(__file__))
 from frigate_event_log_parser import human_readable_log
 from datetime import datetime, timedelta
 
-BROKER = "192.168.1.24"  # MQTT broker from working CLI
+BROKER = "192.168.50.125"  # MQTT broker from working CLI
 MQTT_USER = "mosquito"
 MQTT_PASS = "mosquito"
 TOPIC = "frigate/events"

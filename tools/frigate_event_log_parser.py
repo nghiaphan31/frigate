@@ -4,7 +4,7 @@ Frigate Event Log Parser
 
 Assumption: You have subscribed to the Frigate events topic and piped them to a JSONL file.
 Example:
-    mosquitto_sub -h 192.168.1.24 -u mosquito -P mosquito -t 'frigate/events' > frigate_event_dump.jsonl
+    mosquitto_sub -h 192.168.50.125 -u mosquito -P mosquito -t 'frigate/events' > frigate_event_dump.jsonl
 
 Usage:
     python3 frigate_event_log_parser.py <events.jsonl>
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         sys.argv.remove('--full')
     if len(sys.argv) < 2:
         print("Assumption: you have subsscribed to the frigate events and have pipe it out to a jsonl")
-        print("Example: mosquitto_sub -h 192.168.1.24 -u mosquito -P mosquito -t 'frigate/events' > frigate_event_dump.jsonl")
+        print("Example: mosquitto_sub -h 192.168.50.125 -u mosquito -P mosquito -t 'frigate/events' > frigate_event_dump.jsonl")
         print("Usage: python3 frigate_event_log_parser.py <events.jsonl> [--full]")
         sys.exit(1)
     parse_events_file(sys.argv[1], full=full)
