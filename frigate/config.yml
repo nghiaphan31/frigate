@@ -106,14 +106,22 @@ detectors:
     type: cpu              # Using CPU only – upgrade to Coral for speed
 
 # ---------------------------------------------------------------------------
-# 1.7 MOTION PRE‑FILTER (BEFORE ML) – default pre‑filter for all cameras
-# These parameters let Frigate reject obvious noise (trees, rain) before
-# sending frames to the object detector, saving CPU and false positives.
+# 1.7 MOTION PRE-FILTER (BEFORE ML) – default pre-filter for all cameras
 # ---------------------------------------------------------------------------
 motion:
-  threshold: 11           # Higher → less sensitive. # Higher ➜ require bigger pixel change
-  contour_area: 10        # Ignore blobs < 10 px²
-  improve_contrast: true  # Helps night scenes, more sensitive by day.  Histogram equalisation for low‑light frames
+  # Plus haut ➜ moins sensible. 26 reste assez sensible pour l’allumage de lumière,
+  # mais filtre déjà pas mal de micro-mouvements.
+  threshold: 26
+
+  # Rejette les tout petits blobs (feuilles isolées, bruit).
+  contour_area: 200
+
+  # Lissage temporel : évite de “sauter” sur un changement ultra ponctuel
+  frame_alpha: 0.4
+  delta_alpha: 0.5
+
+  # Garde ça, ça aide beaucoup de nuit sans trop pénaliser le jour
+  improve_contrast: true
 
 # --- Frigate audio section tuned for security-only events -------------------
 audio:
@@ -237,12 +245,160 @@ cameras:
       detections:
         required_zones: rodage   # Keep events when someone lingers at rodage
 
-  # ========================================================================
-  # CAMERA: JARDIN_ARRIERE — Back garden (Reolink RLC-811WA PoE)
-  # - Substream → detection (640x360, light for ML)
-  # - Main stream → recording + audio
-  # - Covers children’s play area + garden shed
-  # ========================================================================
+  allee_sur_le_cote_left:
+
+    # ---------------------------- STREAM INPUTS -----------------------------
+    ffmpeg:
+      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_left
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+          roles: [record, audio]
+
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: true              # Keep mic channel in recordings
+
+    # --------------------------- MQTT SNAPSHOTS -----------------------------
+    # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
+    mqtt:
+      enabled: true              # Enable MQTT snapshots
+      timestamp: true            # Add timestamp overlay
+      bounding_box: true         # Draw bounding boxes
+      crop: false                # Send whole frame (not cropped to object)
+
+    # --------------------------- DETECTION CORE -----------------------------
+    detect:
+      width: 768
+      height: 432
+      fps: 5                     # Balanced; raise if NUC load is fine
+
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track: [person]            # Focus only on people
+      filters:
+        person:
+          min_area: 2500         # Ignore tiny blobs (far away, street)
+          max_area: 200000       # Prevent runaway boxes from broken frames
+          min_ratio: 0.20        # Allow tall, narrow shapes
+          max_ratio: 3.5         # Disallow extreme vertical poles etc.
+          threshold: 0.65        # Base detection threshold
+
+    # ------------------------------ SNAPSHOTS -------------------------------
+    snapshots:
+      enabled: true              # Standard snapshot behaviour
+
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
+    zones:
+      # ---- 'prive' — Private driveway (immediate alerts) ------------------
+      prive:
+        coordinates: 
+          1,1,1,0.002,0.703,0.002,0.506,0.112,0.496,0.124,0.486,0.12,0.464,0.138,0.322,0.239,0.254,0.296,0.244,0.32,0.234,0.329,0.226,0.336,0.247,0.363,0.155,0.694,0,0.568,0,1
+        loitering_time: 0        # Trigger immediately when person enters
+        inertia: 3               # Hold event for 3s after leaving
+        objects: person
+        filters:
+          person:
+            threshold: 0.55      # Allow lower-confidence partial views
+            min_area: 1000       # Allow smaller (bust-only) boxes
+            min_ratio: 0.15      # Allow tall, narrow boxes
+            max_ratio: 4.0       # Allow more square boxes
+
+      # ---- 'rodage' — Fence line / loitering detection --------------------
+      rodage:
+        coordinates: 0.231,0.382,0.214,0.37,0.126,0.653,0.151,0.665
+        loitering_time: 10       # Require ≥10s loitering before event
+        inertia: 3
+        objects: person
+        filters:
+          person:
+            threshold: 0.62
+            min_area: 2000
+            min_ratio: 0.20
+            max_ratio: 3.8
+
+    # ----------------------------- REVIEW RULES -----------------------------
+    review:
+      alerts:
+        required_zones: prive    # Only alert if event entered private zone
+      detections:
+        required_zones: rodage   # Keep events when someone lingers at rodage
+
+    motion:
+      mask: 
+        0.587,0.002,0,0,0,0.533,0.125,0.642,0.214,0.35,0.199,0.315,0.207,0.292,0.308,0.2,0.398,0.127,0.41,0.117,0.422,0.097
+
+
+  allee_sur_le_cote_right:
+
+    # ---------------------------- STREAM INPUTS -----------------------------
+    ffmpeg:
+      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_right
+          roles: [detect]
+#        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+#          roles: [record, audio]
+
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: false              # Keep mic channel in recordings
+
+    # --------------------------- MQTT SNAPSHOTS -----------------------------
+    # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
+    mqtt:
+      enabled: true              # Enable MQTT snapshots
+      timestamp: true            # Add timestamp overlay
+      bounding_box: true         # Draw bounding boxes
+      crop: false                # Send whole frame (not cropped to object)
+
+    # --------------------------- DETECTION CORE -----------------------------
+    detect:
+      width: 768
+      height: 432
+      fps: 5                     # Balanced; raise if NUC load is fine
+
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track: [person]            # Focus only on people
+      filters:
+        person:
+          min_area: 2500         # Ignore tiny blobs (far away, street)
+          max_area: 200000       # Prevent runaway boxes from broken frames
+          min_ratio: 0.20        # Allow tall, narrow shapes
+          max_ratio: 3.5         # Disallow extreme vertical poles etc.
+          threshold: 0.65        # Base detection threshold
+
+    # ------------------------------ SNAPSHOTS -------------------------------
+    snapshots:
+      enabled: true              # Standard snapshot behaviour
+
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
+    zones:
+      # ---- 'prive' — Private driveway (immediate alerts) ------------------
+      prive:
+        coordinates: 
+          1,1,0,1,0,0,0.299,0,0.498,0.097,0.63,0.177,0.748,0.274,0.823,0.349,0.849,0.338,0.877,0.322,0.907,0.299,0.926,0.288,0.939,0.327,0.946,0.359,0.926,0.379,1,0.582,1,0.605
+        loitering_time: 0        # Trigger immediately when person enters
+        inertia: 3               # Hold event for 3s after leaving
+        objects: person
+        filters:
+          person:
+            threshold: 0.55      # Allow lower-confidence partial views
+            min_area: 1000       # Allow smaller (bust-only) boxes
+            min_ratio: 0.15      # Allow tall, narrow boxes
+            max_ratio: 4.0       # Allow more square boxes
+
+      # ---- 'rodage' — Fence line / loitering detection --------------------
+    review:
+      alerts:
+        required_zones: prive    # Only alert if event entered private zone
+    motion:
+      mask: 
+        0.464,0.011,0.499,0,0.587,0,1,0.004,1,0.51,0.971,0.301,0.948,0.188,0.952,0.104,0.913,0.027,0.765,0.028,0.83,0.173,0.85,0.223,0.868,0.258,0.832,0.294,0.694,0.17,0.665,0.145,0.623,0.113
+
+
   jardin_arriere:
 
     # ---------------------------- STREAM INPUTS -----------------------------
@@ -281,10 +437,9 @@ cameras:
 
     # ---------------------------- MOTION FILTER -----------------------------
     motion:
-      threshold: 20              # Stricter (reduce small movements from trees/rain)
-      contour_area: 30           # Ignore tiny blobs (<30 px²)
-      improve_contrast: true     # Histogram equalisation for low-light frames
-
+      mask:
+        - 0.091,0.149,0.081,0.315,0.103,0.347,0.231,0.336,0.245,0.301,0.214,0.274,0.215,0.221,0.201,0.168,0.178,0.143,0.158,0.122,0.13,0.12
+        - 0.429,0.073,0.45,0.078,0.471,0.126,0.47,0.158,0.453,0.188,0.429,0.179,0.412,0.143,0.398,0.115
     # --------------------------- ZONES & BEHAVIOUR --------------------------
     zones:
       # ---- 'prive' — Play area + shed ------------------------------------
@@ -351,9 +506,8 @@ cameras:
 
     # ---------------------------- MOTION FILTER -----------------------------
     motion:
-      threshold: 20              # Stricter (reduce small movements from trees/rain)
-      contour_area: 30           # Ignore tiny blobs (<30 px²)
-      improve_contrast: true     # Histogram equalisation for low-light frames
+      mask: 
+        0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081
 
     # --------------------------- ZONES & BEHAVIOUR --------------------------
     zones:
@@ -377,77 +531,6 @@ cameras:
         required_zones: prive    # Only alert if in private play/shed area
       detections:
         required_zones: prive    # Only keep events when in this area
-
-
-  # ========================================================================
-  # 2.3 CAMERA: JARDIN_DEVANT – FRONT GARDEN / ROAD
-  #           * Ring Floodlight Cam
-  #           * Faces a public road – needs stricter privacy filters
-  # ========================================================================
-#   jardin_devant:
-#     # --- AUDIO -------------------------------------------------------------
-#     audio:
-#       enabled: true            # Keep mic track – useful for analytics later 
-
-#     # --- STREAM INPUTS -----------------------------------------------------
-#     #   We override the global `output_args` to use VAAPI so the timestamp is
-#     #   burned into the recorded video.  Handy when reviewing car drive‑bys.
-#     ffmpeg:
-#       inputs:
-#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/jardin_devant_detect  # [DETECT stream]
-#           roles: [detect, record, audio]
-
-# #      output_args:              # Override global – re‑encode to burn timestamp
-# #        record: preset-vaapi
-
-#     # --- DETECTION SETTINGS ----------------------------------------------
-#     detect:
-#       width: 1920               # Full‑HD needed for persons who are further out
-#       height: 1080
-#       fps: 2
-
-#     # --- OBJECT FILTERS --------------------------------------------------
-#     #objects:
-#     #  track:
-#     #    - person                # Only track people (ignore cars for privacy)
-#     #  filters:
-#     #    person:
-#     #      min_area: 3000        # Disregard tiny silhouettes in the road area
-#     #      min_score: 0.70       # Confidence threshold
-#     #      threshold: 0.70
-
-#     # --- SNAPSHOTS --------------------------------------------------------
-#     snapshots:
-#       enabled: true             # Standard snapshot behaviour
-
-#     # --- ZONES (PRIVACY & LOITERING) -------------------------------------
-#     zones:
-#       # "rodage" – Extended perimeter near public sidewalk
-#       rodage:
-#         coordinates: 
-#           0.225,0.284,0.232,0.246,0.481,0.246,0.61,0.256,0.686,0.278,0.689,0.304,0.698,0.305,0.833,0.328,0.841,0.351,0.827,0.373,0.806,0.383,0.696,0.369,0.699,0.352,0.679,0.309,0.644,0.425,0.5,0.418,0.264,0.407
-#         loitering_time: 10      # Person must loiter ≥ 10 s before event
-#         inertia: 3              # Keep event open for 3 s after leaving zone
-#         objects: person
-#         # Legacy Ring people filter (kept for backwards compat)
-#         filters:
-#           person:
-#             threshold: 150
-
-#       # "prive" – Area inside fence close to house
-#       prive:
-#         coordinates: 
-#           0.015,0.728,0.136,0.808,0.161,0.629,0.193,0.501,0.211,0.396,0.249,0.355,0.282,0.429,0.262,0.415,0.306,0.418,0.412,0.421,0.644,0.436,0.675,0.341,0.687,0.341,0.682,0.358,0.676,0.403,0.807,0.433,0.829,0.445,0.83,0.42,0.872,0.554,0.913,0.817,1,0.785,1,1,0,1
-#         loitering_time: 0       # Immediate intrusion alert
-#         inertia: 3
-#         objects: person
-
-#     # --- REVIEW RULES ----------------------------------------------------
-#     review:
-#       alerts:
-#         required_zones: prive    # Only push notifications inside private zone
-#       detections:
-#         required_zones: rodage   # Record events if loitering near sidewalk
 
 
 # ========================================================================
@@ -478,14 +561,6 @@ cameras:
       width: 1536              # Match substream width (ultra-wide)
       height: 432              # Match substream height
       fps: 4                   # Balanced: enough chances to catch a good pose, still light on CPU
-
-    # ---------------------------- MOTION GATING -----------------------------
-    motion:
-      # Trim night foliage/IR sparkle so the detector isn’t spammed with useless frames.
-      threshold: 34            # Slightly stricter than default 30
-      contour_area: 120        # Ignore very small moving blobs
-      frame_alpha: 0.25        # Background blend factor
-      delta_alpha: 0.25        # Motion blend factor
 
     # ------------------------------ OBJECTS --------------------------------
     objects:
@@ -557,46 +632,46 @@ cameras:
       # hwaccel_args: []
       inputs:
         # Low-res substream → detection (lighter, faster)
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub_left
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_left
           roles: [detect]
         # High-res main stream → recording (and audio if present)
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
-          roles: [record, audio]
+          roles: [record]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
-      enabled: true            # Keep mic channel in recordings (useful for later analytics/rules)
+      enabled: false            # Keep mic channel in recordings (useful for later analytics/rules)
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 768              # Match substream width (ultra-wide)
-      height: 432              # Match substream height
-      fps: 4                   # Balanced: enough chances to catch a good pose, still light on CPU
+      width: 2048              # Match substream width (ultra-wide)
+      height: 1152              # Match substream height
+      fps: 5                   # Balanced: enough chances to catch a good pose, still light on CPU
+      max_disappeared: 40   # ≈ 10 s à 5 fps (50 frames sans détection avant de “perdre” l’objet)
+
 
     # ---------------------------- MOTION GATING -----------------------------
+    # Caméra "Jardin Devant Left"
+    # Personnes de taille moyenne, assez loin mais bien visibles.
     motion:
-      # Trim night foliage/IR sparkle so the detector isn’t spammed with useless frames.
-      threshold: 34            # Slightly stricter than default 30
-      contour_area: 120        # Ignore very small moving blobs
-      frame_alpha: 0.25        # Background blend factor
-      delta_alpha: 0.25        # Motion blend factor
-
-    # ------------------------------ OBJECTS --------------------------------
+      # Mouvement : filtrer les petites variations (feuilles, reflets légers)
+      contour_area: 2500      # aire mini d'un blob de mouvement (~1 % du frame)
+      threshold: 25           # plus haut = moins sensible
+      delta_alpha: 0.2        # lissage entre deux frames (0.2 = bon compromis)
+      mask: 
+        0,0.504,0,0,0.015,0,0.999,0,0.99,0.016,0.556,0.067,0.511,0.165,0.394,0.775,0.199,0.651
     objects:
       track:
-        - person               # Only track people (ignore vehicles for privacy)
+        - person
       filters:
         person:
-          # Global person filter (applies everywhere unless a zone overrides it)
-          min_area: 2500       # Drop tiny, far silhouettes (street)
-          max_area: 200000     # Safety cap for broken frames/huge blobs
-          min_ratio: 0.20      # Allow tall/narrow boxes (bust-only, seen from above)
-          max_ratio: 3.5       # Disallow ultra-thin poles / extreme aspect boxes
-          threshold: 0.65      # Base confidence; zones can override lower
-
-          # Optional: keep tracks alive when briefly occluded (bush/wall edge)
-          # max_disappeared: 30
-
+          # Les vraies boxes "person" vues sur les captures font ~13k–22k px².
+          min_area: 1500      # très en dessous, juste pour éliminer le bruit
+          max_area: 80000     # au cas où la personne soit très proche
+          min_score: 0.6      # score pour accepter une nouvelle personne
+          threshold: 0.6      # score pour continuer à suivre la personne
+      mask: 
+        0.002,0,1,0,1,0.026,0.768,0.04,0.568,0.085,0.546,0.129,0.511,0.276,0.484,0.425,0.444,0.649,0.412,0.811,0,0.556
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
       enabled: true            # Standard snapshot behaviour (uses main stream quality if configured globally)
@@ -607,34 +682,33 @@ cameras:
       # ---- 'prive' — Inside the fence (your private area) ------------------
       # More permissive: person may be partially seen (bust/edge/occluded).
       prive:
-        coordinates: 
-          0,0.407,0.081,0.745,0.17,0.5,0.196,0.417,0.226,0.337,0.24,0.463,0.258,0.488,0.286,0.499,0.325,0.512,0.402,0.55,0.646,0.624,0.667,0.397,0.671,0.466,0.683,0.476,0.691,0.483,0.778,0.534,0.788,0.469,0.813,0.563,0.89,0.801,0.929,0.894,0.971,0.937,1,0.827,1,1,0,1
+        coordinates: 0,1,1,1,1,0.285,0.65,0.296,0.576,0.204,0.47,0.865,0,0.561
         loitering_time: 0      # Immediate alert when a person enters
         inertia: 3             # Keep event open for 3 s after exit (avoid flicker)
         objects: person
         filters:
           person:
-            # Night/bust-only friendly thresholds scoped to this private zone
-            threshold: 0.55    # Accept lower-confidence partial poses near wall/roof
-            min_area: 1000     # Permit smaller boxes (upper body only)
-            min_ratio: 0.15    # Allow very tall/narrow boxes (seen from above)
-            max_ratio: 4.0     # Allow squarer boxes (3/4 body, arm positions)
+            # Encore plus permissif à l’intérieur de ta propriété
+            threshold: 0.32      # en dessous du global 0.30
+            min_area: 900        # plus petit que global
+            min_ratio: 0.25      # très vertical autorisé
+            max_ratio: 5
 
       # ---- 'rodage' — Sidewalk/approach band (outside fence) ---------------
       # Stricter behaviour: only alert if someone lingers (loiters) here.
       rodage:
         coordinates: 
-          0.228,0.298,0.261,0.197,0.436,0.215,0.611,0.277,0.664,0.302,0.665,0.367,0.678,0.376,0.69,0.41,0.757,0.449,0.768,0.394,0.782,0.445,0.79,0.453,0.776,0.526,0.678,0.467,0.671,0.404,0.661,0.417,0.642,0.599,0.513,0.564,0.249,0.463,0.24,0.397
+          1,0.034,0.998,0.28,0.65,0.297,0.575,0.191,0.469,0.858,0.416,0.821,0.539,0.136,0.582,0.092,0.793,0.046
         loitering_time: 10     # Require ≥10 s inside before raising event
         inertia: 3             # Debounce exit
         objects: person
         filters:
           person:
-            # Slightly more permissive than global, but still tighter than 'prive'
-            threshold: 0.62
-            min_area: 2000
-            min_ratio: 0.20
-            max_ratio: 3.8
+            # Plus strict que 'prive' pour éviter de spammer sur le trottoir
+            threshold: 0.35      # un cran au-dessus de 'prive'
+            min_area: 800        # un peu plus grand
+            min_ratio: 0.10
+            max_ratio: 5.0
 
     # ----------------------------- REVIEW RULES -----------------------------
     # These are your policy rules for what gets alerted vs merely recorded.
@@ -650,8 +724,7 @@ cameras:
       # Tip: if VA-API crashes on detect for Duo 3, uncomment to force software decode ONLY for this cam:
       # hwaccel_args: []
       inputs:
-        # Low-res substream → detection (lighter, faster)
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub_right
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_right
           roles: [detect]
         # High-res main stream → recording (and audio if present)
 #        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
@@ -663,33 +736,44 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 768              # Match substream width (ultra-wide)
-      height: 432              # Match substream height
-      fps: 4                   # Balanced: enough chances to catch a good pose, still light on CPU
+      width: 2048              # Match substream width (ultra-wide)
+      height: 1152              # Match substream height
+      fps: 5                   # Balanced: enough chances to catch a good pose, still light on CPU
+      max_disappeared: 40   # ≈ 10 s à 5 fps (50 frames sans détection avant de “perdre” l’objet)
+
 
     # ---------------------------- MOTION GATING -----------------------------
     motion:
-      # Trim night foliage/IR sparkle so the detector isn’t spammed with useless frames.
-      threshold: 34            # Slightly stricter than default 30
-      contour_area: 120        # Ignore very small moving blobs
-      frame_alpha: 0.25        # Background blend factor
-      delta_alpha: 0.25        # Motion blend factor
+      # Revenir à quelque chose de proche du global, juste un peu plus strict
+      threshold: 24          # plus sensible que 26
 
-    # ------------------------------ OBJECTS --------------------------------
+      contour_area: 250      # un peu plus que le global 200, mais bien < 800
+
+      frame_alpha: 0.4
+      delta_alpha: 0.5
+
+      # On garde le même mask pour couper le ciel / zones inutiles
+      mask:
+        - 0,0.032,0.042,0.036,0.188,0.058,0.356,0.093,0.346,0.141,0.377,0.161,0.497,0.204,0.506,0.227,0.542,0.241,0.664,0.784,1,0.556,1,0,0,0
+        - 0,0.391,0.074,0.487,0.071,0.563,0.05,0.621,0.045,0.644,0.033,0.676,0,0.687
+
     objects:
       track:
-        - person               # Only track people (ignore vehicles for privacy)
+        - person
       filters:
         person:
-          # Global person filter (applies everywhere unless a zone overrides it)
-          min_area: 2500       # Drop tiny, far silhouettes (street)
-          max_area: 200000     # Safety cap for broken frames/huge blobs
-          min_ratio: 0.20      # Allow tall/narrow boxes (bust-only, seen from above)
-          max_ratio: 3.5       # Disallow ultra-thin poles / extreme aspect boxes
-          threshold: 0.65      # Base confidence; zones can override lower
+          min_area: 800        # un peu en-dessous de 900 pour ne pas rater des poses petites
+          max_area: 250000
 
-          # Optional: keep tracks alive when briefly occluded (bush/wall edge)
-          # max_disappeared: 30
+          # Forme humaine, mais pas trop restrictive vu la vue plongeante
+          min_ratio: 0.15
+          max_ratio: 3.0
+
+          # Confiance : plus souple que ce qu’on avait mis
+          threshold: 0.25      # était 0.35
+          min_score: 0.20      # était 0.30
+      mask:
+        0.002,0,0.99,0,1,0.598,0.669,0.812,0.536,0.23,0.504,0.235,0.488,0.193,0.349,0.136,0.353,0.085,0.002,0.03
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -702,33 +786,33 @@ cameras:
       # More permissive: person may be partially seen (bust/edge/occluded).
       prive:
         coordinates: 
-          0,0.407,0.081,0.745,0.17,0.5,0.196,0.417,0.226,0.337,0.24,0.463,0.258,0.488,0.286,0.499,0.325,0.512,0.402,0.55,0.646,0.624,0.667,0.397,0.671,0.466,0.683,0.476,0.691,0.483,0.778,0.534,0.788,0.469,0.813,0.563,0.89,0.801,0.929,0.894,0.971,0.937,1,0.827,1,1,0,1
-        loitering_time: 0      # Immediate alert when a person enters
-        inertia: 3             # Keep event open for 3 s after exit (avoid flicker)
+          0,1,0,0.267,0.297,0.288,0.327,0.214,0.495,0.271,0.526,0.269,0.646,0.827,0.65,0.832,1,0.602,1,0.991,1,1
+        loitering_time: 2       # 0 → 2 s avant de lever l’évènement
+        inertia: 3
         objects: person
         filters:
           person:
-            # Night/bust-only friendly thresholds scoped to this private zone
-            threshold: 0.55    # Accept lower-confidence partial poses near wall/roof
-            min_area: 1000     # Permit smaller boxes (upper body only)
-            min_ratio: 0.15    # Allow very tall/narrow boxes (seen from above)
-            max_ratio: 4.0     # Allow squarer boxes (3/4 body, arm positions)
+            # Légèrement plus strict que la caméra, mais cohérent
+            threshold: 0.32      # un cran au-dessus des 0.28 caméra
+            min_area: 1100       # un peu plus grand que 900
+            min_ratio: 0.20      # même plage que la caméra
+            max_ratio: 2.0
 
       # ---- 'rodage' — Sidewalk/approach band (outside fence) ---------------
       # Stricter behaviour: only alert if someone lingers (loiters) here.
       rodage:
         coordinates: 
-          0.228,0.298,0.261,0.197,0.436,0.215,0.611,0.277,0.664,0.302,0.665,0.367,0.678,0.376,0.69,0.41,0.757,0.449,0.768,0.394,0.782,0.445,0.79,0.453,0.776,0.526,0.678,0.467,0.671,0.404,0.661,0.417,0.642,0.599,0.513,0.564,0.249,0.463,0.24,0.397
+          0,0.255,0,0.042,0.217,0.067,0.346,0.099,0.339,0.147,0.494,0.207,0.508,0.241,0.54,0.239,0.667,0.819,0.65,0.837,0.529,0.283,0.523,0.273,0.501,0.273,0.337,0.214,0.3,0.287,0.182,0.28
         loitering_time: 10     # Require ≥10 s inside before raising event
         inertia: 3             # Debounce exit
         objects: person
         filters:
           person:
-            # Slightly more permissive than global, but still tighter than 'prive'
-            threshold: 0.62
-            min_area: 2000
+            # Plus strict que 'prive' pour le trottoir
+            threshold: 0.36
+            min_area: 900
             min_ratio: 0.20
-            max_ratio: 3.8
+            max_ratio: 2.0
 
     # ----------------------------- REVIEW RULES -----------------------------
     # These are your policy rules for what gets alerted vs merely recorded.
@@ -736,7 +820,8 @@ cameras:
       alerts:
         required_zones: prive   # Push notifications only if the event entered 'prive'
       detections:
-        required_zones: rodage  # Keep events when someone loiters at 'rodage'
+#        required_zones: rodage  # Keep events when someone loiters at 'rodage'
+        required_zones: prive
 
 
   # ========================================================================
@@ -806,124 +891,132 @@ cameras:
       detections:
         required_zones: prive    # Only keep detections when inside pool area
 
-  # ========================================================================
-  # 2.5 CAMERA: VUE_SUR_ENTREE_DEV – DEV ENTRY WAY
-  #           * Ring Spotlight Cam
-  # ========================================================================
-  # vue_sur_entree_dev:
-  #   # --- AUDIO -------------------------------------------------------------
-  #   audio:
-  #     enabled: true            # Keep mic track – useful for analytics later 
-  #   # --- STREAM INPUTS -----------------------------------------------------
-  #   ffmpeg:
-  #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/vue_sur_entree_dev_detect  # [DETECT stream]
-  #         roles: [detect, record, audio]
+  piscine_vue_toit_left:
 
-  #   # --- DETECTION SETTINGS ----------------------------------------------
-  #   detect:
-  #     width: 1280               # Persons are quite close-up
-  #     height: 720
-  #     fps: 2
+    # ---------------------------- STREAM INPUTS -----------------------------
+    ffmpeg:
+      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_left
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+          roles: [record, audio]
 
-  #   # --- SNAPSHOTS --------------------------------------------------------
-  #   snapshots:
-  #     enabled: true             # Retain snapshots per global policy
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: true              # Keep mic channel in recordings
 
-  #   # --- ZONES -----------------------------------------------------------
-  #   zones:
-  #     # "prive" – Front porch area; instant alert if breached
-  #     prive:
-  #       coordinates: 
-  #         0.001,0.996,0,0.001,0.268,0.005,0.174,0.195,0.14,0.279,0.234,0.362,0.24,0.347,0.303,0.349,0.313,0.243,0.326,0.169,0.369,0.097,0.408,0.062,0.425,0.001,0.997,0.001,0.998,0.996
-  #       loitering_time: 0        # Alert immediately on entry
+    # --------------------------- DETECTION CORE -----------------------------
+    detect:
+      width: 768
+      height: 432
+      fps: 4                     # Slightly higher than 2 for more chances to catch poses
 
-  #   # --- REVIEW RULES ----------------------------------------------------
-  #   review:
-  #     alerts:
-  #       required_zones: prive    # Skip notifications unless someone is on porch
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track: [person]
+      filters:
+        person:
+          min_area: 2000         # People are generally mid-frame, not tiny
+          max_area: 200000
+          min_ratio: 0.20
+          max_ratio: 3.8
+          threshold: 0.60        # Slightly relaxed to catch partial/bust views
 
-  # cuisine:
-  #   # --- AUDIO -------------------------------------------------------------
-  #   audio:
-  #     enabled: true            # Keep mic track – useful for analytics later 
+    # ------------------------------ SNAPSHOTS -------------------------------
+    snapshots:
+      enabled: true              # Use global settings for retention
 
-  #   # --- STREAM INPUTS -----------------------------------------------------
-  #   #   Uses the same dual‑stream pattern as the driveway cam:
-  #   #     • Lower‑res sub‑stream ➜ detection
-  #   #     • Full‑res main stream ➜ archival recording
-  #   ffmpeg:
-  #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/cuisine_detect   # [DETECT stream]
-  #         roles: [detect, record, audio]
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
+    zones:
+      # ---- 'prive' — Pool rooftop area (full frame) ----------------------
+      prive:
+        coordinates: 
+          0.197,1,0.303,0.821,0.366,0.697,0.506,0.358,0.495,0.283,0.484,0.216,0.496,0.198,0.627,0.053,0.737,0.037,0.739,0.076,0.981,0.039,0.999,0.062,1,0.993,1,1
+        loitering_time: 0        # Immediate alert if person appears
+        inertia: 3               # Hold event for 3s after leaving
+        objects: person
+        filters:
+          person:
+            threshold: 0.55      # More permissive for bust-only or awkward poses
+            min_area: 1000       # Allow smaller boxes (upper body only)
+            min_ratio: 0.15      # Accept tall/narrow shapes
+            max_ratio: 4.0       # Accept more square-ish boxes
 
-  #   # --- DETECTION SETTINGS ----------------------------------------------
-  #   detect:
-  #     width: 1920               # Full‑HD needed for persons who are further out
-  #     height: 1080
-  #     fps: 2                    # Any higher ➜ battery hit + more CPU
+    # ----------------------------- REVIEW RULES -----------------------------
+    review:
+      alerts:
+        required_zones: prive    # Only alert if event is inside the pool area
+      detections:
+        required_zones: prive    # Only keep detections when inside pool area
 
-  #   # --- SNAPSHOTS --------------------------------------------------------
-  #   snapshots:
-  #     enabled: true             # Stick with global snapshot policy
+    motion:
+      mask: 
+        0.157,0.996,0,1,0,0,0.592,0.007,0.323,0.303,0.32,0.352,0.41,0.324,0.471,0.304,0.481,0.347,0.382,0.586,0.343,0.673,0.292,0.768,0.242,0.862
+  piscine_vue_toit_right:
 
-  #   # --- MOTION PRE‑FILTER (BEFORE ML) ------------------------------------
-  #   #  These parameters let Frigate reject obvious noise (trees, rain) before
-  #   #  sending frames to the object detector, saving CPU and false positives.
-  #   motion:
-  #     threshold: 11             # Higher ➜ require bigger pixel change
-  #     contour_area: 10          # Ignore extremely small blobs <10 px²
-  #     improve_contrast: true    # Histogram equalisation for low‑light frames
+    # ---------------------------- STREAM INPUTS -----------------------------
+    ffmpeg:
+      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+      inputs:
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
+          roles: [detect]
+#        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+#          roles: [record, audio]
 
-  #   # --- ZONES -----------------------------------------------------------
-  #   zones: {}                   # Full frame monitoring – no zone gating
+    # --------------------------- AUDIO (RECORD) -----------------------------
+    audio:
+      enabled: false              # Keep mic channel in recordings
 
-  #   # --- REVIEW RULES ----------------------------------------------------
-  #   review: {}                  # Every detection event is archived; no alerts
+    # --------------------------- DETECTION CORE -----------------------------
+    detect:
+      width: 768
+      height: 432
+      fps: 4                     # Slightly higher than 2 for more chances to catch poses
+
+    # ------------------------------ OBJECTS --------------------------------
+    objects:
+      track: [person]
+      filters:
+        person:
+          min_area: 2000         # People are generally mid-frame, not tiny
+          max_area: 200000
+          min_ratio: 0.20
+          max_ratio: 3.8
+          threshold: 0.60        # Slightly relaxed to catch partial/bust views
+
+    # ------------------------------ SNAPSHOTS -------------------------------
+    snapshots:
+      enabled: true              # Use global settings for retention
+
+    # --------------------------- ZONES & BEHAVIOUR --------------------------
+    zones:
+      # ---- 'prive' — Pool rooftop area (full frame) ----------------------
+      prive:
+        coordinates: 
+          0,1,1,1,0.998,0.004,0.604,0,0.454,0.591,0.417,0.6,0.33,0.446,0.292,0.448,0.154,0.207,0.079,0.119,0,0.039
+        loitering_time: 0        # Immediate alert if person appears
+        inertia: 3               # Hold event for 3s after leaving
+        objects: person
+        filters:
+          person:
+            threshold: 0.55      # More permissive for bust-only or awkward poses
+            min_area: 1000       # Allow smaller boxes (upper body only)
+            min_ratio: 0.15      # Accept tall/narrow shapes
+            max_ratio: 4.0       # Accept more square-ish boxes
+
+    # ----------------------------- REVIEW RULES -----------------------------
+    review:
+      alerts:
+        required_zones: prive    # Only alert if event is inside the pool area
+      detections:
+        required_zones: prive    # Only keep detections when inside pool area
+
+    motion:
+      mask: 
+        0,0,0.571,0,0.485,0.288,0.439,0.524,0.435,0.568,0.413,0.565,0.347,0.444,0.299,0.45,0.265,0.391,0.18,0.237,0.029,0.055
 
 
-  # canape_salon:
-  #   # --- AUDIO -------------------------------------------------------------
-  #   audio:
-  #     enabled: true            # Keep mic track – canapé_salonuseful for analytics later 
-
-  #   # --- STREAM INPUTS -----------------------------------------------------
-  #   #   Uses the same dual‑stream pattern as the driveway cam:
-  #   #     • Lower‑res sub‑stream ➜ detection
-  #   #     • Full‑res main stream ➜ archival recording
-  #   ffmpeg:
-  #     inputs:
-  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/canape_salon_detect   # [DETECT stream]
-  #         roles: [detect, record, audio]
-
-  #   # --- DETECTION SETTINGS ----------------------------------------------
-  #   detect:
-  #     width: 1920               # Full‑HD needed for persons who are further out
-  #     height: 1080
-  #     fps: 2                    # Any higher ➜ battery hit + more CPU
-
-  #   # --- SNAPSHOTS --------------------------------------------------------
-  #   snapshots:
-  #     enabled: true             # Stick with global snapshot policy
-
-  #   # --- MOTION PRE‑FILTER (BEFORE ML) ------------------------------------
-  #   #  These parameters let Frigate reject obvious noise (trees, rain) before
-  #   #  sending frames to the object detector, saving CPU and false positives.
-  #   motion:
-  #     threshold: 11             # Higher ➜ require bigger pixel change
-  #     contour_area: 10          # Ignore extremely small blobs <10 px²
-  #     improve_contrast: true    # Histogram equalisation for low‑light frames
-
-  #   # --- ZONES -----------------------------------------------------------
-  #   zones: {}                   # Full frame monitoring – no zone gating
-
-  #   # --- REVIEW RULES ----------------------------------------------------
-  #   review: {}                  # Every detection event is archived; no alerts
-
-
-# ============================================================================
-# 3. ADVANCED FEATURES AND MISCELLANEOUS
-# ============================================================================
 version: 0.15-1               # Frigate config versioning (leave as‑is)
 
 semantic_search:
