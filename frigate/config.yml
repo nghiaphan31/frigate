@@ -79,18 +79,20 @@ snapshots:
     objects:
       person: 7              # Retain person snaps for one week
 
-# ---------------------------------------------------------------------------
-# 1.5 OBJECTS – DEFAULT DETECTION PARAMETERS (CAN BE OVERRIDDEN PER CAMERA)
-# ---------------------------------------------------------------------------
+# ============================================================================
+# ⚠️  FRIGATE+ TRAINING MODE – ULTRA-PERMISSIVE DETECTION ⚠️
+# This config is designed to maximize detections for Frigate+ training data.
+# DO NOT use for normal operation — too many false positives!
+# ============================================================================
 objects:
   track:
     - person                 # Detect only human beings by default
   filters:
     person:
-      min_area: 3000         # Ignore tiny objects (e.g. insects, leaves)     
-      min_score: 0.72        # Ignore detections below this confidence
-      threshold: 0.72        # Sustained confidence required to trigger event
-      max_area: 200000       # Discard blobs bigger than this pixel area (e.g. stalled images due top network issues)
+      min_area: 500          # TINY — capture almost anything
+      min_score: 0.25        # VERY LOW — accept low-confidence detections
+      threshold: 0.25        # VERY LOW — trigger events easily
+      max_area: 300000       # Larger max to catch close-up silhouettes
 
 # ---------------------------------------------------------------------------
 # 1.6 DETECTORS – CHOOSE THE HARDWARE INFERENCE ACCELERATOR
@@ -111,14 +113,14 @@ detectors:
 motion:
   # Plus haut ➜ moins sensible. 26 reste assez sensible pour l’allumage de lumière,
   # mais filtre déjà pas mal de micro-mouvements.
-  threshold: 26
+  threshold: 10
 
   # Rejette les tout petits blobs (feuilles isolées, bruit).
-  contour_area: 200
+  contour_area: 50
 
   # Lissage temporel : évite de “sauter” sur un changement ultra ponctuel
-  frame_alpha: 0.4
-  delta_alpha: 0.5
+  frame_alpha: 0.2
+  delta_alpha: 0.3
 
   # Garde ça, ça aide beaucoup de nuit sans trop pénaliser le jour
   improve_contrast: true
