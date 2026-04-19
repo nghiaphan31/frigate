@@ -1,0 +1,5 @@
+$ORIGIN media.home.arpa.
+chromecast A 192.168.40.97
+chromecast-audio A 192.168.40.10
+cuisine-display-echo-show A 192.168.40.155
+samsung A 192.168.40.80

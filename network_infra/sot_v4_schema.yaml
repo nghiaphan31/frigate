@@ -1,0 +1,243 @@
+
+# =============================================================================
+# SoT v4 — Universal, Human‑Semantic Source of Truth (YAML)
+# -----------------------------------------------------------------------------
+# PURPOSE
+# - One unified schema for ALL devices (Ethernet/Wi‑Fi, Zigbee, Z‑Wave, BLE, etc.).
+# - Human-first naming (alias) that assistants & LLMs can use directly.
+# - Technical identifiers kept separate and stable for automation.
+#
+# CORE LOGIC (read this first)
+# - Canonical name is HUMAN: `alias_human` → we also store a slugified `hostname`.
+# - FQDN is derived as: <hostname>.<category>.home.arpa
+#   where <category> aligns with Home Assistant domains (light, switch, sensor, camera, media_player, vacuum, lock, hub, climate, cover, storage, network, appliance, etc.).
+#   => No redundancy like "cam-*" in hostname if category is "camera".
+# - We keep a dual layer:
+#     * Semantic (human): alias_human, description, location, tags, nlu (synonyms/intents)
+#     * Technical (machine): hostname, fqdn, mac/ieee, ip, bridge, integrations, sot_id
+# - Multi-interface devices are modeled via `interfaces` list (wifi/ethernet/zigbee/zwave/ble/tailscale).
+# - `sot_id` is the stable primary key for a device across renames and protocol changes.
+# - Cross-mapping to external systems lives under `integrations` (HA entity_id, Zigbee2MQTT id, Z-Wave JS node, Google Home name, Matter id).
+# - Location is hierarchical (home/floor/zone/area) to enable natural queries (e.g., “éteins toutes les lights à l’extérieur”).
+# - Versioning & audit in `meta` to keep Git-friendly history.
+#
+# NAMING POLICY
+# - Use the human alias as ground truth of meaning:
+#     alias_human: "Lampe Terrasse"  → hostname: "lampe-terrasse"
+# - Hostname rules: lowercase, [a-z0-9-], no dots/underscores, ≤63 chars.
+# - Category communicates the family/type (no need to repeat role in hostname).
+# - Keep aliases clear for speech; add `nlu.synonyms` for extra vocal forms.
+#
+# INTEROPERABILITY
+# - Categories & capabilities mirror Home Assistant/Matter concepts.
+# - DNS zones follow category (light.home.arpa, camera.home.arpa, ...).
+# - Assistants & LLM ingest alias_human, synonyms, intents.
+#
+# =============================================================================
+
+meta:
+  schema_version: 4.0
+  zone_root: "home.arpa"               # root DNS zone; adjust if needed
+  naming_policy: "human_semantic_v1"   # human alias is canonical; slug becomes hostname
+  last_updated: "YYYY-MM-DDThh:mm:ssZ" # updated by automation
+  notes: >
+    This SoT is human-semantic and protocol-agnostic. The same model is used for IP
+    devices and for Zigbee/Z-Wave/BLE via bridges. Always avoid redundant role words
+    in hostnames; category already conveys it.
+
+devices:
+  # ---------------------------------------------------------------------------
+  # TEMPLATE — copy/paste and fill; do not remove keys (helps validation/CI).
+  # ---------------------------------------------------------------------------
+  - sot_id: "sot-XXXXXXXX"            # stable unique id (do not recycle)
+    alias_human: "Nom lisible humain" # canonical human-visible name
+    hostname: "nom-slug"              # slug(alias_human), lowercase a-z0-9-, ≤63 chars
+    category: "light"                 # HA-like domain: light/switch/sensor/camera/media_player/vacuum/lock/hub/climate/cover/storage/network/appliance
+    fqdn: "nom-slug.light.home.arpa"  # <hostname>.<category>.<zone_root>
+
+    # --- Human semantics -----------------------------------------------------
+    description: null                 # free text description
+    location:
+      home: null                      # optional (if multi-homes / future)
+      floor: null                     # e.g., -1/0/1/2
+      zone: null                      # e.g., exterieur/interieur
+      area: null                      # e.g., terrasse, salon, entree
+    tags: []                          # arbitrary labels for search/navigation
+    nlu:
+      synonyms: []                    # extra vocal names ("Lampe Extérieure")
+      intents: []                     # supported intents: allumer/eteindre, etc.
+
+    # --- Technical identifiers ----------------------------------------------
+    interfaces:
+      # Multiple interfaces allowed; pick fields per transport type
+      - transport: "wifi"             # wifi/ethernet/zigbee/zwave/ble/tailscale
+        mac: null                     # MAC (Wi‑Fi/Ethernet)
+        ip: null                      # current IP (if IP transport)
+        ieee: null                    # IEEE addr (Zigbee) if relevant
+        node_id: null                 # Node id (Z‑Wave) if relevant
+        bridge: null                  # which bridge/controller (e.g., z2m, zwjs)
+    manufacturer: null
+    model: null
+    os: null                          # OS or firmware family
+    firmware: null                    # firmware version (from APIs/scans)
+
+    # --- Operability & policy -----------------------------------------------
+    owner: "nghia"                    # main user/owner
+    critical: false                   # HA/NAS/router/cameras critical to ops = true
+    status: "unknown"                 # online/offline/retired/pending
+    capabilities: []                  # HA-style features (e.g., on_off, brightness, color, motion)
+    exposed_ports: []                 # [{port, proto, state, service, product, version}]
+    threat_level: "low"               # low/medium/high
+
+    # --- Cross mapping (external systems) -----------------------------------
+    integrations:
+      homeassistant: null             # e.g., light.terrasse
+      zigbee2mqtt: null               # e.g., terrasse_light_1
+      zwavejs: null                   # e.g., node_23
+      google_home: null               # friendly name used by Google
+      matter: null                    # Matter id/endpoint if any
+
+    # --- DNS targets (optional if you publish via CoreDNS) ------------------
+    dns:
+      ip_current: null                # current IP (if any)
+      ip_target: null                 # planned IP (addressing plan)
+      dhcp_reservation: null          # true/false if reservation planned
+
+    # --- Audit & history -----------------------------------------------------
+    first_seen: null
+    last_seen: null
+    provenance: null                  # ethernet_scan/wifi_scan/nmap/api/...
+    legacy:
+      mac: null                       # legacy single MAC (if previously used)
+      ip: null                        # legacy single IP
+      confidence: null                # legacy record confidence 0..1
+      _scan_history: []               # append-only: {date, source, details}
+
+  # ---------------------------------------------------------------------------
+  # EXAMPLES — ETH (NUC), Zigbee (Light), Z‑Wave (Switch)
+  # ---------------------------------------------------------------------------
+  - sot_id: "sot-NUC12WSK1"
+    alias_human: "Home Assistant"
+    hostname: "home-assistant"
+    category: "hub"
+    fqdn: "home-assistant.hub.home.arpa"
+    description: "NUC principal hébergeant HA + Docker"
+    location: { home: "maison", floor: 0, zone: "interieur", area: "rack" }
+    tags: ["docker", "frigate"]
+    nlu:
+      synonyms: ["HA", "Home Assistant Serveur"]
+      intents: ["status", "redemarrer"]
+    interfaces:
+      - transport: "ethernet"
+        mac: "00:E0:4C:68:01:41"
+        ip: "192.168.50.112"
+        bridge: null
+      - transport: "wifi"
+        mac: "E4:60:17:5E:36:A7"
+        ip: "192.168.50.10"
+    manufacturer: "Intel"
+    model: "NUC12WSKi5"
+    os: "Ubuntu 24.04"
+    firmware: null
+    owner: "nghia"
+    critical: true
+    status: "online"
+    capabilities: ["compute", "docker_host"]
+    exposed_ports:
+      - { port: 8123, proto: tcp, state: open, service: "homeassistant", product: null, version: null }
+    threat_level: "medium"
+    integrations:
+      homeassistant: "homeassistant"
+      zigbee2mqtt: null
+      zwavejs: null
+      google_home: "Home Assistant"
+      matter: null
+    dns:
+      ip_current: "192.168.50.112"
+      ip_target: "192.168.10.112"
+      dhcp_reservation: true
+    first_seen: "2025-10-03T00:00:00Z"
+    last_seen: "2025-10-05T00:00:00Z"
+    provenance: "ethernet_scan"
+    legacy:
+      mac: "00:E0:4C:68:01:41"
+      ip: "192.168.1.36"
+      confidence: 0.92
+      _scan_history: []
+
+  - sot_id: "sot-ZB-LIGHT-TER1"
+    alias_human: "Lampe Terrasse"
+    hostname: "lampe-terrasse"
+    category: "light"
+    fqdn: "lampe-terrasse.light.home.arpa"
+    description: "Ampoule extérieure terrasse"
+    location: { home: "maison", floor: 0, zone: "exterieur", area: "terrasse" }
+    tags: ["exterieur", "éclairage"]
+    nlu:
+      synonyms: ["Lampe Extérieure", "Lumière Terrasse"]
+      intents: ["allumer", "eteindre", "dimmer"]
+    interfaces:
+      - transport: "zigbee"
+        ieee: "0x00158D00045F0000"
+        bridge: "z2m"
+    manufacturer: "IKEA"
+    model: "TRÅDFRI Bulb E27"
+    os: "firmware"
+    firmware: null
+    owner: "nghia"
+    critical: false
+    status: "online"
+    capabilities: ["on_off", "brightness"]
+    exposed_ports: []
+    threat_level: "low"
+    integrations:
+      homeassistant: "light.terrasse"
+      zigbee2mqtt: "terrasse_light_1"
+      zwavejs: null
+      google_home: "Lampe Terrasse"
+      matter: null
+    dns:
+      ip_current: null
+      ip_target: null
+      dhcp_reservation: null
+    first_seen: "2025-10-03T00:00:00Z"
+    last_seen: "2025-10-05T00:00:00Z"
+    provenance: "z2m"
+    legacy: { mac: null, ip: null, confidence: 1.0, _scan_history: [] }
+
+  - sot_id: "sot-ZW-SW-KITCH1"
+    alias_human: "Interrupteur Cuisine"
+    hostname: "interrupteur-cuisine"
+    category: "switch"
+    fqdn: "interrupteur-cuisine.switch.home.arpa"
+    description: "Z‑Wave interrupteur mural pour cuisine"
+    location: { home: "maison", floor: 0, zone: "interieur", area: "cuisine" }
+    tags: ["cuisine", "éclairage"]
+    nlu:
+      synonyms: ["Bouton Cuisine"]
+      intents: ["allumer", "eteindre"]
+    interfaces:
+      - transport: "zwave"
+        node_id: "23"
+        bridge: "zwjs"
+    manufacturer: "Fibaro"
+    model: "FGS-213"
+    os: "firmware"
+    firmware: null
+    owner: "nghia"
+    critical: false
+    status: "online"
+    capabilities: ["on_off", "power_metering"]
+    exposed_ports: []
+    threat_level: "low"
+    integrations:
+      homeassistant: "switch.cuisine"
+      zigbee2mqtt: null
+      zwavejs: "node_23"
+      google_home: "Interrupteur Cuisine"
+      matter: null
+    dns: { ip_current: null, ip_target: null, dhcp_reservation: null }
+    first_seen: "2025-10-03T00:00:00Z"
+    last_seen: "2025-10-05T00:00:00Z"
+    provenance: "zwjs"
+    legacy: { mac: null, ip: null, confidence: 1.0, _scan_history: [] }
