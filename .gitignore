@@ -12,3 +12,24 @@ logs/
 
 # Sauvegardes locales de DSM/NAS
 nas-pipelines/
+
+# Runtime data directories (volatiles - top-level data only)
+/data/
+/out/
+
+# Subdirectories we DO want to track
+!/ring-mqtt/data/
+!/frigate/
+
+# Backups et fichiers temporaires
+*.bak
+*.backup
+*_avec_unstitched
+.unstitched
+ frigate/.exports
+ frigate/.jwt_secret
+ frigate/.timeline
+ frigate/.vacuum
+ frigate/frigate.db
+ frigate/frigate.db-shm
+ frigate/frigate.db-wal
