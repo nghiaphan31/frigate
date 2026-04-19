@@ -15,11 +15,12 @@ nas-pipelines/
 
 # Runtime data directories (volatiles - top-level data only)
 /data/
-/out/
+/out/*
 
 # Subdirectories we DO want to track
 !/ring-mqtt/data/
 !/frigate/
+!/out/dep_audit/
 
 # Backups et fichiers temporaires
 *.bak

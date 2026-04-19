@@ -1,0 +1,3 @@
+# Audit de dépendances 20251018-2136
+PWD=/home/nghia-phan/git/nuc-docker-stack
+OK: dossier 'nas-pipelines' trouvé

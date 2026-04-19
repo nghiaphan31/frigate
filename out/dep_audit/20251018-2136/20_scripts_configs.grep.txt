@@ -1,0 +1,25 @@
+# Makefile + scripts + config
+./out/dep_audit/20251018-2136/12_compose.raw.grep.txt:6:./nas-compose/ingest-media/docker-compose.yml:14:      - /volume1/run/nas-pipelines:/work
+./out/dep_audit/20251018-2136/00_overview.txt:3:OK: dossier 'nas-pipelines' trouvé
+./.gitignore:14:nas-pipelines/
+./tools/classify_paths.py:57:    ap.add_argument('--cfg-dir', default='/mnt/nas/run/nas-pipelines/config', help='dir with include_keep.txt and repo roots')
+./tools/classify_paths.py:59:    ap.add_argument('--runs-root', default='/mnt/nas/run/nas-pipelines/runs', help='root for run artifacts')
+./tools/classify_paths.py:60:    ap.add_argument('--final-out-dir', default='/mnt/nas/run/nas-pipelines/config', help='where to write candidates_PASS_DATE.lst')
+./tools/ingest_health.sh:3:NASROOT=/mnt/nas/run/nas-pipelines
+./tools/mini_check.sh:6:  echo "Usage: $0 --pass-id <id> --list </mnt/nas/run/nas-pipelines/config/candidates_...lst> [--mount-root /mnt/nas] [--no-hash] [--sample 200] [--per-ext-cap 25]"
+./tools/mini_check.sh:33:OUT_ROOT="/mnt/nas/run/nas-pipelines/checks"
+./tools/mine_media_noise.py:35:  ap.add_argument('--outdir', default='/mnt/nas/run/nas-pipelines/checks')
+./tools/rebuild_clean_candidates.sh:4:CFG="/mnt/nas/run/nas-pipelines/config"
+./tools/auto_exclude.py:8:    --input /mnt/nas/run/nas-pipelines/config/candidates_2025-10-10.lst \
+./tools/auto_exclude.py:9:    --outdir /mnt/nas/run/nas-pipelines/config \
+./tools/auto_exclude.py:42:    r'/PlexMediaServer/', r'/docker/', r'/run/nas-pipelines/', r'/truth/', r'/staging/',
+./tools/deploy_ingest_to_nas.sh:3:NASROOT=/mnt/nas/run/nas-pipelines
+./tools/mine_noise_from_missing.py:43:  outdir = pathlib.Path('/mnt/nas/run/nas-pipelines/checks') / f"{ts}_noise-from-missing-01-media"
+./tools/cascade_tree.py:40:    ap.add_argument('--outdir', default='/mnt/nas/run/nas-pipelines/checks', help="Dossier de sortie")
+./tools/families_by_ancestor.py:34:    ap.add_argument('--outdir', default='/mnt/nas/run/nas-pipelines/checks', help='Répertoire de sortie')
+./tools/mine_media_noise_from_list.py:57:  ap.add_argument('--outdir', default='/mnt/nas/run/nas-pipelines/checks')
+./tools/classify_paths.py.bak:57:    ap.add_argument('--cfg-dir', default='/mnt/nas/run/nas-pipelines/config', help='dir with include_keep.txt and repo roots')
+./tools/classify_paths.py.bak:59:    ap.add_argument('--runs-root', default='/mnt/nas/run/nas-pipelines/runs', help='root for run artifacts')
+./tools/classify_paths.py.bak:60:    ap.add_argument('--final-out-dir', default='/mnt/nas/run/nas-pipelines/config', help='where to write candidates_PASS_DATE.lst')
+./nas-compose/ingest-media/README.md:6:  - `/volume1/run/nas-pipelines:/work`
+./nas-compose/ingest-media/docker-compose.yml:14:      - /volume1/run/nas-pipelines:/work
