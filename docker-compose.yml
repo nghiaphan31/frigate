@@ -76,10 +76,13 @@ services:
     restart: unless-stopped
     network_mode: host          # simplest way to reach go2rtc on 192.168.50.112:8556
     shm_size: "512m"            # shared‑mem for FFmpeg decode pipelines
+    env_file:
+      - .env
     environment:
       TZ: Europe/Paris
       LIBVA_DRIVER_NAME: iHD         # Ensures use of Intel iGPU VA-API driver
       FRIGATE_HWACCEL: vaapi         # (Optional, for explicit Frigate config)
+      PLUS_API_KEY: ${FRIGATE_PLUS_API_KEY}
     privileged: false           # set true if you add a USB Coral
     volumes:
       - ./frigate/config.yml:/config/config.yml
