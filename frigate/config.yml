@@ -72,7 +72,7 @@ snapshots:
   enabled: true              # Global toggle; camera blocks can override
   timestamp: true            # Burn date & time onto the PNG/JPEG
   bounding_box: true         # Draw red box around detected object(s)
-  clean_copy: false          # If true, overwrite with a blank (no annotation)
+  clean_copy: true           # If true, save a clean copy (no annotations) for Frigate+
   crop: false                # True ➜ only keep the boxed area – saves space
   retain:
     default: 0               # Keep *non‑person* snaps for 0 days (discard)
@@ -571,11 +571,12 @@ cameras:
       filters:
         person:
           # Global person filter (applies everywhere unless a zone overrides it)
-          min_area: 500       # Drop tiny, far silhouettes (street)
+          min_area: 300       # TINY — catch far/distant silhouettes (training mode)
           max_area: 200000     # Safety cap for broken frames/huge blobs
           min_ratio: 0.20      # Allow tall/narrow boxes (bust-only, seen from above)
           max_ratio: 3.5       # Disallow ultra-thin poles / extreme aspect boxes
-          threshold: 0.25      # Base confidence; zones can override lower
+          min_score: 0.15      # TRAINING MODE: accept low-confidence new tracks
+          threshold: 0.15      # TRAINING MODE: base confidence; zones can override
 
           # Optional: keep tracks alive when briefly occluded (bush/wall edge)
           # max_disappeared: 30
@@ -598,8 +599,8 @@ cameras:
         filters:
           person:
             # Night/bust-only friendly thresholds scoped to this private zone
-            threshold: 0.25    # Accept lower-confidence partial poses near wall/roof
-            min_area: 500     # Permit smaller boxes (upper body only)
+            threshold: 0.15    # TRAINING MODE: very permissive
+            min_area: 300     # TRAINING MODE: permit smaller boxes
             min_ratio: 0.15    # Allow very tall/narrow boxes (seen from above)
             max_ratio: 4.0     # Allow squarer boxes (3/4 body, arm positions)
 
@@ -613,9 +614,9 @@ cameras:
         objects: person
         filters:
           person:
-            # Slightly more permissive than global, but still tighter than 'prive'
-            threshold: 0.25      # Training mode
-            min_area: 500
+            # TRAINING MODE: very permissive
+            threshold: 0.15
+            min_area: 300
             min_ratio: 0.20
             max_ratio: 3.8
 
@@ -667,11 +668,13 @@ cameras:
         - person
       filters:
         person:
-          # Les vraies boxes "person" vues sur les captures font ~13k–22k px².
-          min_area: 500      # très en dessous, juste pour éliminer le bruit
-          max_area: 80000     # au cas où la personne soit très proche
-          min_score: 0.6      # score pour accepter une nouvelle personne
-          threshold: 0.6      # score pour continuer à suivre la personne
+          # TRAINING MODE: very permissive for far/distal figures
+          min_area: 300      # TRAINING MODE: catch small figures
+          max_area: 80000
+          min_score: 0.20     # TRAINING MODE: accept low-confidence tracks
+          threshold: 0.20     # TRAINING MODE: much lower
+          min_ratio: 0.15
+          max_ratio: 3.5
       mask: 
         0.002,0,1,0,1,0.026,0.768,0.04,0.568,0.085,0.546,0.129,0.511,0.276,0.484,0.425,0.444,0.649,0.412,0.811,0,0.556
     # ------------------------------ SNAPSHOTS -------------------------------
@@ -691,8 +694,8 @@ cameras:
         filters:
           person:
             # Encore plus permissif à l’intérieur de ta propriété
-            threshold: 0.32      # en dessous du global 0.30
-            min_area: 900        # plus petit que global
+            threshold: 0.20      # TRAINING MODE
+            min_area: 300       # TRAINING MODE
             min_ratio: 0.25      # très vertical autorisé
             max_ratio: 5
 
@@ -707,8 +710,8 @@ cameras:
         filters:
           person:
             # Plus strict que 'prive' pour éviter de spammer sur le trottoir
-            threshold: 0.35      # un cran au-dessus de 'prive'
-            min_area: 500        # un peu plus grand
+            threshold: 0.20      # TRAINING MODE
+            min_area: 300        # TRAINING MODE
             min_ratio: 0.10
             max_ratio: 5.0
 
@@ -764,7 +767,7 @@ cameras:
         - person
       filters:
         person:
-          min_area: 500        # un peu en-dessous de 900 pour ne pas rater des poses petites
+          min_area: 300        # TRAINING MODE
           max_area: 250000
 
           # Forme humaine, mais pas trop restrictive vu la vue plongeante
@@ -772,8 +775,8 @@ cameras:
           max_ratio: 3.0
 
           # Confiance : plus souple que ce qu’on avait mis
-          threshold: 0.25      # était 0.35
-          min_score: 0.20      # était 0.30
+          threshold: 0.15      # TRAINING MODE
+          min_score: 0.15     # TRAINING MODE
       mask:
         0.002,0,0.99,0,1,0.598,0.669,0.812,0.536,0.23,0.504,0.235,0.488,0.193,0.349,0.136,0.353,0.085,0.002,0.03
 
@@ -795,8 +798,8 @@ cameras:
         filters:
           person:
             # Légèrement plus strict que la caméra, mais cohérent
-            threshold: 0.32      # un cran au-dessus des 0.28 caméra
-            min_area: 1100       # un peu plus grand que 900
+            threshold: 0.20      # TRAINING MODE
+            min_area: 300       # TRAINING MODE
             min_ratio: 0.20      # même plage que la caméra
             max_ratio: 2.0
 
@@ -811,8 +814,8 @@ cameras:
         filters:
           person:
             # Plus strict que 'prive' pour le trottoir
-            threshold: 0.25      # Training mode
-            min_area: 500
+            threshold: 0.15      # TRAINING MODE
+            min_area: 300
             min_ratio: 0.20
             max_ratio: 2.0
 
@@ -858,11 +861,11 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 500         # People are generally mid-frame, not tiny
+          min_area: 300         # TRAINING MODE: catch small/distant figures
           max_area: 200000
           min_ratio: 0.20
           max_ratio: 3.8
-          threshold: 0.25        # Slightly relaxed to catch partial/bust views
+          threshold: 0.15        # TRAINING MODE: very permissive
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -881,8 +884,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.25      # More permissive for bust-only or awkward poses
-            min_area: 500       # Allow smaller boxes (upper body only)
+            threshold: 0.15      # TRAINING MODE: very permissive
+            min_area: 300       # TRAINING MODE: allow smaller boxes
             min_ratio: 0.15      # Accept tall/narrow shapes
             max_ratio: 4.0       # Accept more square-ish boxes
 
@@ -919,11 +922,11 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 500         # People are generally mid-frame, not tiny
+          min_area: 300         # TRAINING MODE: catch small/distant figures
           max_area: 200000
           min_ratio: 0.20
           max_ratio: 3.8
-          threshold: 0.25        # Slightly relaxed to catch partial/bust views
+          threshold: 0.15        # TRAINING MODE: very permissive
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -940,8 +943,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.25      # More permissive for bust-only or awkward poses
-            min_area: 500       # Allow smaller boxes (upper body only)
+            threshold: 0.15      # TRAINING MODE: very permissive
+            min_area: 300       # TRAINING MODE: allow smaller boxes
             min_ratio: 0.15      # Accept tall/narrow shapes
             max_ratio: 4.0       # Accept more square-ish boxes
 
@@ -981,11 +984,11 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 500         # People are generally mid-frame, not tiny
+          min_area: 300         # TRAINING MODE: catch small/distant figures
           max_area: 200000
           min_ratio: 0.20
           max_ratio: 3.8
-          threshold: 0.25        # Slightly relaxed to catch partial/bust views
+          threshold: 0.15        # TRAINING MODE: very permissive
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -1002,8 +1005,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.25      # More permissive for bust-only or awkward poses
-            min_area: 500       # Allow smaller boxes (upper body only)
+            threshold: 0.15      # TRAINING MODE: very permissive
+            min_area: 300       # TRAINING MODE: allow smaller boxes
             min_ratio: 0.15      # Accept tall/narrow shapes
             max_ratio: 4.0       # Accept more square-ish boxes
 
