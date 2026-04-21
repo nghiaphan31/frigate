@@ -83,16 +83,16 @@ streams:
   reolink_duo_jardin_devant_main_right:
     - ffmpeg:reolink_duo_jardin_devant_main#audio=copy#video=h264#raw=-vf "crop=2048:1152:2048:0"
 
-#  reolink_duo_jardin_devant_sub:
-#    - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
-#    - ffmpeg:rtsp_transport=tcp
-#    - ffmpeg:cache=120
-#  # --- moitié gauche du sub (768x432 si sub = 1536x432) ---
-#  reolink_duo_jardin_devant_sub_left:
-#    - ffmpeg:reolink_duo_jardin_devant_sub#audio=copy#video=h264#raw=-vf "crop=768:432:0:0"
-#  # --- moitié droite du sub ---
-#  reolink_duo_jardin_devant_sub_right:
-#    - ffmpeg:reolink_duo_jardin_devant_sub#audio=copy#video=h264#raw=-vf "crop=768:432:768:0"
+  reolink_duo_jardin_devant_sub:
+    - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=120
+  # --- moitié gauche du sub (768x432 si sub = 1536x432) ---
+  reolink_duo_jardin_devant_sub_left:
+    - ffmpeg:reolink_duo_jardin_devant_sub#audio=copy#video=h264#raw=-vf "crop=768:432:0:0"
+  # --- moitié droite du sub ---
+  reolink_duo_jardin_devant_sub_right:
+    - ffmpeg:reolink_duo_jardin_devant_sub#audio=copy#video=h264#raw=-vf "crop=768:432:768:0"
 
 
   reolink_vue_nord_sur_maison_main:
