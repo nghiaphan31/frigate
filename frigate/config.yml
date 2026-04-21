@@ -673,8 +673,8 @@ cameras:
           max_area: 80000
           min_score: 0.05     # TRAINING MODE: accept low-confidence tracks
           threshold: 0.05     # TRAINING MODE: much lower
-          min_ratio: 0.05        # TRAINING MODE: very permissive (was 0.15)
-          max_ratio: 5
+          min_ratio: 0.01        # TRAINING MODE: extreme shape flexibility (was 0.05)
+          max_ratio: 10         # TRAINING MODE: extreme shape flexibility (was 5)
       # mask DISABLED for training mode
       # mask: 0.002,0,1,0,1,0.026,0.768,0.04,0.568,0.085,0.546,0.129,0.511,0.276,0.484,0.425,0.444,0.649,0.412,0.811,0,0.556
     # ------------------------------ SNAPSHOTS -------------------------------
@@ -696,8 +696,8 @@ cameras:
             # Encore plus permissif à l’intérieur de ta propriété
             threshold: 0.05      # TRAINING MODE
             min_area: 50       # TRAINING MODE
-            min_ratio: 0.25      # très vertical autorisé
-            max_ratio: 5
+            min_ratio: 0.01       # TRAINING MODE: extreme shape flexibility (was 0.25)
+            max_ratio: 10         # TRAINING MODE: extreme shape flexibility (was 5)
 
       # ---- 'rodage' — Sidewalk/approach band (outside fence) ---------------
       # Stricter behaviour: only alert if someone lingers (loiters) here.
@@ -712,8 +712,8 @@ cameras:
             # Plus strict que 'prive' pour éviter de spammer sur le trottoir
             threshold: 0.05      # TRAINING MODE
             min_area: 50        # TRAINING MODE
-            min_ratio: 0.10
-            max_ratio: 5.0
+            min_ratio: 0.01       # TRAINING MODE: extreme shape flexibility (was 0.10)
+            max_ratio: 10         # TRAINING MODE: extreme shape flexibility (was 5.0)
 
     #     # ----------------------------- REVIEW RULES -----------------------------
     # TRAINING MODE: no review restrictions — capture all detections
@@ -764,8 +764,8 @@ cameras:
           max_area: 250000
 
           # Forme humaine, mais pas trop restrictive vu la vue plongeante
-          min_ratio: 0.05        # TRAINING MODE: very permissive (was 0.15)
-          max_ratio: 5.0
+          min_ratio: 0.01       # TRAINING MODE: extreme shape flexibility (was 0.05)
+          max_ratio: 10         # TRAINING MODE: extreme shape flexibility (was 5.0)
 
           # Confiance : plus souple que ce qu’on avait mis
           threshold: 0.05      # TRAINING MODE
@@ -793,8 +793,8 @@ cameras:
             # Légèrement plus strict que la caméra, mais cohérent
             threshold: 0.05      # TRAINING MODE
             min_area: 50       # TRAINING MODE
-            min_ratio: 0.20      # même plage que la caméra
-            max_ratio: 2.0
+            min_ratio: 0.01       # TRAINING MODE: extreme shape flexibility (was 0.20)
+            max_ratio: 10         # TRAINING MODE: extreme shape flexibility (was 2.0)
 
       # ---- 'rodage' — Sidewalk/approach band (outside fence) ---------------
       # Stricter behaviour: only alert if someone lingers (loiters) here.
@@ -809,8 +809,8 @@ cameras:
             # Plus strict que 'prive' pour le trottoir
             threshold: 0.05      # TRAINING MODE
             min_area: 50
-            min_ratio: 0.20
-            max_ratio: 2.0
+            min_ratio: 0.01       # TRAINING MODE: extreme shape flexibility (was 0.20)
+            max_ratio: 10         # TRAINING MODE: extreme shape flexibility (was 2.0)
 
     # ----------------------------- REVIEW RULES -----------------------------
     # TRAINING MODE: no review restrictions — capture all detections
