@@ -60,7 +60,7 @@ ffmpeg:
 # 1.3 RECORD – HOW LONG TO KEEP VIDEO CLIPS
 # ---------------------------------------------------------------------------
 record:
-  enabled: true              # Master switch (false ➜ no recordings at all)
+  enabled: false             # DISABLED for training data mode — maximize detection rate
   retain:
     days: 3                  # Purge any clip older than X days
     mode: motion             # "all" = continuous 24/7; "motion" = only events
@@ -89,9 +89,9 @@ objects:
     - person                 # Detect only human beings by default
   filters:
     person:
-      min_area: 200          # TRAINING MODE: very tiny
-      min_score: 0.15        # TRAINING MODE: accept low-confidence detections
-      threshold: 0.15        # TRAINING MODE: trigger events easily
+      min_area: 50          # TRAINING MODE: very tiny
+      min_score: 0.05        # TRAINING MODE: accept low-confidence detections
+      threshold: 0.05        # TRAINING MODE: trigger events easily
       max_area: 300000       # Larger max to catch close-up silhouettes
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ detectors:
 motion:
   # Plus haut ➜ moins sensible. 26 reste assez sensible pour l’allumage de lumière,
   # mais filtre déjà pas mal de micro-mouvements.
-  threshold: 10
+  threshold: 5             # TRAINING MODE: ultra-sensitive (was 10)
 
   # Rejette les tout petits blobs (feuilles isolées, bruit).
   contour_area: 50
@@ -127,7 +127,7 @@ motion:
 
 # --- Frigate audio section tuned for security-only events -------------------
 audio:
-  enabled: true            # Turn on audio analysis for all cameras
+  enabled: false             # DISABLED for training data mode — focus on video detections only
   # Start slightly conservative; raise if you get too many false events
   # The louder the ambient noise, the higher you set min_volume
   #   ≈200  very sensitive (quiet room)
@@ -201,11 +201,11 @@ cameras:
     #   track: [person]            # Focus only on people
     #   filters:
     #     person:
-    #       min_area: 200          # TRAINING MODE
+    #       min_area: 50          # TRAINING MODE
     #       max_area: 200000       # Prevent runaway boxes from broken frames
     #       min_ratio: 0.20        # Allow tall, narrow shapes
     #       max_ratio: 3.5         # Disallow extreme vertical poles etc.
-    #       threshold: 0.15      # TRAINING MODE
+    #       threshold: 0.05      # TRAINING MODE
 
     # # ------------------------------ SNAPSHOTS -------------------------------
     # snapshots:
@@ -222,8 +222,8 @@ cameras:
     #     objects: [person]
     #     filters:
     #       person:
-    #         threshold: 0.15      # Training mode: very permissive
-    #         min_area: 200       # Training mode: capture tiny boxes
+    #         threshold: 0.05      # Training mode: very permissive
+    #         min_area: 50       # Training mode: capture tiny boxes
     #         min_ratio: 0.15      # Allow tall, narrow boxes
     #         max_ratio: 4.0       # Allow more square boxes
 
@@ -235,8 +235,8 @@ cameras:
     #     objects: [person]
     #     filters:
     #       person:
-    #         threshold: 0.15      # Training mode: very permissive
-    #         min_area: 200       # Training mode: capture tiny boxes
+    #         threshold: 0.05      # Training mode: very permissive
+    #         min_area: 50       # Training mode: capture tiny boxes
     #         min_ratio: 0.20
     #         max_ratio: 3.8
 
@@ -247,292 +247,292 @@ cameras:
     #   detections:
     #     required_zones: rodage   # Keep events when someone lingers at rodage
 
-  allee_sur_le_cote_left:
+#   allee_sur_le_cote_left:
 
-    # ---------------------------- STREAM INPUTS -----------------------------
-    ffmpeg:
-      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_left
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
-          roles: [record, audio]
+#     # ---------------------------- STREAM INPUTS -----------------------------
+#     ffmpeg:
+#       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+#       inputs:
+#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_left
+#           roles: [detect]
+#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+#           roles: [record, audio]
 
-    # --------------------------- AUDIO (RECORD) -----------------------------
-    audio:
-      enabled: true              # Keep mic channel in recordings
+#     # --------------------------- AUDIO (RECORD) -----------------------------
+#     audio:
+#       enabled: true              # Keep mic channel in recordings
 
-    # --------------------------- MQTT SNAPSHOTS -----------------------------
-    # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
-    mqtt:
-      enabled: true              # Enable MQTT snapshots
-      timestamp: true            # Add timestamp overlay
-      bounding_box: true         # Draw bounding boxes
-      crop: false                # Send whole frame (not cropped to object)
+#     # --------------------------- MQTT SNAPSHOTS -----------------------------
+#     # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
+#     mqtt:
+#       enabled: true              # Enable MQTT snapshots
+#       timestamp: true            # Add timestamp overlay
+#       bounding_box: true         # Draw bounding boxes
+#       crop: false                # Send whole frame (not cropped to object)
 
-    # --------------------------- DETECTION CORE -----------------------------
-    detect:
-      width: 768
-      height: 432
-      fps: 5                     # Balanced; raise if NUC load is fine
+#     # --------------------------- DETECTION CORE -----------------------------
+#     detect:
+#       width: 768
+#       height: 432
+#       fps: 5                     # Balanced; raise if NUC load is fine
 
-    # ------------------------------ OBJECTS --------------------------------
-    objects:
-      track: [person]            # Focus only on people
-      filters:
-        person:
-          min_area: 200          # TINY — training mode capture
-          max_area: 200000       # Prevent runaway boxes
-          min_ratio: 0.20        # Allow tall, narrow shapes
-          max_ratio: 3.5         # Disallow extreme vertical poles etc.
-          threshold: 0.15        # VERY LOW — training mode
+#     # ------------------------------ OBJECTS --------------------------------
+#     objects:
+#       track: [person]            # Focus only on people
+#       filters:
+#         person:
+#           min_area: 50          # TINY — training mode capture
+#           max_area: 200000       # Prevent runaway boxes
+#           min_ratio: 0.20        # Allow tall, narrow shapes
+#           max_ratio: 3.5         # Disallow extreme vertical poles etc.
+#           threshold: 0.05        # VERY LOW — training mode
 
-    # ------------------------------ SNAPSHOTS -------------------------------
-    snapshots:
-      enabled: true              # Standard snapshot behaviour
+#     # ------------------------------ SNAPSHOTS -------------------------------
+#     snapshots:
+#       enabled: true              # Standard snapshot behaviour
 
-    # --------------------------- ZONES & BEHAVIOUR --------------------------
-    zones:
-      # ---- 'prive' — Private driveway (immediate alerts) ------------------
-      prive:
-        coordinates: 
-          1,1,1,0.002,0.703,0.002,0.506,0.112,0.496,0.124,0.486,0.12,0.464,0.138,0.322,0.239,0.254,0.296,0.244,0.32,0.234,0.329,0.226,0.336,0.247,0.363,0.155,0.694,0,0.568,0,1
-        loitering_time: 0        # Trigger immediately when person enters
-        inertia: 3               # Hold event for 3s after leaving
-        objects: person
-        filters:
-          person:
-            threshold: 0.15      # Training mode: very permissive
-            min_area: 200       # Training mode: capture tiny boxes
-            min_ratio: 0.15      # Allow tall, narrow boxes
-            max_ratio: 4.0       # Allow more square boxes
+#     # --------------------------- ZONES & BEHAVIOUR --------------------------
+#     zones:
+#       # ---- 'prive' — Private driveway (immediate alerts) ------------------
+#       prive:
+#         coordinates: 
+#           1,1,1,0.002,0.703,0.002,0.506,0.112,0.496,0.124,0.486,0.12,0.464,0.138,0.322,0.239,0.254,0.296,0.244,0.32,0.234,0.329,0.226,0.336,0.247,0.363,0.155,0.694,0,0.568,0,1
+#         loitering_time: 0        # Trigger immediately when person enters
+#         inertia: 3               # Hold event for 3s after leaving
+#         objects: person
+#         filters:
+#           person:
+#             threshold: 0.05      # Training mode: very permissive
+#             min_area: 50       # Training mode: capture tiny boxes
+#             min_ratio: 0.15      # Allow tall, narrow boxes
+#             max_ratio: 4.0       # Allow more square boxes
 
-      # ---- 'rodage' — Fence line / loitering detection --------------------
-      rodage:
-        coordinates: 0.231,0.382,0.214,0.37,0.126,0.653,0.151,0.665
-        loitering_time: 10       # Require ≥10s loitering before event
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.15      # Training mode: very permissive
-            min_area: 200       # Training mode: capture tiny boxes
-            min_ratio: 0.20
-            max_ratio: 3.8
+#       # ---- 'rodage' — Fence line / loitering detection --------------------
+#       rodage:
+#         coordinates: 0.231,0.382,0.214,0.37,0.126,0.653,0.151,0.665
+#         loitering_time: 10       # Require ≥10s loitering before event
+#         inertia: 3
+#         objects: person
+#         filters:
+#           person:
+#             threshold: 0.05      # Training mode: very permissive
+#             min_area: 50       # Training mode: capture tiny boxes
+#             min_ratio: 0.20
+#             max_ratio: 3.8
 
-    # ----------------------------- REVIEW RULES -----------------------------
-    review:
-      alerts:
-        required_zones: prive    # Only alert if event entered private zone
-      detections:
-        required_zones: rodage   # Keep events when someone lingers at rodage
+#     # ----------------------------- REVIEW RULES -----------------------------
+#     review:
+#       alerts:
+#         required_zones: prive    # Only alert if event entered private zone
+#       detections:
+#         required_zones: rodage   # Keep events when someone lingers at rodage
 
-    motion:
-      mask: 
-        0.587,0.002,0,0,0,0.533,0.125,0.642,0.214,0.35,0.199,0.315,0.207,0.292,0.308,0.2,0.398,0.127,0.41,0.117,0.422,0.097
-
-
-  allee_sur_le_cote_right:
-
-    # ---------------------------- STREAM INPUTS -----------------------------
-    ffmpeg:
-      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_right
-          roles: [detect]
-#        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
-#          roles: [record, audio]
-
-    # --------------------------- AUDIO (RECORD) -----------------------------
-    audio:
-      enabled: false              # Keep mic channel in recordings
-
-    # --------------------------- MQTT SNAPSHOTS -----------------------------
-    # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
-    mqtt:
-      enabled: true              # Enable MQTT snapshots
-      timestamp: true            # Add timestamp overlay
-      bounding_box: true         # Draw bounding boxes
-      crop: false                # Send whole frame (not cropped to object)
-
-    # --------------------------- DETECTION CORE -----------------------------
-    detect:
-      width: 768
-      height: 432
-      fps: 5                     # Balanced; raise if NUC load is fine
-
-    # ------------------------------ OBJECTS --------------------------------
-    objects:
-      track: [person]            # Focus only on people
-      filters:
-        person:
-          min_area: 200          # TINY — training mode capture
-          max_area: 200000       # Prevent runaway boxes
-          min_ratio: 0.20        # Allow tall, narrow shapes
-          max_ratio: 3.5         # Disallow extreme vertical poles etc.
-          threshold: 0.15        # VERY LOW — training mode
-
-    # ------------------------------ SNAPSHOTS -------------------------------
-    snapshots:
-      enabled: true              # Standard snapshot behaviour
-
-    # --------------------------- ZONES & BEHAVIOUR --------------------------
-    zones:
-      # ---- 'prive' — Private driveway (immediate alerts) ------------------
-      prive:
-        coordinates: 
-          1,1,0,1,0,0,0.299,0,0.498,0.097,0.63,0.177,0.748,0.274,0.823,0.349,0.849,0.338,0.877,0.322,0.907,0.299,0.926,0.288,0.939,0.327,0.946,0.359,0.926,0.379,1,0.582,1,0.605
-        loitering_time: 0        # Trigger immediately when person enters
-        inertia: 3               # Hold event for 3s after leaving
-        objects: person
-        filters:
-          person:
-            threshold: 0.15      # Training mode: very permissive
-            min_area: 200       # Training mode: capture tiny boxes
-            min_ratio: 0.15      # Allow tall, narrow boxes
-            max_ratio: 4.0       # Allow more square boxes
-
-      # ---- 'rodage' — Fence line / loitering detection --------------------
-    review:
-      alerts:
-        required_zones: prive    # Only alert if event entered private zone
-    motion:
-      mask: 
-        0.464,0.011,0.499,0,0.587,0,1,0.004,1,0.51,0.971,0.301,0.948,0.188,0.952,0.104,0.913,0.027,0.765,0.028,0.83,0.173,0.85,0.223,0.868,0.258,0.832,0.294,0.694,0.17,0.665,0.145,0.623,0.113
+#     motion:
+#       mask: 
+#         0.587,0.002,0,0,0,0.533,0.125,0.642,0.214,0.35,0.199,0.315,0.207,0.292,0.308,0.2,0.398,0.127,0.41,0.117,0.422,0.097
 
 
-  jardin_arriere:
+#   allee_sur_le_cote_right:
 
-    # ---------------------------- STREAM INPUTS -----------------------------
-    ffmpeg:
-      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_sub
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
-          roles: [record, audio]
+#     # ---------------------------- STREAM INPUTS -----------------------------
+#     ffmpeg:
+#       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+#       inputs:
+#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_right
+#           roles: [detect]
+# #        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+# #          roles: [record, audio]
 
-    # --------------------------- AUDIO (RECORD) -----------------------------
-    audio:
-      enabled: true              # Keep mic channel in recordings
+#     # --------------------------- AUDIO (RECORD) -----------------------------
+#     audio:
+#       enabled: false              # Keep mic channel in recordings
 
-    # --------------------------- DETECTION CORE -----------------------------
-    detect:
-      width: 640
-      height: 360
-      fps: 4                     # Raise from 2 → 4 for more frames without overloading
+#     # --------------------------- MQTT SNAPSHOTS -----------------------------
+#     # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
+#     mqtt:
+#       enabled: true              # Enable MQTT snapshots
+#       timestamp: true            # Add timestamp overlay
+#       bounding_box: true         # Draw bounding boxes
+#       crop: false                # Send whole frame (not cropped to object)
 
-    # ------------------------------ OBJECTS --------------------------------
-    objects:
-      track: [person]
-      filters:
-        person:
-          min_area: 200          # TINY — training mode capture
-          max_area: 150000       # Safety cap
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.15        # VERY LOW — training mode
+#     # --------------------------- DETECTION CORE -----------------------------
+#     detect:
+#       width: 768
+#       height: 432
+#       fps: 5                     # Balanced; raise if NUC load is fine
 
-    # ------------------------------ SNAPSHOTS -------------------------------
-    snapshots:
-      enabled: true              # Use global snapshot policy
+#     # ------------------------------ OBJECTS --------------------------------
+#     objects:
+#       track: [person]            # Focus only on people
+#       filters:
+#         person:
+#           min_area: 50          # TINY — training mode capture
+#           max_area: 200000       # Prevent runaway boxes
+#           min_ratio: 0.20        # Allow tall, narrow shapes
+#           max_ratio: 3.5         # Disallow extreme vertical poles etc.
+#           threshold: 0.05        # VERY LOW — training mode
 
-    # ---------------------------- MOTION FILTER -----------------------------
-    motion:
-      mask:
-        - 0.091,0.149,0.081,0.315,0.103,0.347,0.231,0.336,0.245,0.301,0.214,0.274,0.215,0.221,0.201,0.168,0.178,0.143,0.158,0.122,0.13,0.12
-        - 0.429,0.073,0.45,0.078,0.471,0.126,0.47,0.158,0.453,0.188,0.429,0.179,0.412,0.143,0.398,0.115
-    # --------------------------- ZONES & BEHAVIOUR --------------------------
-    zones:
-      # ---- 'prive' — Play area + shed ------------------------------------
-      prive:
-        coordinates: 0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,
-          0.314,0.115,0.524,0.124,0.537,0.166,0.528,0.179,0.523,0.383, 0.741,0.382,0.738,0.338,1,0.364,0.997,0.997
-        loitering_time: 0        # Immediate alert if person enters
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.15      # Training mode: very permissive
-            min_area: 200        # Training mode: capture tiny boxes
-            min_ratio: 0.15
-            max_ratio: 4.0
+#     # ------------------------------ SNAPSHOTS -------------------------------
+#     snapshots:
+#       enabled: true              # Standard snapshot behaviour
 
-    # ----------------------------- REVIEW RULES -----------------------------
-    review:
-      alerts:
-        required_zones: prive    # Only alert if in private play/shed area
-      detections:
-        required_zones: prive    # Only keep events when in this area
+#     # --------------------------- ZONES & BEHAVIOUR --------------------------
+#     zones:
+#       # ---- 'prive' — Private driveway (immediate alerts) ------------------
+#       prive:
+#         coordinates: 
+#           1,1,0,1,0,0,0.299,0,0.498,0.097,0.63,0.177,0.748,0.274,0.823,0.349,0.849,0.338,0.877,0.322,0.907,0.299,0.926,0.288,0.939,0.327,0.946,0.359,0.926,0.379,1,0.582,1,0.605
+#         loitering_time: 0        # Trigger immediately when person enters
+#         inertia: 3               # Hold event for 3s after leaving
+#         objects: person
+#         filters:
+#           person:
+#             threshold: 0.05      # Training mode: very permissive
+#             min_area: 50       # Training mode: capture tiny boxes
+#             min_ratio: 0.15      # Allow tall, narrow boxes
+#             max_ratio: 4.0       # Allow more square boxes
 
-  # ========================================================================
-  # CAMERA: VUE_ENTREE — (Reolink Doorbell POE)
-  # - Substream → detection (640x360, light for ML)
-  # - Main stream → recording + audio
-  # ========================================================================
-  vue_entree:
+#       # ---- 'rodage' — Fence line / loitering detection --------------------
+#     review:
+#       alerts:
+#         required_zones: prive    # Only alert if event entered private zone
+#     motion:
+#       mask: 
+#         0.464,0.011,0.499,0,0.587,0,1,0.004,1,0.51,0.971,0.301,0.948,0.188,0.952,0.104,0.913,0.027,0.765,0.028,0.83,0.173,0.85,0.223,0.868,0.258,0.832,0.294,0.694,0.17,0.665,0.145,0.623,0.113
 
-    # ---------------------------- STREAM INPUTS -----------------------------
-    ffmpeg:
-      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_sub
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
-          roles: [record, audio]
 
-    # --------------------------- AUDIO (RECORD) -----------------------------
-    audio:
-      enabled: true              # Keep mic channel in recordings
+  # jardin_arriere:
 
-    # --------------------------- DETECTION CORE -----------------------------
-    detect:
-      width: 640
-      height: 480
-      fps: 4                     # Raise from 2 → 4 for more frames without overloading
+  #   # ---------------------------- STREAM INPUTS -----------------------------
+  #   ffmpeg:
+  #     # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+  #     inputs:
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_sub
+  #         roles: [detect]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
+  #         roles: [record, audio]
 
-    # ------------------------------ OBJECTS --------------------------------
-    objects:
-      track: [person]
-      filters:
-        person:
-          min_area: 200         # Adjusted for smaller frame; ~20x60 pixels
-          max_area: 150000       # Safety cap
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.15        # Slightly more permissive (bust-only views of kids)
+  #   # --------------------------- AUDIO (RECORD) -----------------------------
+  #   audio:
+  #     enabled: true              # Keep mic channel in recordings
 
-    # ------------------------------ SNAPSHOTS -------------------------------
-    snapshots:
-      enabled: true              # Use global snapshot policy
+  #   # --------------------------- DETECTION CORE -----------------------------
+  #   detect:
+  #     width: 640
+  #     height: 360
+  #     fps: 4                     # Raise from 2 → 4 for more frames without overloading
 
-    # ---------------------------- MOTION FILTER -----------------------------
-    motion:
-      mask: 
-        0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081
+  #   # ------------------------------ OBJECTS --------------------------------
+  #   objects:
+  #     track: [person]
+  #     filters:
+  #       person:
+  #         min_area: 50          # TINY — training mode capture
+  #         max_area: 150000       # Safety cap
+  #         min_ratio: 0.20
+  #         max_ratio: 3.8
+  #         threshold: 0.05        # VERY LOW — training mode
 
-    # --------------------------- ZONES & BEHAVIOUR --------------------------
-    zones:
-      # ---- 'prive' ------------------------------------
-      prive:
-        coordinates: 
-          0,0.735,0,0.488,0.31,0.538,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0.73,1,0.741,0.953,0.676,0.893,0.515,0.96,0.363,0.975,0.188,0.956,0.036,0.89,0.03,0.744
-        loitering_time: 0        # Immediate alert if person enters
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.15      # Relaxed for partial/child-sized detections
-            min_area: 200        # Smaller minimum box allowed
-            min_ratio: 0.15
-            max_ratio: 4.0
+  #   # ------------------------------ SNAPSHOTS -------------------------------
+  #   snapshots:
+  #     enabled: true              # Use global snapshot policy
 
-    # ----------------------------- REVIEW RULES -----------------------------
-    review:
-      alerts:
-        required_zones: prive    # Only alert if in private play/shed area
-      detections:
-        required_zones: prive    # Only keep events when in this area
+  #   # ---------------------------- MOTION FILTER -----------------------------
+  #   motion:
+  #     mask:
+  #       - 0.091,0.149,0.081,0.315,0.103,0.347,0.231,0.336,0.245,0.301,0.214,0.274,0.215,0.221,0.201,0.168,0.178,0.143,0.158,0.122,0.13,0.12
+  #       - 0.429,0.073,0.45,0.078,0.471,0.126,0.47,0.158,0.453,0.188,0.429,0.179,0.412,0.143,0.398,0.115
+  #   # --------------------------- ZONES & BEHAVIOUR --------------------------
+  #   zones:
+  #     # ---- 'prive' — Play area + shed ------------------------------------
+  #     prive:
+  #       coordinates: 0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,
+  #         0.314,0.115,0.524,0.124,0.537,0.166,0.528,0.179,0.523,0.383, 0.741,0.382,0.738,0.338,1,0.364,0.997,0.997
+  #       loitering_time: 0        # Immediate alert if person enters
+  #       inertia: 3
+  #       objects: [person]
+  #       filters:
+  #         person:
+  #           threshold: 0.05      # Training mode: very permissive
+  #           min_area: 50        # Training mode: capture tiny boxes
+  #           min_ratio: 0.15
+  #           max_ratio: 4.0
+
+  #   # ----------------------------- REVIEW RULES -----------------------------
+  #   review:
+  #     alerts:
+  #       required_zones: prive    # Only alert if in private play/shed area
+  #     detections:
+  #       required_zones: prive    # Only keep events when in this area
+
+  # # ========================================================================
+  # # CAMERA: VUE_ENTREE — (Reolink Doorbell POE)
+  # # - Substream → detection (640x360, light for ML)
+  # # - Main stream → recording + audio
+  # # ========================================================================
+  # vue_entree:
+
+  #   # ---------------------------- STREAM INPUTS -----------------------------
+  #   ffmpeg:
+  #     # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+  #     inputs:
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_sub
+  #         roles: [detect]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
+  #         roles: [record, audio]
+
+  #   # --------------------------- AUDIO (RECORD) -----------------------------
+  #   audio:
+  #     enabled: true              # Keep mic channel in recordings
+
+  #   # --------------------------- DETECTION CORE -----------------------------
+  #   detect:
+  #     width: 640
+  #     height: 480
+  #     fps: 4                     # Raise from 2 → 4 for more frames without overloading
+
+  #   # ------------------------------ OBJECTS --------------------------------
+  #   objects:
+  #     track: [person]
+  #     filters:
+  #       person:
+  #         min_area: 50         # Adjusted for smaller frame; ~20x60 pixels
+  #         max_area: 150000       # Safety cap
+  #         min_ratio: 0.20
+  #         max_ratio: 3.8
+  #         threshold: 0.05        # Slightly more permissive (bust-only views of kids)
+
+  #   # ------------------------------ SNAPSHOTS -------------------------------
+  #   snapshots:
+  #     enabled: true              # Use global snapshot policy
+
+  #   # ---------------------------- MOTION FILTER -----------------------------
+  #   motion:
+  #     mask: 
+  #       0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081
+
+  #   # --------------------------- ZONES & BEHAVIOUR --------------------------
+  #   zones:
+  #     # ---- 'prive' ------------------------------------
+  #     prive:
+  #       coordinates: 
+  #         0,0.735,0,0.488,0.31,0.538,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0.73,1,0.741,0.953,0.676,0.893,0.515,0.96,0.363,0.975,0.188,0.956,0.036,0.89,0.03,0.744
+  #       loitering_time: 0        # Immediate alert if person enters
+  #       inertia: 3
+  #       objects: person
+  #       filters:
+  #         person:
+  #           threshold: 0.05      # Relaxed for partial/child-sized detections
+  #           min_area: 50        # Smaller minimum box allowed
+  #           min_ratio: 0.15
+  #           max_ratio: 4.0
+
+  #   # ----------------------------- REVIEW RULES -----------------------------
+  #   review:
+  #     alerts:
+  #       required_zones: prive    # Only alert if in private play/shed area
+  #     detections:
+  #       required_zones: prive    # Only keep events when in this area
 
 
 # ========================================================================
@@ -571,12 +571,12 @@ cameras:
 #       filters:
 #         person:
 #           # Global person filter (applies everywhere unless a zone overrides it)
-#           min_area: 300       # TINY — catch far/distant silhouettes (training mode)
+#           min_area: 50       # TINY — catch far/distant silhouettes (training mode)
 #           max_area: 200000     # Safety cap for broken frames/huge blobs
 #           min_ratio: 0.20      # Allow tall/narrow boxes (bust-only, seen from above)
 #           max_ratio: 3.5       # Disallow ultra-thin poles / extreme aspect boxes
-#           min_score: 0.15      # TRAINING MODE: accept low-confidence new tracks
-#           threshold: 0.15      # TRAINING MODE: base confidence; zones can override
+#           min_score: 0.05      # TRAINING MODE: accept low-confidence new tracks
+#           threshold: 0.05      # TRAINING MODE: base confidence; zones can override
 
 #           # Optional: keep tracks alive when briefly occluded (bush/wall edge)
 #           # max_disappeared: 30
@@ -599,8 +599,8 @@ cameras:
 #         filters:
 #           person:
 #             # Night/bust-only friendly thresholds scoped to this private zone
-#             threshold: 0.15    # TRAINING MODE: very permissive
-#             min_area: 300     # TRAINING MODE: permit smaller boxes
+#             threshold: 0.05    # TRAINING MODE: very permissive
+#             min_area: 50     # TRAINING MODE: permit smaller boxes
 #             min_ratio: 0.15    # Allow very tall/narrow boxes (seen from above)
 #             max_ratio: 4.0     # Allow squarer boxes (3/4 body, arm positions)
 
@@ -615,8 +615,8 @@ cameras:
 #         filters:
 #           person:
 #             # TRAINING MODE: very permissive
-#             threshold: 0.15
-#             min_area: 300
+#             threshold: 0.05
+#             min_area: 50
 #             min_ratio: 0.20
 #             max_ratio: 3.8
 
@@ -654,29 +654,29 @@ cameras:
 
 
     # ---------------------------- MOTION GATING -----------------------------
-    # Caméra "Jardin Devant Left"
-    # Personnes de taille moyenne, assez loin mais bien visibles.
+    # TRAINING MODE: relaxed to maximize detection sensitivity
     motion:
-      # Mouvement : filtrer les petites variations (feuilles, reflets légers)
-      contour_area: 2500      # aire mini d'un blob de mouvement (~1 % du frame)
-      threshold: 25           # plus haut = moins sensible
-      delta_alpha: 0.2        # lissage entre deux frames (0.2 = bon compromis)
-      mask: 
-        0,0.504,0,0,0.015,0,0.999,0,0.99,0.016,0.556,0.067,0.511,0.165,0.394,0.775,0.199,0.651
+      threshold: 5           # TRAINING MODE: ultra-sensitive (was 10)
+      contour_area: 50         # TRAINING MODE: global default
+      frame_alpha: 0.2
+      delta_alpha: 0.3          # TRAINING MODE: global default
+      improve_contrast: true
+      # mask DISABLED for training mode — catch all motion
+      # mask: 0,0.504,0,0,0.015,0,0.999,0,0.99,0.016,0.556,0.067,0.511,0.165,0.394,0.775,0.199,0.651
     objects:
       track:
         - person
       filters:
         person:
           # TRAINING MODE: very permissive for far/distal figures
-          min_area: 300      # TRAINING MODE: catch small figures
+          min_area: 50      # TRAINING MODE: catch small figures
           max_area: 80000
-          min_score: 0.15     # TRAINING MODE: accept low-confidence tracks
-          threshold: 0.15     # TRAINING MODE: much lower
-          min_ratio: 0.15
-          max_ratio: 3.5
-      mask: 
-        0.002,0,1,0,1,0.026,0.768,0.04,0.568,0.085,0.546,0.129,0.511,0.276,0.484,0.425,0.444,0.649,0.412,0.811,0,0.556
+          min_score: 0.05     # TRAINING MODE: accept low-confidence tracks
+          threshold: 0.05     # TRAINING MODE: much lower
+          min_ratio: 0.05        # TRAINING MODE: very permissive (was 0.15)
+          max_ratio: 5
+      # mask DISABLED for training mode
+      # mask: 0.002,0,1,0,1,0.026,0.768,0.04,0.568,0.085,0.546,0.129,0.511,0.276,0.484,0.425,0.444,0.649,0.412,0.811,0,0.556
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
       enabled: true            # Standard snapshot behaviour (uses main stream quality if configured globally)
@@ -694,8 +694,8 @@ cameras:
         filters:
           person:
             # Encore plus permissif à l’intérieur de ta propriété
-            threshold: 0.15      # TRAINING MODE
-            min_area: 300       # TRAINING MODE
+            threshold: 0.05      # TRAINING MODE
+            min_area: 50       # TRAINING MODE
             min_ratio: 0.25      # très vertical autorisé
             max_ratio: 5
 
@@ -710,18 +710,13 @@ cameras:
         filters:
           person:
             # Plus strict que 'prive' pour éviter de spammer sur le trottoir
-            threshold: 0.15      # TRAINING MODE
-            min_area: 300        # TRAINING MODE
+            threshold: 0.05      # TRAINING MODE
+            min_area: 50        # TRAINING MODE
             min_ratio: 0.10
             max_ratio: 5.0
 
-    # ----------------------------- REVIEW RULES -----------------------------
-    # These are your policy rules for what gets alerted vs merely recorded.
-    review:
-      alerts:
-        required_zones: prive   # Push notifications only if the event entered 'prive'
-      detections:
-        required_zones: rodage  # Keep events when someone loiters at 'rodage'
+    #     # ----------------------------- REVIEW RULES -----------------------------
+    # TRAINING MODE: no review restrictions — capture all detections
 
   jardin_devant_right:
     # ---------------------------- STREAM INPUTS -----------------------------
@@ -748,37 +743,35 @@ cameras:
 
 
     # ---------------------------- MOTION GATING -----------------------------
+    # TRAINING MODE: relaxed to maximize detection sensitivity
     motion:
-      # Revenir à quelque chose de proche du global, juste un peu plus strict
-      threshold: 24          # plus sensible que 26
-
-      contour_area: 250      # un peu plus que le global 200, mais bien < 800
-
-      frame_alpha: 0.4
-      delta_alpha: 0.5
-
-      # On garde le même mask pour couper le ciel / zones inutiles
-      mask:
-        - 0,0.032,0.042,0.036,0.188,0.058,0.356,0.093,0.346,0.141,0.377,0.161,0.497,0.204,0.506,0.227,0.542,0.241,0.664,0.784,1,0.556,1,0,0,0
-        - 0,0.391,0.074,0.487,0.071,0.563,0.05,0.621,0.045,0.644,0.033,0.676,0,0.687
+      threshold: 5           # TRAINING MODE: ultra-sensitive (was 10)
+      contour_area: 50         # TRAINING MODE: global default
+      frame_alpha: 0.2
+      delta_alpha: 0.3          # TRAINING MODE: global default
+      improve_contrast: true
+      # mask DISABLED for training mode — catch all motion
+      # mask:
+      #   - 0,0.032,0.042,0.036,0.188,0.058,0.356,0.093,0.346,0.141,0.377,0.161,0.497,0.204,0.506,0.227,0.542,0.241,0.664,0.784,1,0.556,1,0,0,0
+      #   - 0,0.391,0.074,0.487,0.071,0.563,0.05,0.621,0.045,0.644,0.033,0.676,0,0.687
 
     objects:
       track:
         - person
       filters:
         person:
-          min_area: 300        # TRAINING MODE
+          min_area: 50        # TRAINING MODE
           max_area: 250000
 
           # Forme humaine, mais pas trop restrictive vu la vue plongeante
-          min_ratio: 0.15
-          max_ratio: 3.0
+          min_ratio: 0.05        # TRAINING MODE: very permissive (was 0.15)
+          max_ratio: 5.0
 
           # Confiance : plus souple que ce qu’on avait mis
-          threshold: 0.15      # TRAINING MODE
-          min_score: 0.15     # TRAINING MODE
-      mask:
-        0.002,0,0.99,0,1,0.598,0.669,0.812,0.536,0.23,0.504,0.235,0.488,0.193,0.349,0.136,0.353,0.085,0.002,0.03
+          threshold: 0.05      # TRAINING MODE
+          min_score: 0.05     # TRAINING MODE
+      # mask DISABLED for training mode
+      # mask: 0.002,0,0.99,0,1,0.598,0.669,0.812,0.536,0.23,0.504,0.235,0.488,0.193,0.349,0.136,0.353,0.085,0.002,0.03
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -798,8 +791,8 @@ cameras:
         filters:
           person:
             # Légèrement plus strict que la caméra, mais cohérent
-            threshold: 0.15      # TRAINING MODE
-            min_area: 300       # TRAINING MODE
+            threshold: 0.05      # TRAINING MODE
+            min_area: 50       # TRAINING MODE
             min_ratio: 0.20      # même plage que la caméra
             max_ratio: 2.0
 
@@ -814,19 +807,13 @@ cameras:
         filters:
           person:
             # Plus strict que 'prive' pour le trottoir
-            threshold: 0.15      # TRAINING MODE
-            min_area: 300
+            threshold: 0.05      # TRAINING MODE
+            min_area: 50
             min_ratio: 0.20
             max_ratio: 2.0
 
     # ----------------------------- REVIEW RULES -----------------------------
-    # These are your policy rules for what gets alerted vs merely recorded.
-    review:
-      alerts:
-        required_zones: prive   # Push notifications only if the event entered 'prive'
-      detections:
-#        required_zones: rodage  # Keep events when someone loiters at 'rodage'
-        required_zones: prive
+    # TRAINING MODE: no review restrictions — capture all detections
 
 
   # ========================================================================
@@ -860,11 +847,11 @@ cameras:
       # track: [person]
       # filters:
         # person:
-          # min_area: 300         # TRAINING MODE: catch small/distant figures
+          # min_area: 50         # TRAINING MODE: catch small/distant figures
           # max_area: 200000
           # min_ratio: 0.20
           # max_ratio: 3.8
-          # threshold: 0.15        # TRAINING MODE: very permissive
+          # threshold: 0.05        # TRAINING MODE: very permissive
 
     # ------------------------------ SNAPSHOTS -------------------------------
     # snapshots:
@@ -883,8 +870,8 @@ cameras:
         # objects: [person]
         # filters:
           # person:
-            # threshold: 0.15      # TRAINING MODE: very permissive
-            # min_area: 300       # TRAINING MODE: allow smaller boxes
+            # threshold: 0.05      # TRAINING MODE: very permissive
+            # min_area: 50       # TRAINING MODE: allow smaller boxes
             # min_ratio: 0.15      # Accept tall/narrow shapes
             # max_ratio: 4.0       # Accept more square-ish boxes
 
@@ -895,130 +882,130 @@ cameras:
       # detections:
         # required_zones: prive    # Only keep detections when inside pool area
 
-  piscine_vue_toit_left:
+#   piscine_vue_toit_left:
 
-    # ---------------------------- STREAM INPUTS -----------------------------
-    ffmpeg:
-      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_left
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
-          roles: [record, audio]
+#     # ---------------------------- STREAM INPUTS -----------------------------
+#     ffmpeg:
+#       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+#       inputs:
+#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_left
+#           roles: [detect]
+#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+#           roles: [record, audio]
 
-    # --------------------------- AUDIO (RECORD) -----------------------------
-    audio:
-      enabled: true              # Keep mic channel in recordings
+#     # --------------------------- AUDIO (RECORD) -----------------------------
+#     audio:
+#       enabled: true              # Keep mic channel in recordings
 
-    # --------------------------- DETECTION CORE -----------------------------
-    detect:
-      width: 768
-      height: 432
-      fps: 4                     # Slightly higher than 2 for more chances to catch poses
+#     # --------------------------- DETECTION CORE -----------------------------
+#     detect:
+#       width: 768
+#       height: 432
+#       fps: 4                     # Slightly higher than 2 for more chances to catch poses
 
-    # ------------------------------ OBJECTS --------------------------------
-    objects:
-      track: [person]
-      filters:
-        person:
-          min_area: 300         # TRAINING MODE: catch small/distant figures
-          max_area: 200000
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.15        # TRAINING MODE: very permissive
+#     # ------------------------------ OBJECTS --------------------------------
+#     objects:
+#       track: [person]
+#       filters:
+#         person:
+#           min_area: 50         # TRAINING MODE: catch small/distant figures
+#           max_area: 200000
+#           min_ratio: 0.20
+#           max_ratio: 3.8
+#           threshold: 0.05        # TRAINING MODE: very permissive
 
-    # ------------------------------ SNAPSHOTS -------------------------------
-    snapshots:
-      enabled: true              # Use global settings for retention
+#     # ------------------------------ SNAPSHOTS -------------------------------
+#     snapshots:
+#       enabled: true              # Use global settings for retention
 
-    # --------------------------- ZONES & BEHAVIOUR --------------------------
-    zones:
-      # ---- 'prive' — Pool rooftop area (full frame) ----------------------
-      prive:
-        coordinates: 
-          0.197,1,0.303,0.821,0.366,0.697,0.506,0.358,0.495,0.283,0.484,0.216,0.496,0.198,0.627,0.053,0.737,0.037,0.739,0.076,0.981,0.039,0.999,0.062,1,0.993,1,1
-        loitering_time: 0        # Immediate alert if person appears
-        inertia: 3               # Hold event for 3s after leaving
-        objects: person
-        filters:
-          person:
-            threshold: 0.15      # TRAINING MODE: very permissive
-            min_area: 300       # TRAINING MODE: allow smaller boxes
-            min_ratio: 0.15      # Accept tall/narrow shapes
-            max_ratio: 4.0       # Accept more square-ish boxes
+#     # --------------------------- ZONES & BEHAVIOUR --------------------------
+#     zones:
+#       # ---- 'prive' — Pool rooftop area (full frame) ----------------------
+#       prive:
+#         coordinates: 
+#           0.197,1,0.303,0.821,0.366,0.697,0.506,0.358,0.495,0.283,0.484,0.216,0.496,0.198,0.627,0.053,0.737,0.037,0.739,0.076,0.981,0.039,0.999,0.062,1,0.993,1,1
+#         loitering_time: 0        # Immediate alert if person appears
+#         inertia: 3               # Hold event for 3s after leaving
+#         objects: person
+#         filters:
+#           person:
+#             threshold: 0.05      # TRAINING MODE: very permissive
+#             min_area: 50       # TRAINING MODE: allow smaller boxes
+#             min_ratio: 0.15      # Accept tall/narrow shapes
+#             max_ratio: 4.0       # Accept more square-ish boxes
 
-    # ----------------------------- REVIEW RULES -----------------------------
-    review:
-      alerts:
-        required_zones: prive    # Only alert if event is inside the pool area
-      detections:
-        required_zones: prive    # Only keep detections when inside pool area
+#     # ----------------------------- REVIEW RULES -----------------------------
+#     review:
+#       alerts:
+#         required_zones: prive    # Only alert if event is inside the pool area
+#       detections:
+#         required_zones: prive    # Only keep detections when inside pool area
 
-    motion:
-      mask: 
-        0.157,0.996,0,1,0,0,0.592,0.007,0.323,0.303,0.32,0.352,0.41,0.324,0.471,0.304,0.481,0.347,0.382,0.586,0.343,0.673,0.292,0.768,0.242,0.862
-  piscine_vue_toit_right:
+#     motion:
+#       mask: 
+#         0.157,0.996,0,1,0,0,0.592,0.007,0.323,0.303,0.32,0.352,0.41,0.324,0.471,0.304,0.481,0.347,0.382,0.586,0.343,0.673,0.292,0.768,0.242,0.862
+#   piscine_vue_toit_right:
 
-    # ---------------------------- STREAM INPUTS -----------------------------
-    ffmpeg:
-      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
-          roles: [detect]
-#        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
-#          roles: [record, audio]
+#     # ---------------------------- STREAM INPUTS -----------------------------
+#     ffmpeg:
+#       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+#       inputs:
+#         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
+#           roles: [detect]
+# #        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+# #          roles: [record, audio]
 
-    # --------------------------- AUDIO (RECORD) -----------------------------
-    audio:
-      enabled: false              # Keep mic channel in recordings
+#     # --------------------------- AUDIO (RECORD) -----------------------------
+#     audio:
+#       enabled: false              # Keep mic channel in recordings
 
-    # --------------------------- DETECTION CORE -----------------------------
-    detect:
-      width: 768
-      height: 432
-      fps: 4                     # Slightly higher than 2 for more chances to catch poses
+#     # --------------------------- DETECTION CORE -----------------------------
+#     detect:
+#       width: 768
+#       height: 432
+#       fps: 4                     # Slightly higher than 2 for more chances to catch poses
 
-    # ------------------------------ OBJECTS --------------------------------
-    objects:
-      track: [person]
-      filters:
-        person:
-          min_area: 300         # TRAINING MODE: catch small/distant figures
-          max_area: 200000
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.15        # TRAINING MODE: very permissive
+#     # ------------------------------ OBJECTS --------------------------------
+#     objects:
+#       track: [person]
+#       filters:
+#         person:
+#           min_area: 50         # TRAINING MODE: catch small/distant figures
+#           max_area: 200000
+#           min_ratio: 0.20
+#           max_ratio: 3.8
+#           threshold: 0.05        # TRAINING MODE: very permissive
 
-    # ------------------------------ SNAPSHOTS -------------------------------
-    snapshots:
-      enabled: true              # Use global settings for retention
+#     # ------------------------------ SNAPSHOTS -------------------------------
+#     snapshots:
+#       enabled: true              # Use global settings for retention
 
-    # --------------------------- ZONES & BEHAVIOUR --------------------------
-    zones:
-      # ---- 'prive' — Pool rooftop area (full frame) ----------------------
-      prive:
-        coordinates: 
-          0,1,1,1,0.998,0.004,0.604,0,0.454,0.591,0.417,0.6,0.33,0.446,0.292,0.448,0.154,0.207,0.079,0.119,0,0.039
-        loitering_time: 0        # Immediate alert if person appears
-        inertia: 3               # Hold event for 3s after leaving
-        objects: person
-        filters:
-          person:
-            threshold: 0.15      # TRAINING MODE: very permissive
-            min_area: 300       # TRAINING MODE: allow smaller boxes
-            min_ratio: 0.15      # Accept tall/narrow shapes
-            max_ratio: 4.0       # Accept more square-ish boxes
+#     # --------------------------- ZONES & BEHAVIOUR --------------------------
+#     zones:
+#       # ---- 'prive' — Pool rooftop area (full frame) ----------------------
+#       prive:
+#         coordinates: 
+#           0,1,1,1,0.998,0.004,0.604,0,0.454,0.591,0.417,0.6,0.33,0.446,0.292,0.448,0.154,0.207,0.079,0.119,0,0.039
+#         loitering_time: 0        # Immediate alert if person appears
+#         inertia: 3               # Hold event for 3s after leaving
+#         objects: person
+#         filters:
+#           person:
+#             threshold: 0.05      # TRAINING MODE: very permissive
+#             min_area: 50       # TRAINING MODE: allow smaller boxes
+#             min_ratio: 0.15      # Accept tall/narrow shapes
+#             max_ratio: 4.0       # Accept more square-ish boxes
 
-    # ----------------------------- REVIEW RULES -----------------------------
-    review:
-      alerts:
-        required_zones: prive    # Only alert if event is inside the pool area
-      detections:
-        required_zones: prive    # Only keep detections when inside pool area
+#     # ----------------------------- REVIEW RULES -----------------------------
+#     review:
+#       alerts:
+#         required_zones: prive    # Only alert if event is inside the pool area
+#       detections:
+#         required_zones: prive    # Only keep detections when inside pool area
 
-    motion:
-      mask: 
-        0,0,0.571,0,0.485,0.288,0.439,0.524,0.435,0.568,0.413,0.565,0.347,0.444,0.299,0.45,0.265,0.391,0.18,0.237,0.029,0.055
+#     motion:
+#       mask: 
+#         0,0,0.571,0,0.485,0.288,0.439,0.524,0.435,0.568,0.413,0.565,0.347,0.444,0.299,0.45,0.265,0.391,0.18,0.237,0.029,0.055
 
 
 version: 0.15-1               # Frigate config versioning (leave as‑is)
