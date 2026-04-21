@@ -89,9 +89,9 @@ objects:
     - person                 # Detect only human beings by default
   filters:
     person:
-      min_area: 500          # TINY — capture almost anything
-      min_score: 0.25        # VERY LOW — accept low-confidence detections
-      threshold: 0.25        # VERY LOW — trigger events easily
+      min_area: 200          # TRAINING MODE: very tiny
+      min_score: 0.15        # TRAINING MODE: accept low-confidence detections
+      threshold: 0.15        # TRAINING MODE: trigger events easily
       max_area: 300000       # Larger max to catch close-up silhouettes
 
 # ---------------------------------------------------------------------------
@@ -201,11 +201,11 @@ cameras:
       track: [person]            # Focus only on people
       filters:
         person:
-          min_area: 500          # TINY — capture almost anything for training
+          min_area: 200          # TRAINING MODE
           max_area: 200000       # Prevent runaway boxes from broken frames
           min_ratio: 0.20        # Allow tall, narrow shapes
           max_ratio: 3.5         # Disallow extreme vertical poles etc.
-          threshold: 0.25        # VERY LOW — training mode: capture even low-confidence detections
+          threshold: 0.15      # TRAINING MODE
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -222,8 +222,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.25      # Training mode: very permissive
-            min_area: 500       # Training mode: capture tiny boxes
+            threshold: 0.15      # Training mode: very permissive
+            min_area: 200       # Training mode: capture tiny boxes
             min_ratio: 0.15      # Allow tall, narrow boxes
             max_ratio: 4.0       # Allow more square boxes
 
@@ -235,8 +235,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.25      # Training mode: very permissive
-            min_area: 500       # Training mode: capture tiny boxes
+            threshold: 0.15      # Training mode: very permissive
+            min_area: 200       # Training mode: capture tiny boxes
             min_ratio: 0.20
             max_ratio: 3.8
 
@@ -281,11 +281,11 @@ cameras:
       track: [person]            # Focus only on people
       filters:
         person:
-          min_area: 500          # TINY — training mode capture
+          min_area: 200          # TINY — training mode capture
           max_area: 200000       # Prevent runaway boxes
           min_ratio: 0.20        # Allow tall, narrow shapes
           max_ratio: 3.5         # Disallow extreme vertical poles etc.
-          threshold: 0.25        # VERY LOW — training mode
+          threshold: 0.15        # VERY LOW — training mode
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -302,8 +302,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.25      # Training mode: very permissive
-            min_area: 500       # Training mode: capture tiny boxes
+            threshold: 0.15      # Training mode: very permissive
+            min_area: 200       # Training mode: capture tiny boxes
             min_ratio: 0.15      # Allow tall, narrow boxes
             max_ratio: 4.0       # Allow more square boxes
 
@@ -315,8 +315,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.25      # Training mode: very permissive
-            min_area: 500       # Training mode: capture tiny boxes
+            threshold: 0.15      # Training mode: very permissive
+            min_area: 200       # Training mode: capture tiny boxes
             min_ratio: 0.20
             max_ratio: 3.8
 
@@ -366,11 +366,11 @@ cameras:
       track: [person]            # Focus only on people
       filters:
         person:
-          min_area: 500          # TINY — training mode capture
+          min_area: 200          # TINY — training mode capture
           max_area: 200000       # Prevent runaway boxes
           min_ratio: 0.20        # Allow tall, narrow shapes
           max_ratio: 3.5         # Disallow extreme vertical poles etc.
-          threshold: 0.25        # VERY LOW — training mode
+          threshold: 0.15        # VERY LOW — training mode
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -387,8 +387,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.25      # Training mode: very permissive
-            min_area: 500       # Training mode: capture tiny boxes
+            threshold: 0.15      # Training mode: very permissive
+            min_area: 200       # Training mode: capture tiny boxes
             min_ratio: 0.15      # Allow tall, narrow boxes
             max_ratio: 4.0       # Allow more square boxes
 
@@ -427,11 +427,11 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 500          # TINY — training mode capture
+          min_area: 200          # TINY — training mode capture
           max_area: 150000       # Safety cap
           min_ratio: 0.20
           max_ratio: 3.8
-          threshold: 0.25        # VERY LOW — training mode
+          threshold: 0.15        # VERY LOW — training mode
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -453,8 +453,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.25      # Training mode: very permissive
-            min_area: 500        # Training mode: capture tiny boxes
+            threshold: 0.15      # Training mode: very permissive
+            min_area: 200        # Training mode: capture tiny boxes
             min_ratio: 0.15
             max_ratio: 4.0
 
@@ -496,11 +496,11 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 500         # Adjusted for smaller frame; ~20x60 pixels
+          min_area: 200         # Adjusted for smaller frame; ~20x60 pixels
           max_area: 150000       # Safety cap
           min_ratio: 0.20
           max_ratio: 3.8
-          threshold: 0.25        # Slightly more permissive (bust-only views of kids)
+          threshold: 0.15        # Slightly more permissive (bust-only views of kids)
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -522,8 +522,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.25      # Relaxed for partial/child-sized detections
-            min_area: 500        # Smaller minimum box allowed
+            threshold: 0.15      # Relaxed for partial/child-sized detections
+            min_area: 200        # Smaller minimum box allowed
             min_ratio: 0.15
             max_ratio: 4.0
 
@@ -671,8 +671,8 @@ cameras:
           # TRAINING MODE: very permissive for far/distal figures
           min_area: 300      # TRAINING MODE: catch small figures
           max_area: 80000
-          min_score: 0.20     # TRAINING MODE: accept low-confidence tracks
-          threshold: 0.20     # TRAINING MODE: much lower
+          min_score: 0.15     # TRAINING MODE: accept low-confidence tracks
+          threshold: 0.15     # TRAINING MODE: much lower
           min_ratio: 0.15
           max_ratio: 3.5
       mask: 
@@ -694,7 +694,7 @@ cameras:
         filters:
           person:
             # Encore plus permissif à l’intérieur de ta propriété
-            threshold: 0.20      # TRAINING MODE
+            threshold: 0.15      # TRAINING MODE
             min_area: 300       # TRAINING MODE
             min_ratio: 0.25      # très vertical autorisé
             max_ratio: 5
@@ -710,7 +710,7 @@ cameras:
         filters:
           person:
             # Plus strict que 'prive' pour éviter de spammer sur le trottoir
-            threshold: 0.20      # TRAINING MODE
+            threshold: 0.15      # TRAINING MODE
             min_area: 300        # TRAINING MODE
             min_ratio: 0.10
             max_ratio: 5.0
@@ -798,7 +798,7 @@ cameras:
         filters:
           person:
             # Légèrement plus strict que la caméra, mais cohérent
-            threshold: 0.20      # TRAINING MODE
+            threshold: 0.15      # TRAINING MODE
             min_area: 300       # TRAINING MODE
             min_ratio: 0.20      # même plage que la caméra
             max_ratio: 2.0
