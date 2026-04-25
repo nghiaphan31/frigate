@@ -106,7 +106,13 @@ detectors:
     type: cpu              # Using CPU only – upgrade to Coral for speed
 
 # ---------------------------------------------------------------------------
-# 1.7 MOTION PRE-FILTER (BEFORE ML) – default pre-filter for all cameras
+# 1.7 FRIGATE+ CUSTOM MODEL – trained model for improved detection
+# ---------------------------------------------------------------------------
+model:
+  path: plus://0c8bb7807f59a3fb3d4eb7c4b486ad10
+
+# ---------------------------------------------------------------------------
+# 1.8 MOTION PRE-FILTER (BEFORE ML) – default pre-filter for all cameras
 # ---------------------------------------------------------------------------
 motion:
   # Plus haut ➜ moins sensible. 26 reste assez sensible pour l’allumage de lumière,
@@ -159,91 +165,91 @@ audio:
 
 cameras:
 
-  # ========================================================================
-  # CAMERA: ALLEE_SUR_LE_COTE — Driveway side view (Reolink Duo 3 Wi-Fi ETH)
-  # - Substream → detection (ultra-wide 1536x432, light for ML)
-  # - Main stream → recording + audio
-  # - Primary outdoor security feed (with mic + speaker)
-  # ========================================================================
-  allee_sur_le_cote:
+  # # ========================================================================
+  # # CAMERA: ALLEE_SUR_LE_COTE — Driveway side view (Reolink Duo 3 Wi-Fi ETH)
+  # # - Substream → detection (ultra-wide 1536x432, light for ML)
+  # # - Main stream → recording + audio
+  # # - Primary outdoor security feed (with mic + speaker)
+  # # ========================================================================
+  # allee_sur_le_cote:
 
-    # ---------------------------- STREAM INPUTS -----------------------------
-    ffmpeg:
-      # hwaccel_args: []   # Uncomment if VA-API crashes on detect
-      inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
-          roles: [detect]
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
-          roles: [record, audio]
+  #   # ---------------------------- STREAM INPUTS -----------------------------
+  #   ffmpeg:
+  #     # hwaccel_args: []   # Uncomment if VA-API crashes on detect
+  #     inputs:
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
+  #         roles: [detect]
+  #       - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+  #         roles: [record, audio]
 
-    # --------------------------- AUDIO (RECORD) -----------------------------
-    audio:
-      enabled: true              # Keep mic channel in recordings
+  #   # --------------------------- AUDIO (RECORD) -----------------------------
+  #   audio:
+  #     enabled: true              # Keep mic channel in recordings
 
-    # --------------------------- MQTT SNAPSHOTS -----------------------------
-    # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
-    mqtt:
-      enabled: true              # Enable MQTT snapshots
-      timestamp: true            # Add timestamp overlay
-      bounding_box: true         # Draw bounding boxes
-      crop: false                # Send whole frame (not cropped to object)
+  #   # --------------------------- MQTT SNAPSHOTS -----------------------------
+  #   # Allows Home Assistant (or others) to request on-demand snapshots via MQTT.
+  #   mqtt:
+  #     enabled: true              # Enable MQTT snapshots
+  #     timestamp: true            # Add timestamp overlay
+  #     bounding_box: true         # Draw bounding boxes
+  #     crop: false                # Send whole frame (not cropped to object)
 
-    # --------------------------- DETECTION CORE -----------------------------
-    detect:
-      width: 1536
-      height: 432
-      fps: 5                     # Balanced; raise if NUC load is fine
+  #   # --------------------------- DETECTION CORE -----------------------------
+  #   detect:
+  #     width: 1536
+  #     height: 432
+  #     fps: 5                     # Balanced; raise if NUC load is fine
 
-    # ------------------------------ OBJECTS --------------------------------
-    objects:
-      track: [person]            # Focus only on people
-      filters:
-        person:
-          min_area: 2500         # Ignore tiny blobs (far away, street)
-          max_area: 200000       # Prevent runaway boxes from broken frames
-          min_ratio: 0.20        # Allow tall, narrow shapes
-          max_ratio: 3.5         # Disallow extreme vertical poles etc.
-          threshold: 0.65        # Base detection threshold
+  #   # ------------------------------ OBJECTS --------------------------------
+  #   objects:
+  #     track: [person]            # Focus only on people
+  #     filters:
+  #       person:
+  #         min_area: 2500         # Ignore tiny blobs (far away, street)
+  #         max_area: 200000       # Prevent runaway boxes from broken frames
+  #         min_ratio: 0.20        # Allow tall, narrow shapes
+  #         max_ratio: 3.5         # Disallow extreme vertical poles etc.
+  #         threshold: 0.65        # Base detection threshold
 
-    # ------------------------------ SNAPSHOTS -------------------------------
-    snapshots:
-      enabled: true              # Standard snapshot behaviour
+  #   # ------------------------------ SNAPSHOTS -------------------------------
+  #   snapshots:
+  #     enabled: true              # Standard snapshot behaviour
 
-    # --------------------------- ZONES & BEHAVIOUR --------------------------
-    zones:
-      # ---- 'prive' — Private driveway (immediate alerts) ------------------
-      prive:
-        coordinates: 
-          0.276,1,0,1,0,0.539,0.064,0.645,0.104,0.361,0.102,0.329,0.092,0.31,0.131,0.248,0.225,0.112,0.323,0,0.478,0,0.65,0,0.693,0.053,0.762,0.129,0.827,0.22,0.887,0.323,0.908,0.362,0.925,0.332,0.95,0.331,0.963,0.395,0.972,0.439,0.989,0.588,1,0.573,0.999,0.996
-        loitering_time: 0        # Trigger immediately when person enters
-        inertia: 3               # Hold event for 3s after leaving
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.55      # Allow lower-confidence partial views
-            min_area: 1000       # Allow smaller (bust-only) boxes
-            min_ratio: 0.15      # Allow tall, narrow boxes
-            max_ratio: 4.0       # Allow more square boxes
+  #   # --------------------------- ZONES & BEHAVIOUR --------------------------
+  #   zones:
+  #     # ---- 'prive' — Private driveway (immediate alerts) ------------------
+  #     prive:
+  #       coordinates: 
+  #         0.276,1,0,1,0,0.539,0.064,0.645,0.104,0.361,0.102,0.329,0.092,0.31,0.131,0.248,0.225,0.112,0.323,0,0.478,0,0.65,0,0.693,0.053,0.762,0.129,0.827,0.22,0.887,0.323,0.908,0.362,0.925,0.332,0.95,0.331,0.963,0.395,0.972,0.439,0.989,0.588,1,0.573,0.999,0.996
+  #       loitering_time: 0        # Trigger immediately when person enters
+  #       inertia: 3               # Hold event for 3s after leaving
+  #       objects: [person]
+  #       filters:
+  #         person:
+  #           threshold: 0.55      # Allow lower-confidence partial views
+  #           min_area: 1000       # Allow smaller (bust-only) boxes
+  #           min_ratio: 0.15      # Allow tall, narrow boxes
+  #           max_ratio: 4.0       # Allow more square boxes
 
-      # ---- 'rodage' — Fence line / loitering detection --------------------
-      rodage:
-        coordinates: 0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
-        loitering_time: 10       # Require ≥10s loitering before event
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.62
-            min_area: 2000
-            min_ratio: 0.20
-            max_ratio: 3.8
+  #     # ---- 'rodage' — Fence line / loitering detection --------------------
+  #     rodage:
+  #       coordinates: 0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
+  #       loitering_time: 10       # Require ≥10s loitering before event
+  #       inertia: 3
+  #       objects: [person]
+  #       filters:
+  #         person:
+  #           threshold: 0.62
+  #           min_area: 2000
+  #           min_ratio: 0.20
+  #           max_ratio: 3.8
 
-    # ----------------------------- REVIEW RULES -----------------------------
-    review:
-      alerts:
-        required_zones: prive    # Only alert if event entered private zone
-      detections:
-        required_zones: rodage   # Keep events when someone lingers at rodage
+  #   # ----------------------------- REVIEW RULES -----------------------------
+  #   review:
+  #     alerts:
+  #       required_zones: prive    # Only alert if event entered private zone
+  #     detections:
+  #       required_zones: rodage   # Keep events when someone lingers at rodage
 
   allee_sur_le_cote_left:
 
