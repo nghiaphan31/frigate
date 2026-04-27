@@ -109,7 +109,7 @@ detectors:
 # 1.7 FRIGATE+ CUSTOM MODEL – trained model for improved detection
 # ---------------------------------------------------------------------------
 model:
-  path: plus://0c8bb7807f59a3fb3d4eb7c4b486ad10
+  path: plus://b928831497c87e933467243e88ffc218
 
 # ---------------------------------------------------------------------------
 # 1.8 MOTION PRE-FILTER (BEFORE ML) – default pre-filter for all cameras
