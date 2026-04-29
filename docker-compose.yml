@@ -80,9 +80,11 @@ services:
       TZ: Europe/Paris
       LIBVA_DRIVER_NAME: iHD         # Ensures use of Intel iGPU VA-API driver
       FRIGATE_HWACCEL: vaapi         # (Optional, for explicit Frigate config)
+      PLUS_API_KEY: ${FRIGATE_PLUS_API_KEY}
     privileged: false           # set true if you add a USB Coral
     volumes:
-      - ./frigate/config.yml:/config/config.yml
+      - ./frigate:/config
+#      - ./frigate/config.yml:/config/config.yml
       #- ./frigate/storage:/media/frigate        # where clips & recordings land
       - /mnt/nas/video/frigate:/media/frigate # where clips & recordings land
       # tmpfs keeps frequent temp files off your SSD
