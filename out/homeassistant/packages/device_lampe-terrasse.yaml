@@ -1,8 +1,0 @@
-homeassistant:
-  customize:
-    device.lampe-terrasse:
-      friendly_name: Lampe Terrasse
-      area: unspecified
-_meta:
-  generated: '2025-10-09T15:44:50.129214+00:00'
-  source: /home/nghia-phan/git/nuc-docker-stack/sot/examples/sot.sample.yaml

@@ -1,2 +1,0 @@
-# Références sortantes depuis nas-pipelines
-nas-pipelines/releases/pass-01-media-2025-10-12_103216.txt:1:NAS_RELEASE_DIR=/mnt/nas/run/nas-pipelines/releases/2025-10-12_103216

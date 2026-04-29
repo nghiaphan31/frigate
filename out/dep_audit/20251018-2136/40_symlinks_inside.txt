@@ -1,1 +1,0 @@
-# Symlinks internes à nas-pipelines

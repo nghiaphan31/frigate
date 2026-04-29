@@ -1,3 +1,0 @@
-NAS_RELEASE_DIR=/mnt/nas/run/nas-pipelines/releases/2025-10-12_103216
-CANDIDATES_GZ=candidates_01-media.lst.gz
-CHECKSUMS=checksums.sha256
