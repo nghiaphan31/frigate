@@ -8,7 +8,7 @@
 #           * Heavy inline comments explain WHY each value exists, not just WHAT
 #           * Clear visual separators so you can jump to any section quickly
 #
-#  Tested against Frigate 0.15.x (Docker Compose) on an Intel NUC iGPU host
+  # Calypso - RTX 5060 Ti 16G GPU
 # -----------------------------------------------------------------------------
 #  QUICK INDEX
 #    1. GLOBAL SETTINGS
@@ -40,15 +40,15 @@ mqtt:
   host: 192.168.50.125         # IP/hostname of the MQTT broker (Mosquitto on HA)
   user: mosquito             # Frigate‑only MQTT username
   password: mosquito         # …and its matching password
-  topic_prefix: frigate      # Change if you plan multiple Frigate instances
+  topic_prefix: calypso_frigate      # Change if you plan multiple Frigate instances
 
 # ---------------------------------------------------------------------------
 # 1.2 FFMPEG – HARDWARE ACCELERATION & OUTPUT PROFILES
 # ---------------------------------------------------------------------------
 ffmpeg:
-  # The Intel NUC’s iGPU is capable of decoding H.264 streams via VA‑API.
+  # NVIDIA RTX 5060 Ti 16G - CUDA hardware acceleration
   # This offloads work from CPU so detections stay real‑time.
-  hwaccel_args: preset-vaapi
+  hwaccel_args: preset-nvidia
 
   output_args:
     # The built‑in record preset below:
