@@ -46,9 +46,11 @@ mqtt:
 # 1.2 FFMPEG – HARDWARE ACCELERATION & OUTPUT PROFILES
 # ---------------------------------------------------------------------------
 ffmpeg:
-  # NVIDIA RTX 5060 Ti 16G - CUDA hardware acceleration
-  # This offloads work from CPU so detections stay real‑time.
-  hwaccel_args: preset-nvidia
+  # Calypso RTX 5060 Ti 16G - TEMPORARILY DISABLED
+  # Using CPU detector, so disabling CUDA hwaccel to avoid FFmpeg errors.
+  # Re-enable once tensorRT image is available or CUDA is properly configured.
+  # hwaccel_args: preset-nvidia
+  hwaccel_args: []   # Empty = software decoding only
 
   output_args:
     # The built‑in record preset below:
