@@ -4,7 +4,7 @@
 
 NAS_HOST="192.168.50.232"  # Synology NAS local IP
 NAS_SHARE="/volume1/video/frigate"
-MOUNT_POINT="/mnt/nas/video/frigate"
+MOUNT_POINT="/mnt/nas"
 
 echo "Setting up network mount..."
 sudo mkdir -p "$MOUNT_POINT"
