@@ -3,7 +3,7 @@
 # This script should be run before starting docker-compose
 
 NAS_HOST="nas"  # Tailscale hostname
-NAS_SHARE="/volume1/frigate"
+NAS_SHARE="/volume1/video/frigate"
 MOUNT_POINT="/mnt/nas/video/frigate"
 
 echo "Setting up network mount via Tailscale..."
