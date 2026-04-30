@@ -12,4 +12,7 @@ services:
     volumes:
       - ./config.yml:/config
       - ${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}:/media/frigate
-      - tmpfs:/tmp/ramdisk
+      - type: tmpfs
+        target: /tmp/ramdisk
+        tmpfs:
+          size: 1073741824  # 1GB in bytes
