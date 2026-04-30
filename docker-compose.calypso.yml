@@ -9,7 +9,7 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: video
       PLUS_API_KEY: ${FRIGATE_PLUS_API_KEY}
     volumes:
-      - ./config.yml:/config
+      - ./config.yml:/config/config.yml
       - ${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}:/media/frigate
       - type: tmpfs
         target: /tmp/ramdisk
