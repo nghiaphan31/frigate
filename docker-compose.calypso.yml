@@ -1,7 +1,6 @@
 services:
   frigate:
     image: ghcr.io/blakeblackshear/frigate:stable
-    runtime: nvidia
     network_mode: host
     shm_size: "512m"
     environment:
@@ -16,3 +15,8 @@ services:
         target: /tmp/ramdisk
         tmpfs:
           size: 1073741824  # 1GB in bytes
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
