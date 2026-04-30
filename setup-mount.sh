@@ -9,6 +9,6 @@ MOUNT_POINT="/mnt/nas/video/frigate"
 echo "Setting up network mount..."
 sudo mkdir -p "$MOUNT_POINT"
 # Use local IP for NFS mount (same as NUC working config)
-sudo mount -t nfs -o vers=4.2,soft,timeo=30 "$NAS_HOST:/volume1" "$MOUNT_POINT"
+sudo mount -t nfs -o vers=4,soft,timeo=30 "$NAS_HOST:/volume1" "$MOUNT_POINT"
 
 echo "Mount setup complete. Run 'docker compose up -d' to start Frigate."
