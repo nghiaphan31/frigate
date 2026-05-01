@@ -50,12 +50,14 @@ ffmpeg:
   # NVIDIA RTX 5060 Ti 16G - CUDA hardware acceleration ENABLED
   # Using CUDA for FFmpeg video decoding to offload from CPU
   # ONNX detector still uses GPU via device: "0" in detectors.onnx1.
-  hwaccel: cuda
+  # NOTE: -hwaccel_output_format cuda is intentionally omitted — keeping it
+  # would leave decoded frames as CUDA surfaces in GPU memory, which prevents
+  # Frigate from extracting CPU-side pixel data for snapshots and detection.
   hwaccel_args:
-    - -hwaccel_device
-    - 0
-    - -hwaccel_output_format
+    - -hwaccel
     - cuda
+    - -hwaccel_device
+    - '0'
 
   output_args:
     # The built‑in record preset below:
@@ -170,6 +172,33 @@ audio:
 #    - car_alarm             # Vehicle alarm siren
 #    - siren                 # Police / ambulance siren nearby
 
+
+# ============================================================================
+# 1.9 GO2RTC – RESTREAM FROM REMOTE NUC go2rtc (192.168.50.112:8556)
+# ---------------------------------------------------------------------------
+# Frigate always starts its own internal go2rtc instance to power the web UI
+# live view. Without this section, that internal go2rtc has zero streams and
+# the UI shows blank/broken camera tiles.
+#
+# Each key here MUST match the camera name in the cameras: section below so
+# that Frigate can wire the live view to the correct stream automatically.
+# ---------------------------------------------------------------------------
+go2rtc:
+  streams:
+    allee_sur_le_cote:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+    jardin_arriere:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
+    vue_entree:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
+    jardin_devant_left:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
+    jardin_devant_right:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_right
+    piscine_vue_toit_left:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+    piscine_vue_toit_right:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
 
 # ============================================================================
 # 2. CAMERA DEFINITIONS – ONE BLOCK PER PHYSICAL CAMERA
@@ -771,12 +800,12 @@ cameras:
       # Tip: if VA-API crashes on detect for Duo 3, uncomment to force software decode ONLY for this cam:
       # hwaccel_args: []
       inputs:
-        - path: 
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_right
           roles: [detect]
-        # High-res main stream → recording (and audio if present)
-#        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
-#          roles: [record, audio]
+        # High-res main stream → recording (shared with jardin_devant_left, Frigate reuses the connection)
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
+          roles: [record]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
@@ -1010,11 +1039,12 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: 
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
           roles: [detect]
-#        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
-#          roles: [record, audio]
+        # High-res main stream → recording (shared with piscine_vue_toit_left, Frigate reuses the connection)
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+          roles: [record]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
