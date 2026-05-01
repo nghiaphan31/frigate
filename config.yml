@@ -472,7 +472,7 @@ cameras:
     detect:
       width: 640
       height: 360
-      fps: 4                     # Raise from 2 → 4 for more frames without overloading
+      fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
     objects:
@@ -545,7 +545,7 @@ cameras:
     detect:
       width: 640
       height: 480
-      fps: 4                     # Raise from 2 → 4 for more frames without overloading
+      fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
     objects:
@@ -714,8 +714,8 @@ cameras:
     detect:
       width: 2048              # Match substream width (ultra-wide)
       height: 1152              # Match substream height
-      fps: 5                   # Balanced: enough chances to catch a good pose, still light on CPU
-      max_disappeared: 40   # ≈ 10 s à 5 fps (50 frames sans détection avant de “perdre” l’objet)
+      fps: 10                  # Raised to 10 fps – short 3-5 m range, robber crosses fast
+      max_disappeared: 100  # ≈ 10 s à 10 fps (100 frames sans détection avant de "perdre" l'objet)
 
 
     # ---------------------------- MOTION GATING -----------------------------
@@ -815,8 +815,8 @@ cameras:
     detect:
       width: 2048              # Match substream width (ultra-wide)
       height: 1152              # Match substream height
-      fps: 5                   # Balanced: enough chances to catch a good pose, still light on CPU
-      max_disappeared: 40   # ≈ 10 s à 5 fps (50 frames sans détection avant de “perdre” l’objet)
+      fps: 10                  # Raised to 10 fps – short 3-5 m range, robber crosses fast
+      max_disappeared: 100  # ≈ 10 s à 10 fps (100 frames sans détection avant de "perdre" l'objet)
 
 
     # ---------------------------- MOTION GATING -----------------------------
@@ -987,7 +987,7 @@ cameras:
     detect:
       width: 768
       height: 432
-      fps: 4                     # Slightly higher than 2 for more chances to catch poses
+      fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
     objects:
@@ -1054,7 +1054,7 @@ cameras:
     detect:
       width: 768
       height: 432
-      fps: 4                     # Slightly higher than 2 for more chances to catch poses
+      fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
     objects:
