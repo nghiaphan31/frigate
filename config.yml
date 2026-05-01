@@ -47,10 +47,15 @@ mqtt:
 # 1.2 FFMPEG – HARDWARE ACCELERATION & OUTPUT PROFILES
 # ---------------------------------------------------------------------------
 ffmpeg:
-  # NVIDIA RTX 5060 Ti 16G - CUDA hardware acceleration DISABLED
-  # FFmpeg CUDA decoding fails inside container (libcuda.so.1 not accessible via passthrough).
-  # Fallback: software decoding. ONNX detector still uses GPU via device: "0" in detectors.onnx1.
-  hwaccel_args: []
+  # NVIDIA RTX 5060 Ti 16G - CUDA hardware acceleration ENABLED
+  # Using CUDA for FFmpeg video decoding to offload from CPU
+  # ONNX detector still uses GPU via device: "0" in detectors.onnx1.
+  hwaccel: cuda
+  hwaccel_args:
+    - -hwaccel_device
+    - 0
+    - -hwaccel_output_format
+    - cuda
 
   output_args:
     # The built‑in record preset below:
