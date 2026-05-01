@@ -198,7 +198,7 @@ go2rtc:
     piscine_vue_toit_left:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
     piscine_vue_toit_right:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_right
 
 # ============================================================================
 # 2. CAMERA DEFINITIONS – ONE BLOCK PER PHYSICAL CAMERA
@@ -457,10 +457,11 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: 
-            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_sub
-          roles: [detect]
-        - path: 
+        - path:
+            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
+          roles: [detect]        # Switched from sub (640×360) to main (3840×2160) – sub was
+                                 # too small for the 640×640 model (height 360 < 640 → upscaled)
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
           roles: [record, audio]
 
@@ -470,8 +471,8 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 640
-      height: 360
+      width: 1920
+      height: 1080              # Downscaled from 3840×2160 main; still >> 640×640 model input
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -479,8 +480,8 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 1000         # Adjusted for smaller frame; ~20x60 pixels
-          max_area: 15000       # Safety cap
+          min_area: 9000         # Scaled ×9 from 1000 (frame grew 640×360 → 1920×1080)
+          max_area: 135000       # Scaled ×9 from 15000
           min_ratio: 0.20
           max_ratio: 3.8
           threshold: 0.55       # Slightly more permissive (bust-only views of kids)
@@ -510,7 +511,7 @@ cameras:
         filters:
           person:
             threshold: 0.55      # Relaxed for partial/child-sized detections
-            min_area: 1000       # Smaller minimum box allowed
+            min_area: 9000       # Scaled ×9 from 1000 (frame grew 640×360 → 1920×1080)
             min_ratio: 0.15
             max_ratio: 4.0
 
@@ -523,8 +524,8 @@ cameras:
 
   # ========================================================================
   # CAMERA: VUE_ENTREE — (Reolink Doorbell POE)
-  # - Substream → detection (640x360, light for ML)
-  # - Main stream → recording + audio
+  # - Main stream → detection (1280×960, feeds 640×640 model without upscaling)
+  # - Main stream → recording + audio (shared connection)
   # ========================================================================
   vue_entree:
 
@@ -532,8 +533,9 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_sub
-          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
+          roles: [detect]        # Switched from sub (640×480) to main (2560×1920) – sub was
+                                 # too small for the 640×640 model (height 480 < 640 → upscaled)
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
           roles: [record, audio]
 
@@ -543,8 +545,8 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 640
-      height: 480
+      width: 1280
+      height: 960               # Downscaled from 2560×1920 main; still >> 640×640 model input
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -552,8 +554,8 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 3000         # Adjusted for smaller frame; ~20x60 pixels
-          max_area: 15000       # Safety cap
+          min_area: 12000        # Scaled ×4 from 3000 (frame grew 640×480 → 1280×960)
+          max_area: 60000        # Scaled ×4 from 15000
           min_ratio: 0.20
           max_ratio: 3.8
           threshold: 0.60        # Slightly more permissive (bust-only views of kids)
@@ -581,7 +583,7 @@ cameras:
         filters:
           person:
             threshold: 0.55      # Relaxed for partial/child-sized detections
-            min_area: 3000        # Smaller minimum box allowed
+            min_area: 12000       # Scaled ×4 from 3000 (frame grew 640×480 → 1280×960)
             min_ratio: 0.15
             max_ratio: 4.0
 
@@ -972,10 +974,11 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: 
-            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_left
-          roles: [detect]
-        - path: 
+        - path:
+            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_left
+          roles: [detect]        # Switched from sub_left (768×432) to main_left (2048×1152) –
+                                 # sub half was too small for the 640×640 model (height 432 < 640)
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
           roles: [record, audio]
 
@@ -985,8 +988,8 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 768
-      height: 432
+      width: 2048
+      height: 1152              # Full main half resolution – well above 640×640 model input
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -994,8 +997,8 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 3000         # People are generally mid-frame, not tiny
-          max_area: 30000
+          min_area: 21000        # Scaled ×7 from 3000 (frame grew 768×432 → 2048×1152)
+          max_area: 210000       # Scaled ×7 from 30000
           min_ratio: 0.20
           max_ratio: 3.8
           threshold: 0.55        # Slightly relaxed to catch partial/bust views
@@ -1016,7 +1019,7 @@ cameras:
         filters:
           person:
             threshold: 0.55      # More permissive for bust-only or awkward poses
-            min_area: 3000       # Allow smaller boxes (upper body only)
+            min_area: 21000      # Scaled ×7 from 3000 (frame grew 768×432 → 2048×1152)
             min_ratio: 0.15      # Accept tall/narrow shapes
             max_ratio: 4.0       # Accept more square-ish boxes
 
@@ -1040,8 +1043,9 @@ cameras:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
         - path:
-            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
-          roles: [detect]
+            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_right
+          roles: [detect]        # Switched from sub_right (768×432) to main_right (2048×1152) –
+                                 # sub half was too small for the 640×640 model (height 432 < 640)
         # High-res main stream → recording (shared with piscine_vue_toit_left, Frigate reuses the connection)
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
           roles: [record]
@@ -1052,8 +1056,8 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 768
-      height: 432
+      width: 2048
+      height: 1152              # Full main half resolution – well above 640×640 model input
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -1061,8 +1065,8 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 10000         # People are generally mid-frame, not tiny
-          max_area: 100000
+          min_area: 71000        # Scaled ×7 from 10000 (frame grew 768×432 → 2048×1152)
+          max_area: 710000       # Scaled ×7 from 100000
           min_ratio: 0.20
           max_ratio: 3.8
           threshold: 0.60        # Slightly relaxed to catch partial/bust views
@@ -1083,7 +1087,7 @@ cameras:
         filters:
           person:
             threshold: 0.55      # More permissive for bust-only or awkward poses
-            min_area: 10000       # Allow smaller boxes (upper body only)
+            min_area: 71000      # Scaled ×7 from 10000 (frame grew 768×432 → 2048×1152)
             min_ratio: 0.15      # Accept tall/narrow shapes
             max_ratio: 4.0       # Accept more square-ish boxes
 
