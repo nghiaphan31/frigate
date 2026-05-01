@@ -41,6 +41,7 @@ mqtt:
   user: mosquito             # Frigate‑only MQTT username
   password: mosquito         # …and its matching password
   topic_prefix: calypso_frigate      # Change if you plan multiple Frigate instances
+  client_id: frigate_calypso_client
 
 # ---------------------------------------------------------------------------
 # 1.2 FFMPEG – HARDWARE ACCELERATION & OUTPUT PROFILES
