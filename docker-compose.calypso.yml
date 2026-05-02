@@ -2,7 +2,7 @@ services:
   frigate:
     image: ghcr.io/blakeblackshear/frigate:stable
     network_mode: host
-    shm_size: "1024m"             # Increased from 512m – higher-res detect streams (up to 2048×1152) need more SHM
+    shm_size: "512m"
     environment:
       TZ: Europe/Paris
       NVIDIA_VISIBLE_DEVICES: all
