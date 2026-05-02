@@ -73,7 +73,7 @@ services:
   frigate:
     image: ghcr.io/blakeblackshear/frigate:stable
     container_name: frigate
-    restart: unless-stopped
+    restart: "no"                    # disabled - use 'docker compose start frigate' to restart
     network_mode: host          # simplest way to reach go2rtc on 192.168.50.112:8556
     shm_size: "512m"            # shared‑mem for FFmpeg decode pipelines
     environment:

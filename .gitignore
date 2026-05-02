@@ -19,6 +19,7 @@ nas-pipelines/
 
 # Subdirectories we DO want to track
 !/ring-mqtt/data/
+ring-mqtt/data/ring-state.json
 !/frigate/
 !/out/dep_audit/
 
