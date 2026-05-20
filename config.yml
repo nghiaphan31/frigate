@@ -188,11 +188,22 @@ audio:
 #   • Half-frame cameras   → main_left / main_right (cropped by NUC go2rtc)
 # ---------------------------------------------------------------------------
 go2rtc:
+  # ── WebRTC Configuration ──────────────────────────────────────────────
+  # WebRTC bypasses browser's 6-connection limit and typically achieves
+  # sub-200ms latency vs MSE which queues connections.
+  # Port 8555 must be accessible on your Frigate machine.
+  webrtc:
+    candidates:
+      - 192.168.50.150:8555   # Calypso Frigate machine IP – update if different
+      - stun:8555
+
   streams:
     # ── Allée sur le côté (Reolink Duo 3 – 192.168.50.129) ──────────────────
     # Whole panoramic frame (4096×1152 main, 1536×432 sub)
-    allee_sur_le_cote:
+    allee_sur_le_cote_main:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+    allee_sur_le_cote_sub:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
     # Left half (2048×1152 crop of main)
     allee_sur_le_cote_left:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main_left
@@ -201,19 +212,25 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main_right
 
     # ── Jardin arrière (Reolink single-lens – 192.168.50.207) ───────────────
-    # Single-lens camera – no halves available
-    jardin_arriere:
+    # Single-lens camera – main only
+    jardin_arriere_main:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
+    jardin_arriere_sub:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_sub
 
     # ── Vue entrée (Reolink Doorbell POE – 192.168.50.222) ──────────────────
-    # Single-lens camera – no halves available
-    vue_entree:
+    # Single-lens camera – main only
+    vue_entree_main:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
+    vue_entree_sub:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_sub
 
     # ── Jardin devant (Reolink Duo 3 – 192.168.50.18) ───────────────────────
     # Whole panoramic frame (4096×1152 main)
-    jardin_devant:
+    jardin_devant_main:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
+    jardin_devant_sub:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub
     # Left half (2048×1152 crop of main)
     jardin_devant_left:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_left
@@ -223,8 +240,10 @@ go2rtc:
 
     # ── Piscine vue toit (Reolink Duo 3 – 192.168.50.7) ────────────────────
     # Whole panoramic frame (4096×1152 main)
-    piscine_vue_toit:
+    piscine_vue_toit_main:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+    piscine_vue_toit_sub:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub
     # Left half (2048×1152 crop of main)
     piscine_vue_toit_left:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_left
@@ -256,6 +275,12 @@ cameras:
         - path: 
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
           roles: [record, audio]
+
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    # Force Web UI to use lightweight sub-stream for live view grid.
+    # This bypasses browser 6-connection limit and dramatically reduces latency.
+    live:
+      stream_name: allee_sur_le_cote_sub
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
@@ -340,6 +365,10 @@ cameras:
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
           roles: [record, audio]
 
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: allee_sur_le_cote_sub
+
     audio:
       enabled: true
 
@@ -416,6 +445,10 @@ cameras:
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
           roles: [record]
 
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: allee_sur_le_cote_sub
+
     audio:
       enabled: false
 
@@ -480,6 +513,10 @@ cameras:
           roles: [record, audio]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: jardin_arriere_sub
+
     audio:
       enabled: true              # Keep mic channel in recordings
 
@@ -553,6 +590,10 @@ cameras:
           roles: [record, audio]
 
     # --------------------------- AUDIO (RECORD) -----------------------------
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: vue_entree_sub
+
     audio:
       enabled: true              # Keep mic channel in recordings
 
@@ -719,6 +760,10 @@ cameras:
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
           roles: [record, audio]
 
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: jardin_devant_sub
+
     audio:
       enabled: false
 
@@ -789,6 +834,10 @@ cameras:
         - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
           roles: [record]
+
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: jardin_devant_sub
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
@@ -890,6 +939,10 @@ cameras:
         # High-res main stream → recording (shared with jardin_devant_left, Frigate reuses the connection)
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
           roles: [record]
+
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: jardin_devant_sub
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
@@ -999,6 +1052,10 @@ cameras:
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
           roles: [record, audio]
 
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: piscine_vue_toit_sub
+
     audio:
       enabled: true
 
@@ -1057,6 +1114,10 @@ cameras:
         - path: 
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
           roles: [record, audio]
+
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: piscine_vue_toit_sub
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
@@ -1124,6 +1185,10 @@ cameras:
         # High-res main stream → recording (shared with piscine_vue_toit_left, Frigate reuses the connection)
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
           roles: [record]
+
+    # --------------------------- LIVE VIEW (UI) -----------------------------
+    live:
+      stream_name: piscine_vue_toit_sub
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
