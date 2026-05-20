@@ -211,6 +211,9 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
 
     # ── Jardin devant (Reolink Duo 3 – 192.168.50.18) ───────────────────────
+    # Whole panoramic frame (4096×1152 main)
+    jardin_devant:
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
     # Left half (2048×1152 crop of main)
     jardin_devant_left:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_left
@@ -703,18 +706,87 @@ cameras:
 #       contour_area: 10
 #       improve_contrast: true
 
-  jardin_devant_left:
-    # ---------------------------- STREAM INPUTS -----------------------------
+  # ========================================================================
+  # CAMERA: JARDIN_DEVANT — Front garden whole-frame (Reolink Duo 3)
+  # - sub (1536×432) → detect (full panoramic view)
+  # - main → record + audio
+  # ========================================================================
+  jardin_devant:
     ffmpeg:
-      # Tip: if VA-API crashes on detect for Duo 3, uncomment to force software decode ONLY for this cam:
-      # hwaccel_args: []
       inputs:
-        # Low-res substream → detection (lighter, faster)
-        - path: 
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub
+          roles: [detect]
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
+          roles: [record, audio]
+
+    audio:
+      enabled: false
+
+    detect:
+      width: 1536
+      height: 432
+      fps: 10
+
+    objects:
+      track: [person]
+      filters:
+        person:
+          min_area: 2500
+          max_area: 200000
+          min_ratio: 0.20
+          max_ratio: 3.5
+          threshold: 0.65
+
+    snapshots:
+      enabled: true
+
+    zones:
+      prive:
+        coordinates:
+          0,0.533,0.234,0.84,0.249,0.631,0.258,0.541,0.264,0.474,0.266,0.396,0.283,0.253,0.293,0.241,0.321,0.223,0.472,0.241,0.572,0.253,0.637,0.307,0.656,0.217,0.694,0.234,0.727,0.26,0.746,0.274,0.76,0.237,0.779,0.433,0.785,0.479,0.826,0.828,1,0.61,1,0.716,1,0.767,1,0.827,1,1,0,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55
+            min_area: 1000
+            min_ratio: 0.15
+            max_ratio: 4.0
+      rodage:
+        coordinates:
+          0.303,0,0.346,0,0.433,0,0.528,0,0.602,0,0.635,0,0.666,0.026,0.702,0.093,0.73,0.124,0.748,0.131,0.758,0.236,0.752,0.273,0.744,0.297,0.679,0.243,0.658,0.226,0.64,0.291,0.568,0.254,0.499,0.229,0.438,0.229,0.316,0.231,0.282,0.227,0.233,0.835,0.209,0.809,0.259,0.214,0.272,0.129
+        loitering_time: 10
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.62
+            min_area: 2000
+            min_ratio: 0.20
+            max_ratio: 3.8
+
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: rodage
+
+    motion:
+      mask: 0.647,0.095,0.64,0.188,0.653,0.229,0.675,0.211,0.682,0.129,0.671,0.077
+
+  # ========================================================================
+  # CAMERA: JARDIN_DEVANT_LEFT — Left half of front garden (2048×1152)
+  # - main_left (2048×1152) → detect
+  # - main → record (shared connection)
+  # ========================================================================
+  jardin_devant_left:
+    ffmpeg:
+      inputs:
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_left
           roles: [detect]
-        # High-res main stream → recording (and audio if present)
-        - path: 
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
           roles: [record]
 
