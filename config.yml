@@ -298,7 +298,8 @@ cameras:
           roles: [record, audio]
 
     live:
-      stream_name: allee_sur_le_cote_sub
+      streams:
+        Allée côté (panoramique): allee_sur_le_cote_sub
 
     audio:
       enabled: true
@@ -384,7 +385,8 @@ cameras:
           roles: [record, audio]
 
     live:
-      stream_name: allee_sur_le_cote_sub
+      streams:
+        Allée côté gauche: allee_sur_le_cote_sub
 
     audio:
       enabled: true
@@ -473,7 +475,8 @@ cameras:
           roles: [record]
 
     live:
-      stream_name: allee_sur_le_cote_sub
+      streams:
+        Allée côté droite: allee_sur_le_cote_sub
 
     audio:
       enabled: false             # Audio already captured by allee_sur_le_cote_left
@@ -554,7 +557,8 @@ cameras:
           roles: [record, audio]
 
     live:
-      stream_name: jardin_arriere_sub
+      streams:
+        Jardin arrière: jardin_arriere_sub
 
     audio:
       enabled: true
@@ -634,7 +638,8 @@ cameras:
           roles: [record, audio]
 
     live:
-      stream_name: vue_entree_sub
+      streams:
+        Vue entrée: vue_entree_sub
 
     audio:
       enabled: true
@@ -706,7 +711,8 @@ cameras:
           roles: [record, audio]
 
     live:
-      stream_name: jardin_devant_sub
+      streams:
+        Jardin devant (panoramique): jardin_devant_sub
 
     audio:
       enabled: false
@@ -784,7 +790,8 @@ cameras:
           roles: [record]
 
     live:
-      stream_name: jardin_devant_sub
+      streams:
+        Jardin devant gauche: jardin_devant_sub
 
     audio:
       enabled: false
@@ -870,7 +877,8 @@ cameras:
           roles: [record]
 
     live:
-      stream_name: jardin_devant_sub
+      streams:
+        Jardin devant droite: jardin_devant_sub
 
     audio:
       enabled: false
@@ -959,7 +967,8 @@ cameras:
           roles: [record, audio]
 
     live:
-      stream_name: piscine_vue_toit_sub
+      streams:
+        Piscine toit (panoramique): piscine_vue_toit_sub
 
     audio:
       enabled: true
@@ -1024,7 +1033,8 @@ cameras:
           roles: [record, audio]
 
     live:
-      stream_name: piscine_vue_toit_sub
+      streams:
+        Piscine toit gauche: piscine_vue_toit_sub
 
     audio:
       enabled: true
@@ -1098,7 +1108,8 @@ cameras:
           roles: [record]
 
     live:
-      stream_name: piscine_vue_toit_sub
+      streams:
+        Piscine toit droite: piscine_vue_toit_sub
 
     audio:
       enabled: false
