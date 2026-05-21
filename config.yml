@@ -306,7 +306,7 @@ cameras:
       filters:
         person:
           min_area: 4000         # Ignore tiny blobs (far away, street)
-          max_area: 12000       # Prevent runaway boxes from broken frames
+          max_area: 40000        # iter0-fix: 12000 was too tight (close person ≈ 80×200=16000 px²)
           min_ratio: 0.20        # Allow tall, narrow shapes
           max_ratio: 3.5         # Disallow extreme vertical poles etc.
           threshold: 0.65        # Base detection threshold
@@ -352,15 +352,16 @@ cameras:
         required_zones: rodage   # Keep events when someone lingers at rodage
 
   # ========================================================================
-  # CAMERA: ALLEE_SUR_LE_COTE_LEFT — Left half of allée (768×432 sub crop)
-  # - sub_left → detect (768×432)
+  # CAMERA: ALLEE_SUR_LE_COTE_LEFT — Left half of allée (2048×1152 main crop)
+  # - iter1: migrated from sub_left (768×432) → main_left (2048×1152)
+  # - main_left → detect (2048×1152, 7× more pixels for better ML accuracy)
   # - main → record + audio (shared connection with allee_sur_le_cote)
   # ========================================================================
   allee_sur_le_cote_left:
 
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_left
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main_left
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
           roles: [record, audio]
@@ -379,19 +380,22 @@ cameras:
       crop: false
 
     detect:
-      width: 768
-      height: 432
+      width: 2048
+      height: 1152
       fps: 10
 
     objects:
       track: [person]
       filters:
         person:
-          min_area: 2500
-          max_area: 100000
-          min_ratio: 0.15
-          max_ratio: 4.0
-          threshold: 0.65
+          # TEMP iter1: wide-open for 48-72h data collection on new main stream
+          # Will be tightened in iter2 after Option-B event dump analysis
+          min_area: 500
+          max_area: 2000000
+          min_ratio: 0.05
+          max_ratio: 20.0
+          threshold: 0.60
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -432,15 +436,16 @@ cameras:
         0.587,0.002,0,0,0,0.533,0.107,0.629,0.194,0.345,0.199,0.315,0.207,0.292,0.308,0.2,0.398,0.127,0.41,0.117,0.422,0.097
 
   # ========================================================================
-  # CAMERA: ALLEE_SUR_LE_COTE_RIGHT — Right half of allée (768×432 sub crop)
-  # - sub_right → detect (768×432)
+  # CAMERA: ALLEE_SUR_LE_COTE_RIGHT — Right half of allée (2048×1152 main crop)
+  # - iter1: migrated from sub_right (768×432) → main_right (2048×1152)
+  # - main_right → detect (2048×1152, 7× more pixels for better ML accuracy)
   # - main → record (shared connection, no second audio stream needed)
   # ========================================================================
   allee_sur_le_cote_right:
 
     ffmpeg:
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub_right
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main_right
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
           roles: [record]
@@ -459,19 +464,22 @@ cameras:
       crop: false
 
     detect:
-      width: 768
-      height: 432
+      width: 2048
+      height: 1152
       fps: 10
 
     objects:
       track: [person]
       filters:
         person:
-          min_area: 2500
-          max_area: 100000
-          min_ratio: 0.15
-          max_ratio: 4.0
-          threshold: 0.65
+          # TEMP iter1: wide-open for 48-72h data collection on new main stream
+          # Will be tightened in iter2 after Option-B event dump analysis
+          min_area: 500
+          max_area: 2000000
+          min_ratio: 0.05
+          max_ratio: 20.0
+          threshold: 0.60
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -505,10 +513,13 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: 
-            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_sub
+        # iter1: migrated from sub (640×360) → main stream
+        # ⚠️  VERIFY: confirm actual main resolution with ffprobe before deploying
+        #     expected: ~2560×1440 or 2304×1296 — update width/height below if different
+        - path:
+            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
           roles: [detect]
-        - path: 
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
           roles: [record, audio]
 
@@ -522,8 +533,9 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 640
-      height: 360
+      # ⚠️  VERIFY: update width/height to match actual main stream resolution
+      width: 2560
+      height: 1440
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -531,11 +543,14 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 1000         # Adjusted for smaller frame; ~20x60 pixels
-          max_area: 15000       # Safety cap
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.55       # Slightly more permissive (bust-only views of kids)
+          # TEMP iter1: wide-open for 48-72h data collection on new main stream
+          # Will be tightened in iter2 after Option-B event dump analysis
+          min_area: 500
+          max_area: 2000000
+          min_ratio: 0.05
+          max_ratio: 20.0
+          threshold: 0.55
+          min_score: 0.45
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -584,7 +599,10 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_sub
+        # iter1: migrated from sub (640×480) → main stream
+        # ⚠️  VERIFY: confirm actual main resolution with ffprobe before deploying
+        #     Reolink Doorbell POE expected: ~2560×1920 or 2048×1536 — update width/height below if different
+        - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
           roles: [detect]
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
           roles: [record, audio]
@@ -599,8 +617,9 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 640
-      height: 480
+      # ⚠️  VERIFY: update width/height to match actual main stream resolution
+      width: 2560
+      height: 1920
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -608,11 +627,14 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 3000         # Adjusted for smaller frame; ~20x60 pixels
-          max_area: 15000       # Safety cap
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.60        # Slightly more permissive (bust-only views of kids)
+          # TEMP iter1: wide-open for 48-72h data collection on new main stream
+          # Will be tightened in iter2 after Option-B event dump analysis
+          min_area: 500
+          max_area: 2000000
+          min_ratio: 0.05
+          max_ratio: 20.0
+          threshold: 0.60
+          min_score: 0.45
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -869,7 +891,7 @@ cameras:
       filters:
         person:
           min_area: 13000        # un peu en-dessous de 900 pour ne pas rater des poses petites
-          max_area: 52000
+          max_area: 300000       # iter0-fix: 52000 was too tight (close person on 2048×1152 ≈ 200×600=120000 px²)
 
           # Forme humaine, mais pas trop restrictive vu la vue plongeante
           min_ratio: 0.15
@@ -977,7 +999,7 @@ cameras:
       filters:
         person:
           min_area: 13000        # un peu en-dessous de 900 pour ne pas rater des poses petites
-          max_area: 52000
+          max_area: 300000       # iter0-fix: 52000 was too tight (close person on 2048×1152 ≈ 200×600=120000 px²)
 
           # Forme humaine, mais pas trop restrictive vu la vue plongeante
           min_ratio: 0.15
@@ -1098,8 +1120,9 @@ cameras:
         required_zones: prive
 
   # ========================================================================
-  # CAMERA: PISCINE_VUE_TOIT_LEFT — Left half of pool rooftop (768×432)
-  # - sub_left (768×432) → detect
+  # CAMERA: PISCINE_VUE_TOIT_LEFT — Left half of pool rooftop (2048×1152 main crop)
+  # - iter1: migrated from sub_left (768×432) → main_left (2048×1152)
+  # - main_left → detect (2048×1152, 7× more pixels for better ML accuracy)
   # - main → record + audio (shared connection)
   # ========================================================================
   piscine_vue_toit_left:
@@ -1108,10 +1131,10 @@ cameras:
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
-        - path: 
-            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_left
+        - path:
+            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_left
           roles: [detect]
-        - path: 
+        - path:
             rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
           roles: [record, audio]
 
@@ -1125,8 +1148,8 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 768
-      height: 432
+      width: 2048
+      height: 1152
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -1134,11 +1157,14 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 3000         # People are generally mid-frame, not tiny
-          max_area: 30000
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.55        # Slightly relaxed to catch partial/bust views
+          # TEMP iter1: wide-open for 48-72h data collection on new main stream
+          # Will be tightened in iter2 after Option-B event dump analysis
+          min_area: 500
+          max_area: 2000000
+          min_ratio: 0.05
+          max_ratio: 20.0
+          threshold: 0.55
+          min_score: 0.45
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
@@ -1176,11 +1202,12 @@ cameras:
   piscine_vue_toit_right:
 
     # ---------------------------- STREAM INPUTS -----------------------------
+    # iter1: migrated from sub_right (768×432) → main_right (2048×1152)
     ffmpeg:
       # hwaccel_args: []   # Uncomment if VA-API crashes on detect
       inputs:
         - path:
-            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub_right
+            rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_right
           roles: [detect]
         # High-res main stream → recording (shared with piscine_vue_toit_left, Frigate reuses the connection)
         - path: rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
@@ -1192,12 +1219,12 @@ cameras:
 
     # --------------------------- AUDIO (RECORD) -----------------------------
     audio:
-      enabled: false              # Keep mic channel in recordings
+      enabled: false
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      width: 768
-      height: 432
+      width: 2048
+      height: 1152
       fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
 
     # ------------------------------ OBJECTS --------------------------------
@@ -1205,11 +1232,15 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 10000         # People are generally mid-frame, not tiny
-          max_area: 100000
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.60        # Slightly relaxed to catch partial/bust views
+          # TEMP iter1: wide-open for 48-72h data collection on new main stream
+          # iter0-fix also applied: min_area was 10000 (too high for 768×432 distant person ≈ 6000 px²)
+          # Will be tightened in iter2 after Option-B event dump analysis
+          min_area: 500
+          max_area: 2000000
+          min_ratio: 0.05
+          max_ratio: 20.0
+          threshold: 0.60
+          min_score: 0.45
 
     # ------------------------------ SNAPSHOTS -------------------------------
     snapshots:
