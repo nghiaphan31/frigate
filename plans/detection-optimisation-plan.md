@@ -1,8 +1,8 @@
 # Detection Parameter Optimisation Plan — Frigate NVR (Calypso RTX 5060 Ti)
 
-> **Status:** Iteration 1 committed — ready to deploy  
-> **Branch:** `detection-optimisation`  
-> **Last updated:** 2026-05-21  
+> **Status:** 🟢 Deployed — 48–72h soak running (Track A + Track B active)
+> **Branch:** `detection-optimisation`
+> **Last updated:** 2026-05-21
 > **Config file:** [`config.yml`](../config.yml)
 
 ---
@@ -210,14 +210,22 @@ max_ratio = ceil2dp(max_observed_ratio  × 1.30)
 
 | Step | Action | Status |
 |---|---|---|
-| iter0 | Fix 4 provably-wrong area values | ✅ Committed `1258c11` |
-| iter1 | Migrate 6 cameras sub→main + wide-open temp params | ✅ Committed `1258c11` |
-| resolution fix | jardin_arriere 3840×2160, vue_entree 2560×1920 | ✅ Committed `bab09a6` |
-| deploy | `docker compose -f docker-compose.calypso.yml restart frigate` | ⏳ Pending |
-| soak Track A | Run 48–72h, then Option-B event dump | ⏳ Pending |
-| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Pending |
-| iter2 | Apply tight parameters + new plus:// model | ⏳ Pending |
+| iter0 | Fix 4 provably-wrong area values | ✅ `1258c11` |
+| iter1 | Migrate 6 cameras sub→main + wide-open temp params | ✅ `1258c11` |
+| resolution fix | jardin_arriere 3840×2160, vue_entree 2560×1920 | ✅ `bab09a6` |
+| plan Track B | Integrate Frigate+ training into dual-track soak | ✅ `ed2fdd6` |
+| cleanup | Remove Ring refs, add resolution annotations | ✅ `a8529ae` |
+| consistency | Fix go2rtc key collision, `objects.mask`, zone `min_area` | ✅ `e7fb07a` |
+| schema fix | `live.stream_name` → `live.streams` (Frigate 0.17.1) | ✅ `df656cf` |
+| live view fix | Half-crop cameras point to correct crop stream keys | ✅ `c8d26ba` |
+| deploy | Frigate restarted — ONNX model loaded, no safe mode | ✅ 2026-05-21 22:31 |
+| soak Track A | Run 48–72h, then Option-B event dump | ⏳ Started 2026-05-21 |
+| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-21 |
+| iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak) |
 | iter3 | Threshold fine-tuning after 48h monitoring | ⏳ Pending |
+
+### Soak start time
+**2026-05-21 22:31 CEST** — run Option-B dump no earlier than **2026-05-23 22:31 CEST** (48h), ideally **2026-05-24 22:31 CEST** (72h).
 
 ---
 
