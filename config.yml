@@ -386,7 +386,7 @@ cameras:
 
     live:
       streams:
-        Allée côté gauche: allee_sur_le_cote_sub
+        Allée côté gauche: allee_sur_le_cote_left
 
     audio:
       enabled: true
@@ -476,7 +476,7 @@ cameras:
 
     live:
       streams:
-        Allée côté droite: allee_sur_le_cote_sub
+        Allée côté droite: allee_sur_le_cote_right
 
     audio:
       enabled: false             # Audio already captured by allee_sur_le_cote_left
@@ -791,7 +791,7 @@ cameras:
 
     live:
       streams:
-        Jardin devant gauche: jardin_devant_sub
+        Jardin devant gauche: jardin_devant_main_left
 
     audio:
       enabled: false
@@ -878,7 +878,7 @@ cameras:
 
     live:
       streams:
-        Jardin devant droite: jardin_devant_sub
+        Jardin devant droite: jardin_devant_main_right
 
     audio:
       enabled: false
@@ -1034,7 +1034,7 @@ cameras:
 
     live:
       streams:
-        Piscine toit gauche: piscine_vue_toit_sub
+        Piscine toit gauche: piscine_vue_toit_left
 
     audio:
       enabled: true
@@ -1109,7 +1109,7 @@ cameras:
 
     live:
       streams:
-        Piscine toit droite: piscine_vue_toit_sub
+        Piscine toit droite: piscine_vue_toit_right
 
     audio:
       enabled: false
