@@ -533,10 +533,11 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      # ⚠️  VERIFY: update width/height to match actual main stream resolution
-      width: 2560
-      height: 1440
-      fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
+      # Confirmed: Reolink single-lens main = 3840×2160 (4K UHD)
+      # fps capped at 5 — 4K decode at 10 fps is wasteful; Frigate model input is 320×320 anyway
+      width: 3840
+      height: 2160
+      fps: 5
 
     # ------------------------------ OBJECTS --------------------------------
     objects:
@@ -617,10 +618,10 @@ cameras:
 
     # --------------------------- DETECTION CORE -----------------------------
     detect:
-      # ⚠️  VERIFY: update width/height to match actual main stream resolution
+      # Confirmed: Reolink Doorbell POE main = 2560×1920
       width: 2560
       height: 1920
-      fps: 10                    # Raised to 10 fps – short 3-5 m range, robber crosses fast
+      fps: 10
 
     # ------------------------------ OBJECTS --------------------------------
     objects:
