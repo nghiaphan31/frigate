@@ -293,6 +293,8 @@ These fixes were required before the soak could produce valid data:
 | `stable` → `stable-tensorrt` image | `stable` ships CPU-only `onnxruntime`; `get_available_providers()` returned only `CPUExecutionProvider` → inference 146ms, CPU 100% | `bec6292` | GPU inference via `CUDAExecutionProvider`, 146ms → **11ms** (13× speedup) |
 | `shm_size: "512m"` → `"2048m"` | 11 cameras at high resolution filled `/dev/shm` to 77% (393/512 MB) → corrupted/gray frames + Frigate warning | `635c002` | `/dev/shm` = 2.0 GB, 1.7 GB used, 312 MB free, no more warning |
 | All thresholds → wide-open iter1 standard | Several cameras still had old tight params (thr=0.8, area=13000) from before iter1 | `cbbbb6b` | All cameras: `threshold=0.50`, `min_score=0.45`, `min_area=500` |
+| `shm_size: "2048m"` → `"3072m"` | `/dev/shm` at 85% (1.7GB/2.0GB) → UI rendering corruption + "no frames received" | `e5956fa` | `/dev/shm` = 3.0 GB — still insufficient |
+| `shm_size: "3072m"` → `"5120m"` + `record.motion.days: 3→1` | `/dev/shm` at 69% (2.1GB/3.0GB) after 2h and climbing; NAS at 97% full (483GB/500GB) → recording segment backlog → MSE streams dropping at 25s | `cda690e` | `/dev/shm` = 5.0 GB, **42% used (2.1GB)**, 3.0 GB headroom ✅; NAS freed to 26% |
 
 **Key technical findings:**
 - `stable` image = CPU-only onnxruntime; `stable-tensorrt` = GPU onnxruntime (required for `type: onnx` detector)
@@ -333,13 +335,15 @@ These fixes were required before the soak could produce valid data:
 | **infra fix** | **`stable` → `stable-tensorrt` image (CPU-only → GPU inference, 146ms → 11ms)** | ✅ `bec6292` 2026-05-22 ~14:00 CEST |
 | **infra fix** | **`shm_size: "512m"` → `"2048m"` (corrupted frames + shm warning fixed)** | ✅ `635c002` 2026-05-22 ~14:30 CEST |
 | **infra fix** | **All thresholds/zone-filters lowered to wide-open iter1 standard** | ✅ `cbbbb6b` |
-| soak Track A | Run 48–72h, then Option-B event dump | ⏳ **Restarted 2026-05-22 14:53 CEST** — 8/11 cameras det_fps>0, inference 11.6ms |
-| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-22 14:53 CEST |
+| **infra fix** | **`shm_size: "2048m"` → `"3072m"` (85% full → UI rendering corruption)** | ✅ `e5956fa` 2026-05-22 ~18:47 CEST |
+| **infra fix** | **`shm_size: "3072m"` → `"5120m"` + `record.motion.days: 3→1` (69% full after 2h + NAS 97% full)** | ✅ `cda690e` 2026-05-22 19:26 CEST |
+| soak Track A | Run 48–72h, then Option-B event dump | ⏳ **Restarted 2026-05-22 19:26 CEST** — inference 12.5ms, /dev/shm 42% (2.1G/5.0G) |
+| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-22 19:26 CEST |
 | iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak) |
 | iter3 | Threshold fine-tuning after 48h monitoring | ⏳ Pending |
 
 ### Soak start time
-**2026-05-22 14:53 CEST** (restarted after shm_size fix + stable-tensorrt image) — run Option-B dump no earlier than **2026-05-23 14:53 CEST** (24h min), ideally **2026-05-24 14:53 CEST** (48h recommended).
+**2026-05-22 19:26 CEST** (restarted after shm_size=5120m + motion.days=1 fix) — run Option-B dump no earlier than **2026-05-23 19:26 CEST** (24h min), ideally **2026-05-24 19:26 CEST** (48h recommended).
 
 > **Post-mortem — `detect.enabled=false` bug (12h lost):**
 > Frigate 0.17.1 defaults `detect.enabled` to `false` at the global schema level.
@@ -362,6 +366,19 @@ These fixes were required before the soak could produce valid data:
 > causes frame corruption. Fix: increase to `shm_size: "2048m"`. Required container
 > recreation (not just restart) to take effect. After fix: 2.0 GB total, 1.7 GB used,
 > 312 MB free. Committed `635c002`.
+
+> **Post-mortem — "no frames received" / gray screens / MSE streams dropping at 25s:**
+> Three compounding issues:
+> 1. `/dev/shm` at 69% (2.1GB/3.0GB) after only 2h and climbing — 3072m was insufficient.
+>    Root cause: 11 cameras × detect+record+live+motion stream types × up to 4K resolution.
+>    Calculated ceiling: ~374MB detect-only × 6 stream types = ~2.2GB + recording cache spikes.
+>    Fix: `shm_size: "5120m"`. After fix: 42% (2.1GB/5.0GB), 3.0GB headroom.
+> 2. NAS at 97% full (483GB/500GB) — `record.motion.days: 3` with 11 high-res cameras
+>    fills 500GB NAS in hours. Recording segment backlog → iowait spikes → MSE timeouts.
+>    Fix: `record.motion.days: 1`. NAS freed to 26% after manual purge of old recordings.
+> 3. `check_shm` in deploy script was reading host `/dev/shm` (16GB) not container's.
+>    Fix: use `docker exec` to read container's `/dev/shm`. Committed `c0adde4`.
+> Combined fix committed `cda690e`. Soak restarted 2026-05-22 19:26 CEST.
 
 ---
 
