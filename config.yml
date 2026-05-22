@@ -813,11 +813,10 @@ cameras:
       contour_area: 100
       threshold: 25
       delta_alpha: 0.2
-      mask:
-        - 0,0.504,0,0,0.015,0,0.999,0,0.99,0.016,0.556,0.067,0.511,0.165,0.394,0.775,0.199,0.651
-        - 0.593,0.091,0.899,0.048,0.926,0.156,0.899,0.273,0.644,0.286,0.553,0.142,0.568,0.107
-        - 0.002,0,1,0,1,0.026,0.768,0.04,0.568,0.085,0.546,0.129,0.511,0.276,0.484,0.425,0.444,0.649,0.412,0.811,0,0.556
       improve_contrast: true
+      # TEMP iter1: motion masks removed for soak period to capture all pedestrian data.
+      # Original masks covered 76.5% of frame (street + sky), blocking most detections.
+      # Will be re-evaluated and re-added in iter2 based on false-positive analysis.
 
     objects:
       track: [person]
@@ -907,11 +906,9 @@ cameras:
       contour_area: 40
       frame_alpha: 0.4
       delta_alpha: 0.5
-      mask:
-        - 0.236,0,0.235,0,0.36,0.05,0.37,0.062,0.378,0.087,0.389,0.099,0.503,0.145,0.506,0.227,0.542,0.241,0.664,0.784,1,0.556,1,0,0.236,0
-        - 0.294,0.112,0.294,0.209,0.355,0.211,0.357,0.129,0.329,0.108
-        - 0,0.473,0.05,0.442,0.097,0.469,0.116,0.528,0.114,0.591,0.1,0.619,0.079,0.651,0.046,0.666,0.01,0.677,0.001,0.665
-        - 0.002,0,0.99,0,1,0.598,0.669,0.812,0.536,0.23,0.51,0.23,0.503,0.141,0.379,0.093,0.367,0.051,0.24,0
+      # TEMP iter1: motion masks removed for soak period to capture all pedestrian data.
+      # Original masks covered 66.9% of frame (street + sky), blocking most detections.
+      # Will be re-evaluated and re-added in iter2 based on false-positive analysis.
 
     objects:
       track: [person]
