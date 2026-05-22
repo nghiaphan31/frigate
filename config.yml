@@ -823,12 +823,16 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 13000
-          max_area: 300000
-          min_ratio: 0.15
-          max_ratio: 3.0
-          threshold: 0.8
-          min_score: 0.80
+          # TEMP iter1: wide-open for 48-72h data collection on new main stream.
+          # Was: threshold=0.8, min_score=0.80, min_area=13000 (old tight params,
+          # never migrated in iter1 — caused zero detections despite motion firing).
+          # Will be tightened in iter2 after Option-B event dump analysis.
+          min_area: 500
+          max_area: 2000000
+          min_ratio: 0.05
+          max_ratio: 20.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -841,10 +845,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.8
-            min_area: 13000
-            min_ratio: 0.25
-            max_ratio: 5
+            # TEMP iter1: wide-open to match camera-level filter
+            threshold: 0.55
+            min_area: 500
+            min_ratio: 0.05
+            max_ratio: 20.0
       rodage:
         coordinates:
           1,0.034,0.998,0.28,0.65,0.297,0.575,0.191,0.469,0.858,0.416,0.821,0.539,0.136,0.582,0.092,0.793,0.046
@@ -853,10 +858,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.8
-            min_area: 13000
-            min_ratio: 0.10
-            max_ratio: 5.0
+            # TEMP iter1: wide-open to match camera-level filter
+            threshold: 0.55
+            min_area: 500
+            min_ratio: 0.05
+            max_ratio: 20.0
 
     review:
       alerts:
