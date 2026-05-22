@@ -1,8 +1,49 @@
+# =============================================================================
+# DEPLOYMENT PROCEDURE
+# =============================================================================
+# IMPORTANT: shm_size and image changes require container RECREATION (not just
+# restart). A plain `docker-compose restart` will NOT apply them.
+#
+# Standard deploy (config.yml changes only — no recreation needed):
+#   docker-compose -f docker-compose.calypso.yml restart frigate
+#
+# Full recreation deploy (image / shm_size / devices / volumes changed):
+#   Step 1 — recreate container:
+#     docker-compose -f docker-compose.calypso.yml stop frigate
+#     docker-compose -f docker-compose.calypso.yml rm -f frigate
+#     docker-compose -f docker-compose.calypso.yml up -d frigate
+#   Step 2 — fix ZMQ IPC deadlock (REQUIRED after every recreation):
+#     docker-compose -f docker-compose.calypso.yml stop frigate
+#     docker-compose -f docker-compose.calypso.yml start frigate
+#
+# WHY step 2 is required:
+#   `up -d` after `rm -f` recreates the container but leaves ZMQ IPC sockets
+#   in a broken state between the capture and detect processes → det_fps=0 on
+#   all cameras. A stop/start cycle resets the IPC correctly.
+#
+# DO NOT use `--force-recreate` flag — docker-compose v1.29.2 has a bug with
+# newer OCI images (KeyError: 'ContainerConfig'). Use stop+rm+up instead.
+#
+# Verify after deploy:
+#   curl -s http://localhost:5000/api/stats | python3 -m json.tool | grep -E 'inference_speed|det_fps'
+#   df -h /dev/shm
+# =============================================================================
+
 services:
   frigate:
+    # stable-tensorrt required for GPU inference (onnxruntime-gpu).
+    # The plain `stable` image ships CPU-only onnxruntime → 146ms inference, CPU 100%.
+    # stable-tensorrt → CUDAExecutionProvider → 11ms inference.
+    # To use TensorrtExecutionProvider instead of CUDA, set detector device: "Tensorrt"
+    # (exact string) — requires TRT engine cache build on first run (~5 min).
     image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
     network_mode: host
-    shm_size: "512m"
+    # shm_size must be large enough for all camera frame buffers.
+    # Formula: sum(width × height × 3 bytes × fps × 0.5s buffer) across all cameras.
+    # With 11 cameras at up to 4K: ~1.7 GB observed usage → 2048m gives ~300 MB headroom.
+    # Too small → corrupted/gray frames + Frigate warning "shm allocation should be increased".
+    # Changing this value requires full recreation (stop + rm + up + stop + start).
+    shm_size: "2048m"
     environment:
       TZ: Europe/Paris
       NVIDIA_VISIBLE_DEVICES: all

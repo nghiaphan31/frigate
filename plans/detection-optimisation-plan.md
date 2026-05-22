@@ -2,8 +2,9 @@
 
 > **Status:** 🟢 Deployed — 48–72h soak running (Track A + Track B active)
 > **Branch:** `detection-optimisation`
-> **Last updated:** 2026-05-21
+> **Last updated:** 2026-05-22
 > **Config file:** [`config.yml`](../config.yml)
+> **Docker compose:** [`docker-compose.calypso.yml`](../docker-compose.calypso.yml)
 
 ---
 
@@ -62,7 +63,7 @@ min_area: 500        # catch everything
 max_area: 2000000    # catch everything
 min_ratio: 0.05      # catch everything
 max_ratio: 20.0      # catch everything
-threshold: 0.55-0.60 # reasonable confidence floor
+threshold: 0.50      # wide-open (lowered from 0.55-0.60 in cbbbb6b)
 min_score: 0.45
 ```
 
@@ -206,6 +207,25 @@ max_ratio = ceil2dp(max_observed_ratio  × 1.30)
 
 ---
 
+## Infrastructure Fixes (2026-05-22 session)
+
+These fixes were required before the soak could produce valid data:
+
+| Fix | Root cause | Commit | Result |
+|---|---|---|---|
+| `stable` → `stable-tensorrt` image | `stable` ships CPU-only `onnxruntime`; `get_available_providers()` returned only `CPUExecutionProvider` → inference 146ms, CPU 100% | `bec6292` | GPU inference via `CUDAExecutionProvider`, 146ms → **11ms** (13× speedup) |
+| `shm_size: "512m"` → `"2048m"` | 11 cameras at high resolution filled `/dev/shm` to 77% (393/512 MB) → corrupted/gray frames + Frigate warning | `635c002` | `/dev/shm` = 2.0 GB, 1.7 GB used, 312 MB free, no more warning |
+| All thresholds → wide-open iter1 standard | Several cameras still had old tight params (thr=0.8, area=13000) from before iter1 | `cbbbb6b` | All cameras: `threshold=0.50`, `min_score=0.45`, `min_area=500` |
+
+**Key technical findings:**
+- `stable` image = CPU-only onnxruntime; `stable-tensorrt` = GPU onnxruntime (required for `type: onnx` detector)
+- `device: "0"` → `CUDAExecutionProvider` (11ms); `device: "Tensorrt"` → `TensorrtExecutionProvider` (would require engine cache build)
+- `shm_size` requires container recreation (not just restart) to take effect
+- `docker-compose up --force-recreate` breaks ZMQ IPC between capture/detect processes → always follow with `stop` + `start`
+- Deployment procedure: `stop` + `rm -f` + `up -d` → then `stop` + `start`
+
+---
+
 ## Execution Status
 
 | Step | Action | Status |
@@ -223,13 +243,16 @@ max_ratio = ceil2dp(max_observed_ratio  × 1.30)
 | **bug fix** | **`jardin_devant_left` iter1 migration missed — old tight params (thr=0.8, area=13000)** | ✅ `da11cc6` |
 | **bug fix** | **`jardin_devant_right` same missed iter1 migration** | ✅ `9f8abfc` |
 | **bug fix** | **Motion masks on `jardin_devant_left+right` covered 67–77% of frame — removed for soak** | ✅ `ce9fe20` |
-| soak Track A | Run 48–72h, then Option-B event dump | ⏳ Started 2026-05-22 08:50 CEST — **10/11 cameras active** |
-| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-22 08:50 CEST |
+| **infra fix** | **`stable` → `stable-tensorrt` image (CPU-only → GPU inference, 146ms → 11ms)** | ✅ `bec6292` 2026-05-22 ~14:00 CEST |
+| **infra fix** | **`shm_size: "512m"` → `"2048m"` (corrupted frames + shm warning fixed)** | ✅ `635c002` 2026-05-22 ~14:30 CEST |
+| **infra fix** | **All thresholds/zone-filters lowered to wide-open iter1 standard** | ✅ `cbbbb6b` |
+| soak Track A | Run 48–72h, then Option-B event dump | ⏳ **Restarted 2026-05-22 14:53 CEST** — 8/11 cameras det_fps>0, inference 11.6ms |
+| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-22 14:53 CEST |
 | iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak) |
 | iter3 | Threshold fine-tuning after 48h monitoring | ⏳ Pending |
 
 ### Soak start time
-**2026-05-22 08:50 CEST** (restarted after `detect.enabled` fix) — run Option-B dump no earlier than **2026-05-24 08:50 CEST** (48h), ideally **2026-05-25 08:50 CEST** (72h).
+**2026-05-22 14:53 CEST** (restarted after shm_size fix + stable-tensorrt image) — run Option-B dump no earlier than **2026-05-23 14:53 CEST** (24h min), ideally **2026-05-24 14:53 CEST** (48h recommended).
 
 > **Post-mortem — `detect.enabled=false` bug (12h lost):**
 > Frigate 0.17.1 defaults `detect.enabled` to `false` at the global schema level.
@@ -237,6 +260,21 @@ max_ratio = ceil2dp(max_observed_ratio  × 1.30)
 > `enabled=false`. Motion was firing (6000+ counts/hour confirmed), but the
 > ML detector was never woken up. Fix: add `detect: enabled: true` as a
 > top-level section. Committed `f15b9af`.
+
+> **Post-mortem — CPU 100% / Onnx1 very slow (146ms):**
+> The `stable` Docker image ships a CPU-only build of `onnxruntime`. With 11 cameras
+> at high resolution, the CPU detector was saturated (PID consuming 1367% CPU).
+> `ort.get_available_providers()` returned only `['AzureExecutionProvider', 'CPUExecutionProvider']`.
+> Fix: switch to `stable-tensorrt` image which includes `onnxruntime-gpu`.
+> After fix: `['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']`,
+> inference 146ms → 11ms. Committed `bec6292`.
+
+> **Post-mortem — corrupted/gray frames + `/dev/shm` warning:**
+> `shm_size: "512m"` was 77% full (393/512 MB) with 11 cameras at high resolution
+> (up to 4K). Frigate uses `/dev/shm` for inter-process frame buffers; overflow
+> causes frame corruption. Fix: increase to `shm_size: "2048m"`. Required container
+> recreation (not just restart) to take effect. After fix: 2.0 GB total, 1.7 GB used,
+> 312 MB free. Committed `635c002`.
 
 ---
 
