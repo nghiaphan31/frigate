@@ -110,7 +110,10 @@ record:
   continuous:
     days: 0                    # No continuous recording — motion-triggered only
   motion:
-    days: 3                    # Keep motion-triggered clips for 3 days
+    days: 1                    # Keep motion-triggered clips for 1 day
+                               # Reduced from 3 days: 11 cameras at high resolution
+                               # (up to 4K) fills disk in <1h at 3-day retention.
+                               # Increase back to 3 days once storage is sized correctly.
 
 # ---------------------------------------------------------------------------
 # 1.4 SNAPSHOTS – STILL-IMAGE SETTINGS

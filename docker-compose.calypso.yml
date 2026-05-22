@@ -39,11 +39,16 @@ services:
     image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
     network_mode: host
     # shm_size must be large enough for all camera frame buffers.
-    # Formula: sum(width × height × 3 bytes × fps × 0.5s buffer) across all cameras.
-    # With 11 cameras at up to 4K: ~1.7 GB observed usage at 85% of 2048m → increased to 3072m.
-    # Too small → corrupted/gray frames + Frigate warning "shm allocation should be increased".
+    # Formula: sum(width × height × 3 bytes × fps × 0.5s buffer) across all cameras,
+    # multiplied by ~6 for detect + record + live + motion streams per camera.
+    # Calculated for this setup (11 cameras, up to 4K):
+    #   detect streams only: ~374 MB
+    #   × 6 (all stream types): ~2.2 GB
+    #   + headroom for recording cache spikes: → 5120m
+    # History: 512m (corrupted frames) → 2048m (85% full) → 3072m (69% full after 2h) → 5120m
+    # Too small → corrupted/gray frames + "no frames received" in UI.
     # Changing this value requires full recreation (stop + rm + up + stop + start).
-    shm_size: "3072m"
+    shm_size: "5120m"
     environment:
       TZ: Europe/Paris
       NVIDIA_VISIBLE_DEVICES: all
