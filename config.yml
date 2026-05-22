@@ -404,8 +404,9 @@ cameras:
           roles: [record, audio]
 
     live:
-      streams:
-        Allée côté gauche: allee_sur_le_cote_left
+      streams: {}  # Live view disabled — detection/recording/snapshots still active
+                   # Half-crop cameras cause MSE rendering issues in the UI; the
+                   # full panoramic (allee_sur_le_cote) is the primary live view.
 
     audio:
       enabled: true
@@ -494,8 +495,9 @@ cameras:
           roles: [record]
 
     live:
-      streams:
-        Allée côté droite: allee_sur_le_cote_right
+      streams: {}  # Live view disabled — detection/recording/snapshots still active
+                   # Half-crop cameras cause MSE rendering issues in the UI; the
+                   # full panoramic (allee_sur_le_cote) is the primary live view.
 
     audio:
       enabled: false             # Audio already captured by allee_sur_le_cote_left
@@ -818,8 +820,9 @@ cameras:
           roles: [record]
 
     live:
-      streams:
-        Jardin devant gauche: jardin_devant_main_left
+      streams: {}  # Live view disabled — detection/recording/snapshots still active
+                   # Half-crop cameras cause MSE rendering issues in the UI; the
+                   # full panoramic (jardin_devant) is the primary live view.
 
     audio:
       enabled: false
@@ -911,8 +914,9 @@ cameras:
           roles: [record]
 
     live:
-      streams:
-        Jardin devant droite: jardin_devant_main_right
+      streams: {}  # Live view disabled — detection/recording/snapshots still active
+                   # Half-crop cameras cause MSE rendering issues in the UI; the
+                   # full panoramic (jardin_devant) is the primary live view.
 
     audio:
       enabled: false
@@ -1078,8 +1082,9 @@ cameras:
           roles: [record, audio]
 
     live:
-      streams:
-        Piscine toit gauche: piscine_vue_toit_left
+      streams: {}  # Live view disabled — detection/recording/snapshots still active
+                   # Half-crop cameras cause MSE rendering issues in the UI; the
+                   # full panoramic (piscine_vue_toit) is the primary live view.
 
     audio:
       enabled: true
@@ -1156,8 +1161,9 @@ cameras:
           roles: [record]
 
     live:
-      streams:
-        Piscine toit droite: piscine_vue_toit_right
+      streams: {}  # Live view disabled — detection/recording/snapshots still active
+                   # Half-crop cameras cause MSE rendering issues in the UI; the
+                   # full panoramic (piscine_vue_toit) is the primary live view.
 
     audio:
       enabled: false
