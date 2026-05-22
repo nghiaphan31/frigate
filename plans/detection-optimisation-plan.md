@@ -218,14 +218,22 @@ max_ratio = ceil2dp(max_observed_ratio  × 1.30)
 | consistency | Fix go2rtc key collision, `objects.mask`, zone `min_area` | ✅ `e7fb07a` |
 | schema fix | `live.stream_name` → `live.streams` (Frigate 0.17.1) | ✅ `df656cf` |
 | live view fix | Half-crop cameras point to correct crop stream keys | ✅ `c8d26ba` |
-| deploy | Frigate restarted — ONNX model loaded, no safe mode | ✅ 2026-05-21 22:31 |
-| soak Track A | Run 48–72h, then Option-B event dump | ⏳ Started 2026-05-21 |
-| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-21 |
+| deploy | Frigate restarted — ONNX model loaded, no safe mode | ✅ 2026-05-21 22:31 CEST |
+| **bug fix** | **`detect.enabled` was `false` globally — detection silently off for 12h** | ✅ `f15b9af` 2026-05-22 08:50 CEST |
+| soak Track A | Run 48–72h, then Option-B event dump | ⏳ Started 2026-05-22 08:50 CEST |
+| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-22 08:50 CEST |
 | iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak) |
 | iter3 | Threshold fine-tuning after 48h monitoring | ⏳ Pending |
 
 ### Soak start time
-**2026-05-21 22:31 CEST** — run Option-B dump no earlier than **2026-05-23 22:31 CEST** (48h), ideally **2026-05-24 22:31 CEST** (72h).
+**2026-05-22 08:50 CEST** (restarted after `detect.enabled` fix) — run Option-B dump no earlier than **2026-05-24 08:50 CEST** (48h), ideally **2026-05-25 08:50 CEST** (72h).
+
+> **Post-mortem — `detect.enabled=false` bug (12h lost):**
+> Frigate 0.17.1 defaults `detect.enabled` to `false` at the global schema level.
+> The config had no top-level `detect:` block, so all 11 cameras inherited
+> `enabled=false`. Motion was firing (6000+ counts/hour confirmed), but the
+> ML detector was never woken up. Fix: add `detect: enabled: true` as a
+> top-level section. Committed `f15b9af`.
 
 ---
 
