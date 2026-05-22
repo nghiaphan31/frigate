@@ -220,7 +220,10 @@ max_ratio = ceil2dp(max_observed_ratio  × 1.30)
 | live view fix | Half-crop cameras point to correct crop stream keys | ✅ `c8d26ba` |
 | deploy | Frigate restarted — ONNX model loaded, no safe mode | ✅ 2026-05-21 22:31 CEST |
 | **bug fix** | **`detect.enabled` was `false` globally — detection silently off for 12h** | ✅ `f15b9af` 2026-05-22 08:50 CEST |
-| soak Track A | Run 48–72h, then Option-B event dump | ⏳ Started 2026-05-22 08:50 CEST |
+| **bug fix** | **`jardin_devant_left` iter1 migration missed — old tight params (thr=0.8, area=13000)** | ✅ `da11cc6` |
+| **bug fix** | **`jardin_devant_right` same missed iter1 migration** | ✅ `9f8abfc` |
+| **bug fix** | **Motion masks on `jardin_devant_left+right` covered 67–77% of frame — removed for soak** | ✅ `ce9fe20` |
+| soak Track A | Run 48–72h, then Option-B event dump | ⏳ Started 2026-05-22 08:50 CEST — **10/11 cameras active** |
 | soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-22 08:50 CEST |
 | iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak) |
 | iter3 | Threshold fine-tuning after 48h monitoring | ⏳ Pending |
