@@ -4,7 +4,7 @@
 # =============================================================================
 # Usage:
 #   ./deploy-frigate.sh            # auto-detect: restart or full recreate
-#   ./deploy-frigate.sh restart    # config-only change (no recreation)
+#   ./deploy-frigate.sh restart    # config-only change (stop+start, NOT docker restart)
 #   ./deploy-frigate.sh recreate   # force full container recreation
 #   ./deploy-frigate.sh status     # show current health (inference speed, det_fps, shm)
 #   ./deploy-frigate.sh dump       # run Option-B event dump (Track A soak output)
@@ -12,11 +12,13 @@
 # Why this script exists — issues encountered 2026-05-22:
 #   1. `docker-compose up --force-recreate` fails with KeyError: 'ContainerConfig'
 #      on docker-compose v1.29.2 with newer OCI images. Use stop+rm+up instead.
-#   2. After any container recreation, ZMQ IPC sockets between capture and detect
-#      processes are left in a broken state → det_fps=0 on all cameras.
-#      Fix: always follow recreation with a stop+start cycle.
-#   3. shm_size changes require recreation (not just restart) to take effect.
-#   4. The plain `stable` image ships CPU-only onnxruntime → 146ms inference.
+#   2. `docker-compose restart` leaves ZMQ IPC sockets between capture and detect
+#      processes in a broken state → det_fps=0 on ALL cameras (even config-only changes).
+#      Fix: ALWAYS use stop+start, never `docker-compose restart`.
+#   3. After container recreation (stop+rm+up), a second stop+start cycle is also
+#      required to clear the ZMQ IPC deadlock introduced by the recreation itself.
+#   4. shm_size changes require recreation (not just restart) to take effect.
+#   5. The plain `stable` image ships CPU-only onnxruntime → 146ms inference.
 #      Always use `stable-tensorrt` for GPU inference (11ms).
 # =============================================================================
 
@@ -114,11 +116,15 @@ cmd_status() {
 }
 
 cmd_restart() {
-    log "=== Config-only restart (no recreation) ==="
-    log "Restarting ${SERVICE}..."
-    dc restart "$SERVICE"
+    log "=== Config-only restart (stop+start — never docker-compose restart) ==="
+    # IMPORTANT: `docker-compose restart` leaves ZMQ IPC sockets broken → det_fps=0.
+    # Always use stop+start instead, even for config-only changes.
+    log "Stopping ${SERVICE}..."
+    dc stop "$SERVICE"
+    log "Starting ${SERVICE}..."
+    dc start "$SERVICE"
     wait_healthy
-    sleep 10  # allow detectors to initialise
+    sleep 15  # allow detectors to initialise and first frames to arrive
     log "Post-restart health:"
     check_inference
     check_det_fps
