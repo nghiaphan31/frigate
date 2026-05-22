@@ -30,7 +30,7 @@ FRIGATE_API="http://localhost:5000"
 
 # Soak epoch — update this after each container recreation
 # Used by the `dump` command to filter events since last soak start
-SOAK_EPOCH=1748001480  # 2026-05-22 14:53 CEST
+SOAK_EPOCH=1779470841  # 2026-05-22 19:26 CEST (shm_size=5120m + motion.days=1 recreation)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,8 +96,10 @@ for name, v in det.items():
 
 check_shm() {
     local shm_info
-    shm_info=$(df -h /dev/shm 2>/dev/null | tail -1 | awk '{print "size="$2" used="$3" avail="$4" use%="$5}') \
-        || shm_info="(could not read)"
+    # Read from inside the container — the host /dev/shm is a different tmpfs
+    shm_info=$(docker exec "frigate_${SERVICE}_1" df -h /dev/shm 2>/dev/null \
+        | tail -1 | awk '{print "size="$2" used="$3" avail="$4" use%="$5}') \
+        || shm_info="(could not read — container may not be running)"
     echo "  /dev/shm: $shm_info"
 }
 
