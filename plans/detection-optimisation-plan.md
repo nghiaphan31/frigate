@@ -164,9 +164,85 @@ max_ratio = ceil2dp(max_observed_ratio  × 1.30)
 
 ---
 
+## Track A — Preliminary Dump (4h, 2026-05-22 14:53→18:52 CEST)
+
+> ⚠️ **Too early for iter2** — only 4h of data. Full 48h dump needed (earliest 2026-05-24 14:53 CEST).
+> Recorded here for reference and sanity-check only.
+
+### Raw dump output
+
+```
+CAMERA: allee_sur_le_cote
+  events: 12  |  score min/max: 0.42/0.71  |  area min/max: 312/4821  |  ratio min/max: 0.38/0.52
+CAMERA: allee_sur_le_cote_right
+  events: 8   |  score min/max: 0.44/0.68  |  area min/max: 287/3102  |  ratio min/max: 0.40/0.55
+CAMERA: piscine_vue_toit
+  events: 3   |  score min/max: 0.46/0.59  |  area min/max: 421/1823  |  ratio min/max: 0.35/0.48
+CAMERA: piscine_vue_toit_left
+  events: 5   |  score min/max: 0.45/0.63  |  area min/max: 398/2104  |  ratio min/max: 0.36/0.50
+CAMERA: piscine_vue_toit_right
+  events: 4   |  score min/max: 0.46/0.61  |  area min/max: 412/1987  |  ratio min/max: 0.37/0.49
+CAMERA: jardin_devant
+  events: 21  |  score min/max: 0.45/0.78  |  area min/max: 298/8432  |  ratio min/max: 0.33/0.58
+CAMERA: jardin_devant_left
+  events: 17  |  score min/max: 0.46/0.82  |  area min/max: 315/7621  |  ratio min/max: 0.34/0.57
+CAMERA: jardin_devant_right
+  events: 14  |  score min/max: 0.47/0.79  |  area min/max: 302/6843  |  ratio min/max: 0.35/0.56
+CAMERA: vue_entree
+  events: 31  |  score min/max: 0.52/0.91  |  area min/max: 1823/42103  |  ratio min/max: 0.38/0.62
+CAMERA: jardin_arriere
+  events: 9   |  score min/max: 0.48/0.74  |  area min/max: 892/12043  |  ratio min/max: 0.36/0.54
+```
+
+### Preliminary analysis
+
+| Camera | Events | Score range | Area range | Notes |
+|--------|--------|-------------|------------|-------|
+| `allee_sur_le_cote` (sub) | 12 | 0.42–0.71 | 312–4821 | min_area=300 ✅ catching small detections |
+| `allee_sur_le_cote_right` (main) | 8 | 0.44–0.68 | 287–3102 | area=287 < min_area=300 → review snapshot |
+| `piscine_vue_toit` (sub) | 3 | 0.46–0.59 | 421–1823 | Low count — quiet area or too few hours |
+| `piscine_vue_toit_left` (main) | 5 | 0.45–0.63 | 398–2104 | |
+| `piscine_vue_toit_right` (main) | 4 | 0.46–0.61 | 412–1987 | |
+| `jardin_devant` (sub) | 21 | 0.45–0.78 | 298–8432 | Active street, min_area=300 ✅ |
+| `jardin_devant_left` (main) | 17 | 0.46–0.82 | 315–7621 | |
+| `jardin_devant_right` (main) | 14 | 0.47–0.79 | 302–6843 | |
+| `vue_entree` | 31 | 0.52–0.91 | 1823–42103 | Close-range, high confidence ✅ |
+| `jardin_arriere` | 9 | 0.48–0.74 | 892–12043 | Mid-range |
+
+**Good signals:**
+- `allee_sur_le_cote` min area 312px² confirms geometry-based min_area=300 is correctly catching far persons
+- `jardin_devant` min area 298px² confirms street pedestrians at max range are being caught
+- `vue_entree` scores 0.52–0.91 — could tighten threshold to 0.55 in iter2
+- No obvious false-positive clusters (score distribution looks clean)
+
+**Watch points:**
+- `allee_sur_le_cote_right` area=287px² is below min_area=300 — this event was caught because the global
+  default allows it. Geometry predicts ~3894px² for a person at 17m on main-stream (2048×1152), so 287px²
+  implies either a person at ~50m+ or a false positive. **Review the snapshot.**
+- `piscine_vue_toit` only 3 events in 4h — too sparse; wait for 48h data before setting tight params
+
+### Preliminary iter2 targets (DO NOT APPLY — wait for 48h dump)
+
+Applying the derivation formulas `min_area = floor(min × 0.70)`, `max_area = ceil(max × 1.50)`:
+
+| Camera | Obs min area | Obs max area | Prelim min_area | Prelim max_area | Prelim threshold |
+|--------|-------------|-------------|----------------|----------------|-----------------|
+| `allee_sur_le_cote` (sub) | 312 | 4821 | 218 | 7232 | 0.45 |
+| `allee_sur_le_cote_right` (main) | 287 | 3102 | 201 | 4653 | 0.45 |
+| `piscine_vue_toit` (sub) | 421 | 1823 | 295 | 2735 | 0.45 (too few events) |
+| `piscine_vue_toit_left` (main) | 398 | 2104 | 279 | 3156 | 0.45 |
+| `piscine_vue_toit_right` (main) | 412 | 1987 | 288 | 2981 | 0.45 |
+| `jardin_devant` (sub) | 298 | 8432 | 209 | 12648 | 0.45 |
+| `jardin_devant_left` (main) | 315 | 7621 | 221 | 11432 | 0.45 |
+| `jardin_devant_right` (main) | 302 | 6843 | 211 | 10265 | 0.45 |
+| `vue_entree` | 1823 | 42103 | 1276 | 63155 | 0.55 |
+| `jardin_arriere` | 892 | 12043 | 624 | 18065 | 0.50 |
+
+---
+
 ## Iteration 2 — Tight Parameters (pending Track A dump)
 
-After receiving the Option-B event dump, I will produce a YAML diff with:
+After receiving the **full 48h Option-B event dump**, I will produce a YAML diff with:
 - Tight `min_area`, `max_area`, `min_ratio`, `max_ratio` per camera
 - Updated `model: path: plus://<id>` if Track B training is complete
 - Adjusted `threshold` / `min_score` based on observed score distribution
