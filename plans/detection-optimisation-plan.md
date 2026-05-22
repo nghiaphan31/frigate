@@ -5,6 +5,7 @@
 > **Last updated:** 2026-05-22
 > **Config file:** [`config.yml`](../config.yml)
 > **Docker compose:** [`docker-compose.calypso.yml`](../docker-compose.calypso.yml)
+> **Deploy script:** [`deploy-frigate.sh`](../deploy-frigate.sh)
 
 ---
 
@@ -223,6 +224,16 @@ These fixes were required before the soak could produce valid data:
 - `shm_size` requires container recreation (not just restart) to take effect
 - `docker-compose up --force-recreate` breaks ZMQ IPC between capture/detect processes → always follow with `stop` + `start`
 - Deployment procedure: `stop` + `rm -f` + `up -d` → then `stop` + `start`
+
+**Use [`deploy-frigate.sh`](../deploy-frigate.sh) for all future deployments:**
+
+```bash
+./deploy-frigate.sh            # auto-detect: restart or full recreate
+./deploy-frigate.sh restart    # config.yml change only
+./deploy-frigate.sh recreate   # image / shm_size / devices changed
+./deploy-frigate.sh status     # inference speed + det_fps + /dev/shm
+./deploy-frigate.sh dump       # Option-B event dump (Track A soak output)
+```
 
 ---
 
