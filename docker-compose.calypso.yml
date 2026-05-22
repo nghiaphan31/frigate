@@ -40,10 +40,10 @@ services:
     network_mode: host
     # shm_size must be large enough for all camera frame buffers.
     # Formula: sum(width × height × 3 bytes × fps × 0.5s buffer) across all cameras.
-    # With 11 cameras at up to 4K: ~1.7 GB observed usage → 2048m gives ~300 MB headroom.
+    # With 11 cameras at up to 4K: ~1.7 GB observed usage at 85% of 2048m → increased to 3072m.
     # Too small → corrupted/gray frames + Frigate warning "shm allocation should be increased".
     # Changing this value requires full recreation (stop + rm + up + stop + start).
-    shm_size: "2048m"
+    shm_size: "3072m"
     environment:
       TZ: Europe/Paris
       NVIDIA_VISIBLE_DEVICES: all
@@ -56,7 +56,7 @@ services:
       - type: tmpfs
         target: /tmp/cache
         tmpfs:
-          size: 1073741824  # 1GB in bytes
+          size: 2147483648  # 2GB in bytes (increased from 1GB — iowait 38% indicated pressure)
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl
