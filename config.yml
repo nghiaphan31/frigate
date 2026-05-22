@@ -140,7 +140,13 @@ objects:
       max_area: 100000         # Discard oversized blobs (e.g. frozen/corrupt frames)
 
 # ---------------------------------------------------------------------------
-# 1.6 DETECTORS – RTX 5060 Ti 16 GB via ONNX Runtime + TensorRT
+# 1.6 DETECT – GLOBAL ENABLE (required; Frigate 0.17.1 defaults to false)
+# ---------------------------------------------------------------------------
+detect:
+  enabled: true                # Must be explicitly true — Frigate default is false
+
+# ---------------------------------------------------------------------------
+# 1.7 DETECTORS – RTX 5060 Ti 16 GB via ONNX Runtime + TensorRT
 # ---------------------------------------------------------------------------
 detectors:
   onnx1:
