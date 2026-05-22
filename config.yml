@@ -134,9 +134,13 @@ objects:
     - person
   filters:
     person:
+      # TEMP iter1: wide-open global defaults for 48-72h soak data collection.
+      # Cameras that don't override these (allee_sur_le_cote, jardin_devant,
+      # piscine_vue_toit sub-stream panoramics) inherit these values.
+      # Will be tightened per-camera in iter2 after event dump analysis.
       min_area: 300            # Ignore tiny detections (insects, noise)
-      min_score: 0.72          # Minimum per-frame confidence to consider
-      threshold: 0.72          # Sustained confidence required to trigger event
+      min_score: 0.45          # TEMP iter1: was 0.72 — lowered to catch borderline detections
+      threshold: 0.50          # TEMP iter1: was 0.72 — lowered for exhaustive soak coverage
       max_area: 100000         # Discard oversized blobs (e.g. frozen/corrupt frames)
 
 # ---------------------------------------------------------------------------
@@ -327,11 +331,14 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 4000         # Far-end person ≈ 50×80 = 4000 px²
+          # TEMP iter1: wide-open for soak. min_area lowered from 4000 to 500
+          # to catch distant pedestrians on the 1536×432 sub-stream.
+          min_area: 500
           max_area: 40000        # Close person ≈ 80×200 = 16000 px² (iter0-fix: was 12000)
-          min_ratio: 0.20        # Standing person: width/height ≈ 0.25–0.45
-          max_ratio: 3.5         # Reject extreme horizontal blobs (poles, artefacts)
-          threshold: 0.65
+          min_ratio: 0.05        # TEMP iter1: wide-open
+          max_ratio: 20.0        # TEMP iter1: wide-open
+          threshold: 0.50        # TEMP iter1: was 0.65
+          min_score: 0.45        # TEMP iter1: inherits global 0.45
 
     snapshots:
       enabled: true
@@ -346,10 +353,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.55
-            min_area: 4000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50   # TEMP iter1: was 0.55
+            min_area: 500     # TEMP iter1: was 4000
+            min_ratio: 0.05
+            max_ratio: 20.0
 
       rodage:
         # Fence line — alert only after 10s loitering
@@ -359,10 +366,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.62
-            min_area: 4000
-            min_ratio: 0.20
-            max_ratio: 3.8
+            threshold: 0.50   # TEMP iter1: was 0.62
+            min_area: 500     # TEMP iter1: was 4000
+            min_ratio: 0.05
+            max_ratio: 20.0
 
     review:
       alerts:
@@ -420,7 +427,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.60
+          threshold: 0.50          # TEMP iter1: was 0.60
           min_score: 0.45
 
     snapshots:
@@ -435,10 +442,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.55
-            min_area: 1000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: was 1000
+            min_ratio: 0.05          # TEMP iter1: was 0.15
+            max_ratio: 20.0          # TEMP iter1: was 4.0
       rodage:
         coordinates: 0.231,0.382,0.198,0.348,0.111,0.635,0.151,0.665
         loitering_time: 10
@@ -446,10 +453,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.62
-            min_area: 2000
-            min_ratio: 0.20
-            max_ratio: 3.8
+            threshold: 0.50          # TEMP iter1: was 0.62
+            min_area: 500            # TEMP iter1: was 2000
+            min_ratio: 0.05          # TEMP iter1: was 0.20
+            max_ratio: 20.0          # TEMP iter1: was 3.8
 
     review:
       alerts:
@@ -510,7 +517,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.60
+          threshold: 0.50          # TEMP iter1: was 0.60
           min_score: 0.45
 
     snapshots:
@@ -525,10 +532,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.55
-            min_area: 1000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: was 1000
+            min_ratio: 0.05          # TEMP iter1: was 0.15
+            max_ratio: 20.0          # TEMP iter1: was 4.0
 
     review:
       alerts:
@@ -588,7 +595,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.55
+          threshold: 0.50          # TEMP iter1: was 0.55
           min_score: 0.45
 
     snapshots:
@@ -614,10 +621,10 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.55
-            min_area: 1000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: was 1000
+            min_ratio: 0.05          # TEMP iter1: was 0.15
+            max_ratio: 20.0          # TEMP iter1: was 4.0
 
     # ----------------------------- REVIEW RULES -----------------------------
     review:
@@ -666,7 +673,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.60
+          threshold: 0.50          # TEMP iter1: was 0.60
           min_score: 0.45
 
     snapshots:
@@ -687,10 +694,10 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.55
-            min_area: 3000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: was 3000
+            min_ratio: 0.05          # TEMP iter1: was 0.15
+            max_ratio: 20.0          # TEMP iter1: was 4.0
 
     review:
       alerts:
@@ -733,11 +740,14 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 2500
+          # TEMP iter1: wide-open for soak. min_area lowered from 2500 to 500
+          # to catch distant pedestrians on the 1536×432 sub-stream.
+          min_area: 500
           max_area: 200000
-          min_ratio: 0.20
-          max_ratio: 3.5
-          threshold: 0.65
+          min_ratio: 0.05        # TEMP iter1: wide-open
+          max_ratio: 20.0        # TEMP iter1: wide-open
+          threshold: 0.50        # TEMP iter1: was 0.65
+          min_score: 0.45        # TEMP iter1: inherits global 0.45
 
     snapshots:
       enabled: true
@@ -751,10 +761,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.55
-            min_area: 1000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: was 1000
+            min_ratio: 0.05          # TEMP iter1: was 0.15
+            max_ratio: 20.0          # TEMP iter1: was 4.0
       rodage:
         coordinates:
           0.303,0,0.346,0,0.433,0,0.528,0,0.602,0,0.635,0,0.666,0.026,0.702,0.093,0.73,0.124,0.748,0.131,0.758,0.236,0.752,0.273,0.744,0.297,0.679,0.243,0.658,0.226,0.64,0.291,0.568,0.254,0.499,0.229,0.438,0.229,0.316,0.231,0.282,0.227,0.233,0.835,0.209,0.809,0.259,0.214,0.272,0.129
@@ -763,10 +773,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.62
-            min_area: 2000
-            min_ratio: 0.20
-            max_ratio: 3.8
+            threshold: 0.50          # TEMP iter1: was 0.62
+            min_area: 500            # TEMP iter1: was 2000
+            min_ratio: 0.05          # TEMP iter1: was 0.20
+            max_ratio: 20.0          # TEMP iter1: was 3.8
 
     review:
       alerts:
@@ -830,7 +840,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.55
+          threshold: 0.50          # TEMP iter1: was 0.55
           min_score: 0.45
 
     snapshots:
@@ -845,7 +855,7 @@ cameras:
         filters:
           person:
             # TEMP iter1: wide-open to match camera-level filter
-            threshold: 0.55
+            threshold: 0.50          # TEMP iter1: was 0.55
             min_area: 500
             min_ratio: 0.05
             max_ratio: 20.0
@@ -858,7 +868,7 @@ cameras:
         filters:
           person:
             # TEMP iter1: wide-open to match camera-level filter
-            threshold: 0.55
+            threshold: 0.50          # TEMP iter1: was 0.55
             min_area: 500
             min_ratio: 0.05
             max_ratio: 20.0
@@ -922,7 +932,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.55
+          threshold: 0.50          # TEMP iter1: was 0.55
           min_score: 0.45
 
     snapshots:
@@ -938,7 +948,7 @@ cameras:
         filters:
           person:
             # TEMP iter1: wide-open to match camera-level filter
-            threshold: 0.55
+            threshold: 0.50          # TEMP iter1: was 0.55
             min_area: 500
             min_ratio: 0.05
             max_ratio: 20.0
@@ -951,7 +961,7 @@ cameras:
         filters:
           person:
             # TEMP iter1: wide-open to match camera-level filter
-            threshold: 0.55
+            threshold: 0.50          # TEMP iter1: was 0.55
             min_area: 500
             min_ratio: 0.05
             max_ratio: 20.0
@@ -998,11 +1008,13 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 2000
+          # TEMP iter1: wide-open for soak. min_area lowered from 2000 to 500.
+          min_area: 500
           max_area: 200000
-          min_ratio: 0.20
-          max_ratio: 3.8
-          threshold: 0.60
+          min_ratio: 0.05        # TEMP iter1: wide-open
+          max_ratio: 20.0        # TEMP iter1: wide-open
+          threshold: 0.50        # TEMP iter1: was 0.60
+          min_score: 0.45        # TEMP iter1: inherits global 0.45
 
     snapshots:
       enabled: true
@@ -1016,10 +1028,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.55
-            min_area: 1000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: was 1000
+            min_ratio: 0.05          # TEMP iter1: was 0.15
+            max_ratio: 20.0          # TEMP iter1: was 4.0
 
     review:
       alerts:
@@ -1070,7 +1082,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.55
+          threshold: 0.50          # TEMP iter1: was 0.55
           min_score: 0.45
 
     snapshots:
@@ -1085,10 +1097,10 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.55
-            min_area: 3000
-            min_ratio: 0.15
-            max_ratio: 4.0
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: was 3000
+            min_ratio: 0.05          # TEMP iter1: was 0.15
+            max_ratio: 20.0          # TEMP iter1: was 4.0
 
     review:
       alerts:
@@ -1146,7 +1158,7 @@ cameras:
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.60
+          threshold: 0.50          # TEMP iter1: was 0.60
           min_score: 0.45
 
     snapshots:
@@ -1161,8 +1173,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.55
-            min_area: 500        # TEMP iter1: wide-open, matches camera-level filter
+            threshold: 0.50          # TEMP iter1: was 0.55
+            min_area: 500            # TEMP iter1: wide-open, matches camera-level filter
             min_ratio: 0.05
             max_ratio: 20.0
 
