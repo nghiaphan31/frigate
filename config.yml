@@ -562,6 +562,7 @@ cameras:
   # ==========================================================================
   # CAMERA: JARDIN_ARRIERE
   # Hardware:  Reolink RLC-810A single-lens — 192.168.50.207
+  # Height:    2.2m above ground
   # Position:  North-facing, covers rear garden, play area, and shed
   # Streams:
   #   detect  → main 3840×2160  (4K UHD)
@@ -648,6 +649,7 @@ cameras:
 
   # ========================================================================
   # CAMERA: VUE_ENTREE — Reolink Doorbell POE
+  # Height:    1.8m above ground
   # Resolution:
   #   main  = 2560×1920 (4:3, ~4.9 MP) — detect + record + audio
   #   sub   = 640×480   (4:3, ~0.3 MP) — live view only
