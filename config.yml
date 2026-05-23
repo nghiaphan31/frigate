@@ -289,6 +289,7 @@ cameras:
   # ==========================================================================
   # CAMERA: ALLEE_SUR_LE_COTE
   # Hardware:  Reolink Duo 3 Wi-Fi/ETH — 192.168.50.129
+  # Height:    4m above ground
   # Position:  Driveway side view, eye-level, covers gate + approach
   # Streams:
   #   detect  → sub 1536×432   (full panoramic sub-stream)
@@ -478,6 +479,7 @@ cameras:
   # ==========================================================================
   # CAMERA: ALLEE_SUR_LE_COTE_RIGHT
   # Hardware:  Reolink Duo 3 — right lens half (same physical camera as above)
+  # Height:    4m above ground
   # Position:  Right half of driveway — covers garden side and rear approach
   # Streams:
   #   detect  → main_right 2048×1152  (right half-crop of 4096×1152 main)
@@ -718,6 +720,7 @@ cameras:
 
   # ========================================================================
   # CAMERA: JARDIN_DEVANT — Front garden whole-frame (Reolink Duo 3)
+  # Height:    6.5m above ground
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
@@ -803,6 +806,7 @@ cameras:
 
   # ========================================================================
   # CAMERA: JARDIN_DEVANT_LEFT — Left half of front garden (Reolink Duo 3)
+  # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
   #   main_left  = 2048×1152 (16:9 crop, left half) — detect
@@ -897,6 +901,7 @@ cameras:
 
   # ========================================================================
   # CAMERA: JARDIN_DEVANT_RIGHT — Right half of front garden (Reolink Duo 3)
+  # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
   #   main_right = 2048×1152 (16:9 crop, right half) — detect
@@ -992,6 +997,7 @@ cameras:
 
   # ========================================================================
   # CAMERA: PISCINE_VUE_TOIT — Pool rooftop whole-frame (Reolink Duo 3)
+  # Height:    6.5m above ground
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
@@ -1063,6 +1069,7 @@ cameras:
 
   # ========================================================================
   # CAMERA: PISCINE_VUE_TOIT_LEFT — Left half of pool rooftop (Reolink Duo 3)
+  # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record + audio (shared connection)
   #   main_left  = 2048×1152 (16:9 crop, left half) — detect
@@ -1142,6 +1149,7 @@ cameras:
 
   # ========================================================================
   # CAMERA: PISCINE_VUE_TOIT_RIGHT — Right half of pool rooftop (Reolink Duo 3)
+  # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
   #   main_right = 2048×1152 (16:9 crop, right half) — detect
