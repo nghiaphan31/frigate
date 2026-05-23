@@ -387,6 +387,7 @@ cameras:
   # ==========================================================================
   # CAMERA: ALLEE_SUR_LE_COTE_LEFT
   # Hardware:  Reolink Duo 3 — left lens half (same physical camera as above)
+  # Height:    4m above ground
   # Position:  Left half of driveway — covers gate and street approach
   # Streams:
   #   detect  → main_left 2048×1152  (left half-crop of 4096×1152 main)
