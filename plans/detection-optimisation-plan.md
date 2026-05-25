@@ -412,9 +412,11 @@ These fixes were required before the soak could produce valid data:
 | **far-range fix** | **Lower min_area+threshold on 4 cameras for >20m detection** | ✅ `39aa638` 2026-05-25 |
 | **bug fix** | **`deploy-frigate.sh` dump: normalised area rounds to 0 — fixed with `STREAM_PIXELS` lookup** | ✅ `c0b7833` 2026-05-25 |
 | **bug fix** | **`SOAK_EPOCH` was 2025 (one year off) — corrected to 2026-05-25 17:43 UTC** | ✅ `c0b7833` 2026-05-25 |
-| soak 2 Track A | New 48h soak with area fix — dump no earlier than 2026-05-27 19:43 CEST | ⏳ Started 2026-05-25 19:43 CEST |
-| soak 2 Track B | Continue labelling snapshots in Frigate+ | ⏳ In progress |
-| iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak 2 dump) |
+| **bug fix** | **`SOAK_EPOCH` still wrong (2026-05-22 soak1 start, not 2026-05-25 19:43) — corrected to `1779730980`** | ✅ `dfa2ec0` 2026-05-25 |
+| soak 3 Track A | Re-dump with corrected SOAK_EPOCH — 2822 events, 72h, valid pixel areas | ✅ `frigate_detection_optimisation_dump_soak3.txt` 2026-05-25 |
+| iter2 | Apply tight p5/p95 parameters to all 11 cameras from soak3 dump | ✅ `ac203d0` 2026-05-25 |
+| soak 3 Track B | Continue labelling snapshots in Frigate+ | ⏳ In progress |
+| deploy iter2 | `./deploy-frigate.sh restart` on Calypso | ⏳ Pending |
 | iter3 | Threshold fine-tuning after 48h monitoring | ⏳ Pending |
 
 ### Soak 1 start time
@@ -427,6 +429,45 @@ These fixes were required before the soak could produce valid data:
 > 2026-05-22→2026-05-25) captured score and ratio data correctly but area was still 0
 > (second bug: normalised area rounds to integer 0). Score/ratio data from that file is
 > recorded below for reference. Pixel area data requires re-running the dump after `c0b7833`.
+
+### Soak 3 dump (2026-05-25 — valid pixel areas)
+
+`frigate_detection_optimisation_dump_soak3.txt` — 2822 events, 2026-05-22 20:23 → 2026-05-25 21:41 CEST (72h).
+Produced after `dfa2ec0` corrected `SOAK_EPOCH` to `1779730980` (2026-05-25 17:43 UTC = 19:43 CEST).
+Note: epoch still covered from soak 1 start (2026-05-22 20:23 CEST) — more data, not less.
+
+| Camera | Events | Area med (px²) | Ratio med | Score med |
+|---|---|---|---|---|
+| allee_sur_le_cote | 373 | 118,085 | 2.570 | 0.729 |
+| allee_sur_le_cote_left | 38 | 71,071 | 0.355 | 0.799 |
+| allee_sur_le_cote_right | 267 | 623,565 | 1.679 | 0.810 |
+| jardin_arriere | 1184 | 564,140 | 1.137 | 0.805 |
+| jardin_devant | 162 | 28,756 | 5.738 | 0.830 |
+| jardin_devant_left | 56 | 64,660 | 1.808 | 0.790 |
+| jardin_devant_right | 152 | 39,600 | 5.081 | 0.856 |
+| piscine_vue_toit | 168 | 26,733 | 2.756 | 0.846 |
+| piscine_vue_toit_left | 349 | 234,368 | 3.351 | 0.852 |
+| piscine_vue_toit_right | 16 | 112,240 | 1.800 | 0.873 |
+| vue_entree | 57 | 275,028 | 1.529 | 0.886 |
+
+### Iter2 parameters (applied `ac203d0`, 2026-05-25)
+
+Derived from p5/p95 percentiles with safety margins: area ×0.70/×1.30, ratio ×0.80/×1.20.
+`max_ratio` capped at 10.0 (degenerate panoramic boxes), `min_ratio` floored at 0.10.
+
+| Camera | min_area | max_area | min_ratio | max_ratio | threshold | min_score |
+|---|---|---|---|---|---|---|
+| allee_sur_le_cote | 12,558 | 322,582 | 1.38 | 5.75 | 0.56 | 0.52 |
+| allee_sur_le_cote_left | 8,162 | 789,001 | 0.10 | 5.17 | 0.68 | 0.60 |
+| allee_sur_le_cote_right | 10,745 | 1,135,452 | 0.39 | 3.14 | 0.59 | 0.52 |
+| jardin_arriere | 92,744 | 1,247,755 | 0.10 | 2.43 | 0.59 | 0.55 |
+| vue_entree | 2,366 | 3,332,815 | 0.19 | 10.0 | 0.64 | 0.58 |
+| jardin_devant | 1,442 | 132,761 | 0.38 | 10.0 | 0.55 | 0.49 |
+| jardin_devant_left | 4,256 | 1,228,500 | 0.20 | 10.0 | 0.56 | 0.52 |
+| jardin_devant_right | 2,296 | 211,100 | 0.16 | 10.0 | 0.65 | 0.56 |
+| piscine_vue_toit | 1,554 | 60,901 | 0.53 | 10.0 | 0.68 | 0.65 |
+| piscine_vue_toit_left | 19,178 | 684,684 | 0.94 | 10.0 | 0.65 | 0.59 |
+| piscine_vue_toit_right | 503 | 422,832 | 0.24 | 10.0 | 0.58 | 0.53 |
 
 > **Post-mortem — `detect.enabled=false` bug (12h lost):**
 > Frigate 0.17.1 defaults `detect.enabled` to `false` at the global schema level.
