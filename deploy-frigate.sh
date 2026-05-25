@@ -30,7 +30,7 @@ FRIGATE_API="http://localhost:5000"
 
 # Soak epoch — update this after each container recreation or soak reset
 # Used by the `dump` command to filter events since last soak start
-SOAK_EPOCH=1748187804  # 2026-05-25 19:43 CEST (soak reset: area fix in dump script)
+SOAK_EPOCH=1779474180  # 2026-05-25 17:43 UTC = 2026-05-25 19:43 CEST (soak 2 start)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -184,6 +184,24 @@ events = json.load(sys.stdin)
 print(f'Total person events since soak start: {len(events)}')
 print()
 
+# Stream pixel counts per camera (width x height).
+# data.box is [x1, y1, x2, y2] in NORMALISED coordinates (0-1).
+# Multiply normalised area by stream pixels to get pixel area.
+# These match the detect: stream resolutions in config.yml.
+STREAM_PIXELS = {
+    'allee_sur_le_cote':        1536 * 432,   # sub panoramic 3.56:1
+    'allee_sur_le_cote_left':   2048 * 1152,  # main left crop
+    'allee_sur_le_cote_right':  2048 * 1152,  # main right crop
+    'jardin_arriere':           3840 * 2160,  # main 4K
+    'jardin_devant':            1536 * 432,   # sub panoramic 3.56:1
+    'jardin_devant_left':       2048 * 1152,  # main left crop
+    'jardin_devant_right':      2048 * 1152,  # main right crop
+    'piscine_vue_toit':         1536 * 432,   # sub panoramic 3.56:1
+    'piscine_vue_toit_left':    2048 * 1152,  # main left crop
+    'piscine_vue_toit_right':   2048 * 1152,  # main right crop
+    'vue_entree':               2560 * 1920,  # main doorbell 4:3
+}
+
 # Group by camera
 from collections import defaultdict
 by_cam = defaultdict(list)
@@ -193,12 +211,13 @@ for e in events:
 for cam in sorted(by_cam.keys()):
     evs = by_cam[cam]
     scores = [e.get('data', {}).get('top_score', e.get('score', 0)) for e in evs]
+    px = STREAM_PIXELS.get(cam, 1920 * 1080)  # fallback to 1080p
 
-    # Bounding box area: Frigate API stores the box as [x1, y1, x2, y2] in
-    # e['data']['box'] (normalised 0-1) or as pixel coords in e['box'].
+    # Bounding box: Frigate API stores the box as [x1, y1, x2, y2] in
+    # e['data']['box'] in NORMALISED coordinates (0-1).
     # The top-level e['area'] and e['ratio'] fields are always 0 in Frigate 0.17.x
-    # because they are only populated on the /api/events/<id> detail endpoint.
-    # Derive area from the box field instead.
+    # (only populated on the /api/events/<id> detail endpoint).
+    # Multiply normalised area by stream pixel count to get pixel area.
     areas  = []
     ratios = []
     for e in evs:
@@ -207,18 +226,18 @@ for cam in sorted(by_cam.keys()):
             x1, y1, x2, y2 = box
             w = abs(x2 - x1)
             h = abs(y2 - y1)
-            areas.append(w * h)
+            areas.append(w * h * px)
             ratios.append(w / h if h > 0 else 0)
         else:
             areas.append(0)
             ratios.append(0)
 
-    print(f'=== {cam} ({len(evs)} events) ===')
+    print(f'=== {cam} ({len(evs)} events) [stream {px} px] ===')
     if scores: print(f'  score : min={min(scores):.3f}  max={max(scores):.3f}  median={sorted(scores)[len(scores)//2]:.3f}')
     nz_areas  = [a for a in areas  if a > 0]
     nz_ratios = [r for r in ratios if r > 0]
-    if nz_areas:  print(f'  area  : min={min(nz_areas):.0f}  max={max(nz_areas):.0f}  median={sorted(nz_areas)[len(nz_areas)//2]:.0f}')
-    else:         print(f'  area  : min=0  max=0  (box field absent — upgrade Frigate or use /api/events/<id>)')
+    if nz_areas:  print(f'  area  : min={min(nz_areas):.0f}  max={max(nz_areas):.0f}  median={sorted(nz_areas)[len(nz_areas)//2]:.0f}  (px²)')
+    else:         print(f'  area  : min=0  max=0  (box field absent)')
     if nz_ratios: print(f'  ratio : min={min(nz_ratios):.3f}  max={max(nz_ratios):.3f}  median={sorted(nz_ratios)[len(nz_ratios)//2]:.3f}')
     else:         print(f'  ratio : min=0.000  max=0.000')
     print()
@@ -230,7 +249,7 @@ for cam in sorted(by_cam.keys()):
         if box and len(box) == 4:
             x1, y1, x2, y2 = box
             w = abs(x2 - x1); h = abs(y2 - y1)
-            area  = w * h
+            area  = w * h * px
             ratio = w / h if h > 0 else 0
         else:
             area = 0; ratio = 0
