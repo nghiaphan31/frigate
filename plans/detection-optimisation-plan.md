@@ -350,6 +350,40 @@ These fixes were required before the soak could produce valid data:
 
 ---
 
+## Track A — Soak 2 Pre-Dump (72h, 2026-05-22 19:26 → 2026-05-25 20:08 CEST)
+
+> **Area data: UNUSABLE** — second area=0 bug: normalised `w*h` rounds to integer 0 with `{:.0f}`.
+> Fixed in `c0b7833` (STREAM_PIXELS lookup). Score and ratio distributions are valid.
+> **Pixel area data requires re-running `./deploy-frigate.sh dump` after 2026-05-27 19:43 CEST.**
+
+### Soak 2 pre-dump event counts, score and ratio distributions
+
+| Camera | Events | Score min | Score med | Score max | Ratio min | Ratio med | Ratio max | Stream |
+|--------|--------|-----------|-----------|-----------|-----------|-----------|-----------|--------|
+| `allee_sur_le_cote` | 373 | 0.451 | 0.729 | 0.969 | 0.011 | 2.568 | 5.839 | sub 1536×432 |
+| `allee_sur_le_cote_left` | 40 | 0.576 | 0.799 | 0.969 | 0.191 | 0.355 | 2.155 | main 2048×1152 |
+| `allee_sur_le_cote_right` | 273 | 0.456 | 0.808 | 0.965 | 0.022 | 1.689 | 4.635 | main 2048×1152 |
+| `jardin_arriere` | 1120 | 0.510 | 0.811 | 0.976 | 0.011 | 1.110 | 310.500 | main 3840×2160 |
+| `jardin_devant` | 176 | 0.479 | 0.831 | 0.954 | 0.011 | 5.738 | 24.188 | sub 1536×432 |
+| `jardin_devant_left` | 58 | 0.517 | 0.790 | 0.966 | 0.191 | 1.960 | 59.946 | main 2048×1152 |
+| `jardin_devant_right` | 173 | 0.481 | 0.851 | 0.961 | 0.022 | 4.983 | 310.500 | main 2048×1152 |
+| `piscine_vue_toit` | 167 | 0.576 | 0.844 | 0.931 | 0.140 | 2.443 | 148.781 | sub 1536×432 |
+| `piscine_vue_toit_left` | 339 | 0.508 | 0.853 | 0.964 | 0.192 | 3.351 | 273.562 | main 2048×1152 |
+| `piscine_vue_toit_right` | 11 | 0.559 | 0.840 | 0.940 | 0.296 | 1.046 | 49.625 | main 2048×1152 |
+| `vue_entree` | 60 | 0.556 | 0.886 | 0.953 | 0.125 | 1.531 | 17.114 | main 2560×1920 |
+| **TOTAL** | **2790** | | | | | | | |
+
+### Soak 2 pre-dump observations (score + ratio, no area)
+
+- **Score distributions unchanged** from soak 1 — medians 0.73–0.89, healthy range
+- **Ratio extremes are suspicious**: `jardin_devant_right` max=310.5, `jardin_arriere` max=310.5 — these are likely degenerate bounding boxes (1-pixel-tall boxes, e.g. a horizontal line detection). Will need `max_ratio` filter in iter2.
+- **`piscine_vue_toit_left` ratio median=3.351** — pool camera sees people lying/sitting by pool (wide bounding boxes), expected
+- **`allee_sur_le_cote_left` ratio median=0.355** — left driveway crop sees people walking toward camera (taller than wide), expected
+- **`vue_entree` ratio median=1.531** — doorbell at 2560×1920 (4:3), close-range persons slightly wider than tall in normalised space
+- **Pixel area data pending** — cannot derive `min_area`/`max_area` until re-dump with `c0b7833` fix
+
+---
+
 ## Execution Status
 
 | Step | Action | Status |
@@ -376,6 +410,8 @@ These fixes were required before the soak could produce valid data:
 | soak 1 Track B | Label snapshots in Frigate+ during soak | ⏳ In progress |
 | **bug fix** | **`deploy-frigate.sh` dump: area/ratio always 0 — fixed to read `data.box`** | ✅ `b72a3db` 2026-05-25 |
 | **far-range fix** | **Lower min_area+threshold on 4 cameras for >20m detection** | ✅ `39aa638` 2026-05-25 |
+| **bug fix** | **`deploy-frigate.sh` dump: normalised area rounds to 0 — fixed with `STREAM_PIXELS` lookup** | ✅ `c0b7833` 2026-05-25 |
+| **bug fix** | **`SOAK_EPOCH` was 2025 (one year off) — corrected to 2026-05-25 17:43 UTC** | ✅ `c0b7833` 2026-05-25 |
 | soak 2 Track A | New 48h soak with area fix — dump no earlier than 2026-05-27 19:43 CEST | ⏳ Started 2026-05-25 19:43 CEST |
 | soak 2 Track B | Continue labelling snapshots in Frigate+ | ⏳ In progress |
 | iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak 2 dump) |
@@ -385,7 +421,12 @@ These fixes were required before the soak could produce valid data:
 **2026-05-22 19:26 CEST** (restarted after shm_size=5120m + motion.days=1 fix)
 
 ### Soak 2 start time
-**2026-05-25 19:43 CEST** (restarted after area=0 dump bug fix) — run Option-B dump no earlier than **2026-05-26 19:43 CEST** (24h min), ideally **2026-05-27 19:43 CEST** (48h recommended).
+**2026-05-25 19:43 CEST** (`SOAK_EPOCH=1779474180`) — run Option-B dump no earlier than **2026-05-27 19:43 CEST** (48h recommended).
+
+> **Note:** The soak 2 pre-dump (`frigate_detection_optimisation_dump_soak2.txt`, 2790 events,
+> 2026-05-22→2026-05-25) captured score and ratio data correctly but area was still 0
+> (second bug: normalised area rounds to integer 0). Score/ratio data from that file is
+> recorded below for reference. Pixel area data requires re-running the dump after `c0b7833`.
 
 > **Post-mortem — `detect.enabled=false` bug (12h lost):**
 > Frigate 0.17.1 defaults `detect.enabled` to `false` at the global schema level.
@@ -418,6 +459,22 @@ These fixes were required before the soak could produce valid data:
 > All 2743 events from soak 1 (2026-05-22→2026-05-25) had `area=0` — the score
 > distributions were valid but area data was unusable for iter2 parameter tuning.
 > A new 48h soak (soak 2) was started 2026-05-25 19:43 CEST. Committed `b72a3db`.
+
+> **Post-mortem — `area=0` in all dump events (soak 2 pre-dump, 2026-05-25):**
+> After fixing the `data.box` extraction, `ratio` became non-zero (confirming the box
+> field was being read correctly) but `area` remained 0. Root cause: `data.box` is in
+> **normalised coordinates (0–1)**, not pixel coordinates. The product `w*h` for a
+> typical person bounding box is ~0.000024 (e.g. w=0.008, h=0.003), which formats as
+> `0` with `{area:8.0f}`. The `ratio = w/h` is dimensionless and therefore correct
+> regardless of coordinate scale (e.g. 2.568 for a wide panoramic bounding box).
+> Evidence: `vue_entree` showed `area=1` for a few events where `w*h ≥ 0.5` (large
+> close-range persons on the 2560×1920 doorbell), confirming the rounding hypothesis.
+> Fix: multiply normalised area by `STREAM_PIXELS[cam]` (stream width × height) to
+> convert to pixel area. Added per-camera lookup table matching `config.yml` detect
+> stream resolutions. Also fixed `SOAK_EPOCH=1748187804` (was 2025-05-25, one year
+> off) to `1779474180` (2026-05-25 17:43 UTC = 19:43 CEST). Committed `c0b7833`.
+> The 2790-event soak 2 pre-dump has valid score/ratio data but no pixel area.
+> Pixel area data requires re-running `./deploy-frigate.sh dump` after 2026-05-27 19:43 CEST.
 
 > **Post-mortem — "no frames received" / gray screens / MSE streams dropping at 25s:**
 > Three compounding issues:
