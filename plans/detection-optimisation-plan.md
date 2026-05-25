@@ -1,8 +1,8 @@
 # Detection Parameter Optimisation Plan — Frigate NVR (Calypso RTX 5060 Ti)
 
-> **Status:** 🟢 Deployed — 48–72h soak running (Track A + Track B active)
+> **Status:** Deployed — soak 2 running (Track A area fix applied, Track B active)
 > **Branch:** `detection-optimisation`
-> **Last updated:** 2026-05-22
+> **Last updated:** 2026-05-25
 > **Config file:** [`config.yml`](../config.yml)
 > **Docker compose:** [`docker-compose.calypso.yml`](../docker-compose.calypso.yml)
 > **Deploy script:** [`deploy-frigate.sh`](../deploy-frigate.sh)
@@ -315,6 +315,41 @@ These fixes were required before the soak could produce valid data:
 
 ---
 
+## Track A — Soak 1 Full Dump (72h, 2026-05-22 19:26 → 2026-05-25 19:43 CEST)
+
+> **Area data: UNUSABLE** — all events show `area=0` due to dump script bug (see post-mortem).
+> Score distributions are valid and recorded here for reference.
+> **Do not use these scores for iter2 threshold tuning** — soak 2 will provide both area + score data.
+
+### Soak 1 event counts and score distributions
+
+| Camera | Events | Score min | Score median | Score max | Stream | Notes |
+|--------|--------|-----------|--------------|-----------|--------|-------|
+| `allee_sur_le_cote` | 369 | 0.451 | 0.729 | 0.969 | sub 1536×432 | Far-range fix applied mid-soak |
+| `allee_sur_le_cote_left` | 39 | 0.576 | 0.797 | 0.969 | main 2048×1152 | Low count — left half of driveway |
+| `allee_sur_le_cote_right` | 271 | 0.456 | 0.807 | 0.965 | main 2048×1152 | Far-range fix applied mid-soak |
+| `jardin_arriere` | 1107 | 0.510 | 0.808 | 0.976 | main 3840×2160 | Most active camera (rear garden) |
+| `jardin_devant` | 171 | 0.479 | 0.831 | 0.954 | sub 1536×432 | Street-facing |
+| `jardin_devant_left` | 58 | 0.517 | ~0.800 | 0.966 | main 2048×1152 | Low count — masks removed for soak |
+| `jardin_devant_right` | 171 | 0.481 | 0.851 | 0.961 | main 2048×1152 | |
+| `piscine_vue_toit` | 160 | 0.576 | 0.843 | 0.931 | sub 1536×432 | Far-range fix applied mid-soak |
+| `piscine_vue_toit_left` | 331 | 0.508 | 0.852 | 0.964 | main 2048×1152 | Far-range fix applied mid-soak |
+| `piscine_vue_toit_right` | 11 | 0.559 | 0.840 | 0.940 | main 2048×1152 | Very low count — right side of pool |
+| `vue_entree` | 55 | 0.556 | 0.886 | 0.953 | main 2560×1920 | Doorbell — high confidence |
+| **TOTAL** | **2743** | | | | | |
+
+### Soak 1 observations (score only)
+
+- **Score distributions look healthy** — medians 0.73–0.89, no camera stuck at floor
+- **`jardin_arriere` dominates** (1107/2743 = 40%) — rear garden is the most active area
+- **`piscine_vue_toit_right` very sparse** (11 events) — right side of pool rarely has activity, or detection is still too tight
+- **`allee_sur_le_cote_left` sparse** (39 events) — left driveway half, gate side; low pedestrian traffic expected
+- **`vue_entree` high median** (0.886) — doorbell camera sees close-range persons, high confidence; threshold could be raised to 0.65+ in iter2
+- **Far-range cameras** (`allee_sur_le_cote`, `allee_sur_le_cote_right`, `piscine_vue_toit`, `piscine_vue_toit_left`) have score_min 0.45–0.58 — confirms the threshold=0.40 fix was necessary
+- **Area data: all zero** — cannot derive `min_area`/`max_area` from this dump; soak 2 required
+
+---
+
 ## Execution Status
 
 | Step | Action | Status |
@@ -337,13 +372,20 @@ These fixes were required before the soak could produce valid data:
 | **infra fix** | **All thresholds/zone-filters lowered to wide-open iter1 standard** | ✅ `cbbbb6b` |
 | **infra fix** | **`shm_size: "2048m"` → `"3072m"` (85% full → UI rendering corruption)** | ✅ `e5956fa` 2026-05-22 ~18:47 CEST |
 | **infra fix** | **`shm_size: "3072m"` → `"5120m"` + `record.motion.days: 3→1` (69% full after 2h + NAS 97% full)** | ✅ `cda690e` 2026-05-22 19:26 CEST |
-| soak Track A | Run 48–72h, then Option-B event dump | ⏳ **Restarted 2026-05-22 19:26 CEST** — inference 12.5ms, /dev/shm 42% (2.1G/5.0G) |
-| soak Track B | Label snapshots in Frigate+ during soak | ⏳ Started 2026-05-22 19:26 CEST |
-| iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak) |
+| soak 1 Track A | Run 48–72h, then Option-B event dump | ✅ Dump collected 2026-05-25 — **area=0 bug found** (see post-mortem below) |
+| soak 1 Track B | Label snapshots in Frigate+ during soak | ⏳ In progress |
+| **bug fix** | **`deploy-frigate.sh` dump: area/ratio always 0 — fixed to read `data.box`** | ✅ `b72a3db` 2026-05-25 |
+| **far-range fix** | **Lower min_area+threshold on 4 cameras for >20m detection** | ✅ `39aa638` 2026-05-25 |
+| soak 2 Track A | New 48h soak with area fix — dump no earlier than 2026-05-27 19:43 CEST | ⏳ Started 2026-05-25 19:43 CEST |
+| soak 2 Track B | Continue labelling snapshots in Frigate+ | ⏳ In progress |
+| iter2 | Apply tight parameters + new plus:// model | ⏳ Pending (after soak 2 dump) |
 | iter3 | Threshold fine-tuning after 48h monitoring | ⏳ Pending |
 
-### Soak start time
-**2026-05-22 19:26 CEST** (restarted after shm_size=5120m + motion.days=1 fix) — run Option-B dump no earlier than **2026-05-23 19:26 CEST** (24h min), ideally **2026-05-24 19:26 CEST** (48h recommended).
+### Soak 1 start time
+**2026-05-22 19:26 CEST** (restarted after shm_size=5120m + motion.days=1 fix)
+
+### Soak 2 start time
+**2026-05-25 19:43 CEST** (restarted after area=0 dump bug fix) — run Option-B dump no earlier than **2026-05-26 19:43 CEST** (24h min), ideally **2026-05-27 19:43 CEST** (48h recommended).
 
 > **Post-mortem — `detect.enabled=false` bug (12h lost):**
 > Frigate 0.17.1 defaults `detect.enabled` to `false` at the global schema level.
@@ -366,6 +408,16 @@ These fixes were required before the soak could produce valid data:
 > causes frame corruption. Fix: increase to `shm_size: "2048m"`. Required container
 > recreation (not just restart) to take effect. After fix: 2.0 GB total, 1.7 GB used,
 > 312 MB free. Committed `635c002`.
+
+> **Post-mortem — `area=0` in all dump events (soak 1, 2026-05-25):**
+> The Frigate 0.17.x `/api/events` list endpoint does not populate the top-level
+> `area` and `ratio` fields — they are always 0. Bounding box data is only available
+> in `e['data']['box']` as `[x1, y1, x2, y2]` normalised coordinates (0–1 range).
+> The dump script was reading `e.get('area', 0)` which always returned 0.
+> Fix: derive `area = w*h` and `ratio = w/h` from `data.box` in the dump script.
+> All 2743 events from soak 1 (2026-05-22→2026-05-25) had `area=0` — the score
+> distributions were valid but area data was unusable for iter2 parameter tuning.
+> A new 48h soak (soak 2) was started 2026-05-25 19:43 CEST. Committed `b72a3db`.
 
 > **Post-mortem — "no frames received" / gray screens / MSE streams dropping at 25s:**
 > Three compounding issues:
