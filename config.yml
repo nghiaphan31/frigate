@@ -338,14 +338,16 @@ cameras:
           # GEOMETRY (camera at 4m, sub-stream 1536×432):
           #   Person 1.8m tall at 17m ground distance → slant range √(17²+4²)=17.5m
           #   pixel_height = 1.8/17.5 × 432 = 44px  pixel_width ≈ 12px  area ≈ 530px²
-          #   min_area = 530 × 0.70 = 371 → use 300 (global default covers this)
-          # Threshold/min_score lowered to catch small distant persons.
-          min_area: 300          # Covers person at 17m on 432px-height sub-stream (≈530px²)
+          #   Person 1.8m tall at 25m ground distance → slant range √(25²+4²)=25.3m
+          #   pixel_height = 1.8/25.3 × 432 = 31px  pixel_width ≈ 8px   area ≈ 248px²
+          #   min_area = 248 × 0.60 = 149 → use 150 (covers person at ~30m)
+          # Threshold/min_score further lowered for far-range miss fix (2026-05-25).
+          min_area: 150          # Covers person at ~30m on 432px-height sub-stream (≈248px² at 25m)
           max_area: 40000        # Close person ≈ 80×200 = 16000 px² (iter0-fix: was 12000)
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.45        # Lowered for small/distant persons (was 0.50)
-          min_score: 0.40        # Lowered for small/distant persons (was 0.45)
+          threshold: 0.40        # Further lowered for far-range misses (was 0.45)
+          min_score: 0.35        # Further lowered for far-range misses (was 0.40)
 
     snapshots:
       enabled: true
@@ -360,8 +362,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.45   # Lowered for small/distant persons
-            min_area: 300     # Covers person at 17m on sub-stream (≈530px²)
+            threshold: 0.40   # Further lowered for far-range misses (was 0.45)
+            min_area: 150     # Covers person at ~30m on sub-stream (was 300)
             min_ratio: 0.05
             max_ratio: 20.0
 
@@ -373,8 +375,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.45   # Lowered for small/distant persons
-            min_area: 300     # Covers person at 17m on sub-stream (≈530px²)
+            threshold: 0.40   # Further lowered for far-range misses (was 0.45)
+            min_area: 150     # Covers person at ~30m on sub-stream (was 300)
             min_ratio: 0.05
             max_ratio: 20.0
 
@@ -525,14 +527,16 @@ cameras:
           # GEOMETRY (camera at 4m, main_right 2048×1152):
           #   Person 1.8m tall at 17m ground distance → slant range √(17²+4²)=17.5m
           #   pixel_height = 1.8/17.5 × 1152 = 118px  pixel_width ≈ 33px  area ≈ 3894px²
-          #   min_area = 3894 × 0.70 = 2726 → keeping 500 for soak + partial/crouching persons
-          # Threshold/min_score lowered to catch small distant persons.
-          min_area: 500          # Wide-open soak; geometry min for 17m = ~2726px²
+          #   Person 1.8m tall at 25m ground distance → slant range √(25²+4²)=25.3m
+          #   pixel_height = 1.8/25.3 × 1152 = 82px   pixel_width ≈ 23px  area ≈ 1886px²
+          #   min_area = 1886 × 0.10 = 189 → use 200 (covers partial/crouching at 25m+)
+          # Threshold/min_score further lowered for far-range miss fix (2026-05-25).
+          min_area: 200          # Covers person at ~25m+ on main 1152px stream (was 500)
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.45        # Lowered for small/distant persons (was 0.50)
-          min_score: 0.40        # Lowered for small/distant persons (was 0.45)
+          threshold: 0.40        # Further lowered for far-range misses (was 0.45)
+          min_score: 0.35        # Further lowered for far-range misses (was 0.40)
 
     snapshots:
       enabled: true
@@ -546,8 +550,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.45          # Lowered for small/distant persons
-            min_area: 500
+            threshold: 0.40          # Further lowered for far-range misses (was 0.45)
+            min_area: 200            # Covers person at ~25m+ on main stream (was 500)
             min_ratio: 0.05
             max_ratio: 20.0
 
@@ -1038,14 +1042,16 @@ cameras:
           # GEOMETRY (camera at 6.5m, sub-stream 1536×432):
           #   Person 1.8m tall at 17m ground distance → slant range √(17²+6.5²)=18.2m
           #   pixel_height = 1.8/18.2 × 432 = 43px  pixel_width ≈ 12px  area ≈ 516px²
-          #   min_area = 516 × 0.70 = 361 → use 300
-          # Threshold/min_score lowered to catch small distant persons.
-          min_area: 300          # Covers person at 17m on 432px-height sub-stream (≈516px²)
+          #   Person 1.8m tall at 25m ground distance → slant range √(25²+6.5²)=25.8m
+          #   pixel_height = 1.8/25.8 × 432 = 30px  pixel_width ≈ 8px   area ≈ 240px²
+          #   min_area = 240 × 0.60 = 144 → use 150 (covers person at ~30m)
+          # Threshold/min_score further lowered for far-range miss fix (2026-05-25).
+          min_area: 150          # Covers person at ~30m on 432px-height sub-stream (was 300)
           max_area: 200000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.45        # Lowered for small/distant persons (was 0.50)
-          min_score: 0.40        # Lowered for small/distant persons (was 0.45)
+          threshold: 0.40        # Further lowered for far-range misses (was 0.45)
+          min_score: 0.35        # Further lowered for far-range misses (was 0.40)
 
     snapshots:
       enabled: true
@@ -1059,8 +1065,8 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.45          # Lowered for small/distant persons
-            min_area: 300            # Covers person at 17m on sub-stream (≈516px²)
+            threshold: 0.40          # Further lowered for far-range misses (was 0.45)
+            min_area: 150            # Covers person at ~30m on sub-stream (was 300)
             min_ratio: 0.05
             max_ratio: 20.0
 
@@ -1112,14 +1118,16 @@ cameras:
           # GEOMETRY (camera at 6.5m, main_left 2048×1152):
           #   Person 1.8m tall at 17m ground distance → slant range √(17²+6.5²)=18.2m
           #   pixel_height = 1.8/18.2 × 1152 = 114px  pixel_width ≈ 32px  area ≈ 3648px²
-          #   min_area = 3648 × 0.70 = 2554 → keeping 500 for soak + partial/crouching persons
-          # Threshold/min_score lowered to catch small distant persons.
-          min_area: 500          # Wide-open soak; geometry min for 17m = ~2554px²
+          #   Person 1.8m tall at 25m ground distance → slant range √(25²+6.5²)=25.8m
+          #   pixel_height = 1.8/25.8 × 1152 = 80px   pixel_width ≈ 22px  area ≈ 1760px²
+          #   min_area = 1760 × 0.10 = 176 → use 200 (covers partial/crouching at 25m+)
+          # Threshold/min_score further lowered for far-range miss fix (2026-05-25).
+          min_area: 200          # Covers person at ~25m+ on main 1152px stream (was 500)
           max_area: 2000000
           min_ratio: 0.05
           max_ratio: 20.0
-          threshold: 0.45        # Lowered for small/distant persons (was 0.50)
-          min_score: 0.40        # Lowered for small/distant persons (was 0.45)
+          threshold: 0.40        # Further lowered for far-range misses (was 0.45)
+          min_score: 0.35        # Further lowered for far-range misses (was 0.40)
 
     snapshots:
       enabled: true
@@ -1133,8 +1141,8 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.45          # Lowered for small/distant persons
-            min_area: 500
+            threshold: 0.40          # Further lowered for far-range misses (was 0.45)
+            min_area: 200            # Covers person at ~25m+ on main stream (was 500)
             min_ratio: 0.05
             max_ratio: 20.0
 
