@@ -28,9 +28,9 @@ COMPOSE_FILE="docker-compose.calypso.yml"
 SERVICE="frigate"
 FRIGATE_API="http://localhost:5000"
 
-# Soak epoch — update this after each container recreation
+# Soak epoch — update this after each container recreation or soak reset
 # Used by the `dump` command to filter events since last soak start
-SOAK_EPOCH=1779470841  # 2026-05-22 19:26 CEST (shm_size=5120m + motion.days=1 recreation)
+SOAK_EPOCH=1748187804  # 2026-05-25 19:43 CEST (soak reset: area fix in dump script)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -193,19 +193,47 @@ for e in events:
 for cam in sorted(by_cam.keys()):
     evs = by_cam[cam]
     scores = [e.get('data', {}).get('top_score', e.get('score', 0)) for e in evs]
-    areas  = [e.get('area', 0) for e in evs]
-    ratios = [e.get('ratio', 0) for e in evs]
+
+    # Bounding box area: Frigate API stores the box as [x1, y1, x2, y2] in
+    # e['data']['box'] (normalised 0-1) or as pixel coords in e['box'].
+    # The top-level e['area'] and e['ratio'] fields are always 0 in Frigate 0.17.x
+    # because they are only populated on the /api/events/<id> detail endpoint.
+    # Derive area from the box field instead.
+    areas  = []
+    ratios = []
+    for e in evs:
+        box = e.get('data', {}).get('box') or e.get('box')
+        if box and len(box) == 4:
+            x1, y1, x2, y2 = box
+            w = abs(x2 - x1)
+            h = abs(y2 - y1)
+            areas.append(w * h)
+            ratios.append(w / h if h > 0 else 0)
+        else:
+            areas.append(0)
+            ratios.append(0)
+
     print(f'=== {cam} ({len(evs)} events) ===')
     if scores: print(f'  score : min={min(scores):.3f}  max={max(scores):.3f}  median={sorted(scores)[len(scores)//2]:.3f}')
-    if areas:  print(f'  area  : min={min(areas):.0f}  max={max(areas):.0f}')
-    if ratios: print(f'  ratio : min={min(ratios):.3f}  max={max(ratios):.3f}')
+    nz_areas  = [a for a in areas  if a > 0]
+    nz_ratios = [r for r in ratios if r > 0]
+    if nz_areas:  print(f'  area  : min={min(nz_areas):.0f}  max={max(nz_areas):.0f}  median={sorted(nz_areas)[len(nz_areas)//2]:.0f}')
+    else:         print(f'  area  : min=0  max=0  (box field absent — upgrade Frigate or use /api/events/<id>)')
+    if nz_ratios: print(f'  ratio : min={min(nz_ratios):.3f}  max={max(nz_ratios):.3f}  median={sorted(nz_ratios)[len(nz_ratios)//2]:.3f}')
+    else:         print(f'  ratio : min=0.000  max=0.000')
     print()
     for e in evs:
         d = e.get('data', {})
         t = datetime.datetime.fromtimestamp(e['start_time']).strftime('%Y-%m-%d %H:%M:%S')
         score = d.get('top_score', e.get('score', 0))
-        area  = e.get('area', 0)
-        ratio = e.get('ratio', 0)
+        box = d.get('box') or e.get('box')
+        if box and len(box) == 4:
+            x1, y1, x2, y2 = box
+            w = abs(x2 - x1); h = abs(y2 - y1)
+            area  = w * h
+            ratio = w / h if h > 0 else 0
+        else:
+            area = 0; ratio = 0
         zones = e.get('zones', [])
         print(f'  {t}  score={score:.3f}  area={area:8.0f}  ratio={ratio:.3f}  zones={zones}')
     print()
