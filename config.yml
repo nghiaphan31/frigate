@@ -157,8 +157,13 @@ detect:
 # ---------------------------------------------------------------------------
 detectors:
   onnx1:
-    type: onnx                 # NVIDIA GPU inference via ONNX Runtime + TensorRT
-    device: "0"                # First GPU (quoted string required by Frigate schema)
+    type: onnx                 # NVIDIA GPU inference via ONNX Runtime
+    # device: "0" causes CudaGraphRunner which hangs on RTX 5060 Ti (Blackwell/GB206)
+    # with ONNX Runtime 1.22.0 — CUDA Graph capture deadlocks on first run_with_iobinding.
+    # Plain CUDAExecutionProvider (sess.run) works fine (2.71s first inference, 11ms after).
+    # Workaround: use "CPU" to bypass CudaGraphRunner; detection still works via CPU ONNX.
+    # TODO: switch to device: "Tensorrt" once TRT engine cache is built (~5 min first run).
+    device: "CPU"              # Bypass CudaGraphRunner deadlock on Blackwell GPU
 
 # ---------------------------------------------------------------------------
 # 1.7 MODEL – Frigate+ custom trained model
