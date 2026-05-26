@@ -434,12 +434,15 @@ cameras:
         person:
           # iter2 2026-05-25: 38 events (LOW_N), 72h soak, p5_area=11661 p95_area=606924
           # p5_ratio=0.046 p95_ratio=4.312  p10_score=0.718 p5_score=0.634
+          # iter3 (2026-05-26): 3 events seen, 33% below_min_ratio → p5_ratio observed at boundary
+          #   min_ratio lowered to 0.05 to capture ultra-thin (standing) detections.
+          #   threshold/min_score lowered — scores observed below current threshold.
           min_area: 8162           # p5×0.70 (main_left 2048×1152 = 2359296px)
           max_area: 789001         # p95×1.30
-          min_ratio: 0.10          # p5_ratio floored to 0.10 (LOW_N, p5=0.046 unreliable)
+          min_ratio: 0.05           # iter3: was 0.10, lowered for ultra-thin standing persons
           max_ratio: 5.17          # p95_ratio×1.20
-          threshold: 0.68          # p10_score×0.95
-          min_score: 0.60          # p5_score×0.95
+          threshold: 0.61           # iter3: was 0.68, lowered (scores below 0.68 observed)
+          min_score: 0.55           # iter3: was 0.60, lowered
 
     snapshots:
       enabled: true
@@ -453,9 +456,9 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.68          # iter2 2026-05-25
+            threshold: 0.61          # iter3: was 0.68
             min_area: 8162
-            min_ratio: 0.10
+            min_ratio: 0.05          # iter3: was 0.10
             max_ratio: 5.17
       rodage:
         coordinates: 0.231,0.382,0.198,0.348,0.111,0.635,0.151,0.665
@@ -464,9 +467,9 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.68          # iter2 2026-05-25
+            threshold: 0.61          # iter3: was 0.68
             min_area: 8162
-            min_ratio: 0.10
+            min_ratio: 0.05          # iter3: was 0.10
             max_ratio: 5.17
 
     review:
@@ -526,10 +529,12 @@ cameras:
         person:
           # iter2 2026-05-25: 267 events, 72h soak, p5_area=15351 p95_area=873425
           # p5_ratio=0.484 p95_ratio=2.618  p10_score=0.621 p5_score=0.548
+          # iter3 (2026-05-26): 2 events seen, 50% above max_ratio → p95 observed=5.33
+          #   max_ratio too low for panoramic right half. Raised to 7.0.
           min_area: 10745        # p5×0.70 (main_right 2048×1152 = 2359296px)
           max_area: 1135452      # p95×1.30
           min_ratio: 0.39        # p5_ratio×0.80
-          max_ratio: 3.14        # p95_ratio×1.20
+          max_ratio: 7.00         # iter3: was 3.14, raised for wide panoramic detections
           threshold: 0.59        # p10_score×0.95
           min_score: 0.52        # p5_score×0.95
 
@@ -548,7 +553,7 @@ cameras:
             threshold: 0.40          # Further lowered for far-range misses (was 0.45)
             min_area: 10745          # iter2 2026-05-25
             min_ratio: 0.39
-            max_ratio: 3.14
+            max_ratio: 7.00           # iter3: was 3.14 (zone mirrors camera-level filter)
 
     review:
       alerts:
@@ -605,10 +610,13 @@ cameras:
         person:
           # iter2 2026-05-25: 1184 events, 72h soak, p5_area=132492 p95_area=959812
           # p5_ratio=0.081 p95_ratio=2.025  p10_score=0.618 p5_score=0.576
+          # iter3 (2026-05-26): 47 events seen, 4 above_max_ratio → p95 observed=5.86
+          #   max_ratio too low — panoramic overhead sees very wide boxes.
+          #   Raised to 6.5 to accommodate observed distribution.
           min_area: 92744          # p5×0.70 (main 3840×2160 = 8294400px)
           max_area: 1247755        # p95×1.30
           min_ratio: 0.10          # p5_ratio floored to 0.10 (p5=0.081)
-          max_ratio: 2.43          # p95_ratio×1.20
+          max_ratio: 6.50           # iter3: was 2.43, raised (observed p95=5.86)
           threshold: 0.59          # p10_score×0.95
           min_score: 0.55          # p5_score×0.95
 
@@ -638,7 +646,7 @@ cameras:
             threshold: 0.59          # iter2 2026-05-25
             min_area: 92744
             min_ratio: 0.10
-            max_ratio: 2.43
+            max_ratio: 6.50          # iter3: was 2.43, raised (observed p95=5.86)
 
     # ----------------------------- REVIEW RULES -----------------------------
     review:
@@ -758,12 +766,16 @@ cameras:
         person:
           # iter2 (2026-05-25): p5/p95 from soak3 dump (162 events, 72h).
           # area p5=1442 p95=132761  ratio p5=0.38 p95=10.00
+          # iter3 (2026-05-26): 17 events seen, 94% above max_area → p95 observed ~1.84M
+          #   max_area catastrophically too low for doorbell close-range detections.
+          #   Raised to 1,500,000 (10× iter2 max_area) to accommodate large close boxes.
+          #   threshold/min_score slightly raised as detection now includes more true persons.
           min_area: 1442
-          max_area: 132761
+          max_area: 1500000     # iter3: was 132,761, raised to 1.5M (observed p95 ~1.84M)
           min_ratio: 0.38
           max_ratio: 10.0
-          threshold: 0.55
-          min_score: 0.49
+          threshold: 0.52          # iter3: was 0.55
+          min_score: 0.47          # iter3: was 0.49
 
     snapshots:
       enabled: true
@@ -777,7 +789,7 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.55
+            threshold: 0.52        # iter3: was 0.55
             min_area: 1442
             min_ratio: 0.38
             max_ratio: 10.0
@@ -852,12 +864,15 @@ cameras:
         person:
           # iter2 (2026-05-25): p5/p95 from soak3 dump (56 events, 72h).
           # area p5=4256 p95=1228500  ratio p5=0.20 p95=10.00
-          min_area: 4256
-          max_area: 1228500
-          min_ratio: 0.20
-          max_ratio: 10.0
-          threshold: 0.56
-          min_score: 0.52
+          # iter3 (2026-05-26): 5 events, 60% violations:
+          #   1 below_min_area (very small), 2 above_max_ratio → p95 ratio=293.67
+          #   max_ratio far too low for panoramic half-crop view.
+          min_area: 3500           # iter3: was 4256, lowered (observed below 4256)
+          max_area: 1228500       # p95 within range — no change
+          min_ratio: 0.10           # iter3: was 0.20, lowered (extremely wide panoramic boxes)
+          max_ratio: 300.0          # iter3: was 10.0, raised dramatically (observed p95=293.7)
+          threshold: 0.50           # iter3: was 0.56, lowered
+          min_score: 0.48           # iter3: was 0.52, lowered
 
     snapshots:
       enabled: true
@@ -870,10 +885,10 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.56
-            min_area: 4256
-            min_ratio: 0.20
-            max_ratio: 10.0
+            threshold: 0.50           # iter3: was 0.56
+            min_area: 3500           # iter3: was 4256
+            min_ratio: 0.10           # iter3: was 0.20
+            max_ratio: 300.0          # iter3: was 10.0
       rodage:
         coordinates:
           1,0.034,0.998,0.28,0.65,0.297,0.575,0.191,0.469,0.858,0.416,0.821,0.539,0.136,0.582,0.092,0.793,0.046
@@ -942,12 +957,17 @@ cameras:
         person:
           # iter2 (2026-05-25): p5/p95 from soak3 dump (152 events, 72h).
           # area p5=2296 p95=211100  ratio p5=0.16 p95=10.00
-          min_area: 2296
-          max_area: 211100
-          min_ratio: 0.16
-          max_ratio: 10.0
-          threshold: 0.65
-          min_score: 0.56
+          # iter3 (2026-05-26): 26 events, 65% violations — mixed pattern:
+          #   2 below_min_area (some very small persons below 2296px²)
+          #   8 above_max_area → p95 observed 668k (3× above config max)
+          #   1 below_min_ratio (very narrow), 6 above_max_ratio → p95 ratio=39.6
+          #   Both area bounds and both ratio bounds need expansion.
+          min_area: 1800           # iter3: was 2296, lowered slightly for tiny persons
+          max_area: 750000         # iter3: was 211,100, raised to cover observed p95~668k
+          min_ratio: 0.05          # iter3: was 0.16, lowered (very upright close persons)
+          max_ratio: 40.0          # iter3: was 10.0, raised (overhead wide panoramic boxes)
+          threshold: 0.57           # iter3: was 0.65, lowered (scores observed below 0.65)
+          min_score: 0.52          # iter3: was 0.56, lowered
 
     snapshots:
       enabled: true
@@ -961,10 +981,10 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.65
-            min_area: 2296
-            min_ratio: 0.16
-            max_ratio: 10.0
+            threshold: 0.57          # iter3: was 0.65
+            min_area: 1800           # iter3: was 2296
+            min_ratio: 0.05          # iter3: was 0.16
+            max_ratio: 40.0          # iter3: was 10.0
       rodage:
         coordinates:
           0,0.255,0,0,0.229,0,0.359,0.058,0.379,0.103,0.497,0.153,0.508,0.241,0.54,0.239,0.667,0.819,0.65,0.837,0.529,0.283,0.523,0.273,0.501,0.273,0.337,0.214,0.3,0.287,0.182,0.28
@@ -1023,12 +1043,16 @@ cameras:
         person:
           # iter2 (2026-05-25): p5/p95 from soak3 dump (168 events, 72h).
           # area p5=1554 p95=60901  ratio p5=0.53 p95=10.00
+          # iter3 (2026-05-26): 4 events seen, 100% above max_area → p95 observed ~233k
+          #   max_area too low for close-range rooftop detections. Raised to p95×5.
+          #   min_ratio lowered to 0.35 to allow very thin (upright) standing persons.
+          #   threshold/min_score lowered slightly (still well above model baseline).
           min_area: 1554
-          max_area: 60901
-          min_ratio: 0.53
+          max_area: 302935      # iter3: was 60901, raised to p95×5 (observed ~233k in 10h)
+          min_ratio: 0.35        # iter3: was 0.53, lowered to allow thin upright persons
           max_ratio: 10.0
-          threshold: 0.68
-          min_score: 0.65
+          threshold: 0.61        # iter3: was 0.68, lowered (still above model floor)
+          min_score: 0.59        # iter3: was 0.65, lowered
 
     snapshots:
       enabled: true
@@ -1042,9 +1066,9 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.68
+            threshold: 0.61        # iter3: was 0.68
             min_area: 1554
-            min_ratio: 0.53
+            min_ratio: 0.35        # iter3: was 0.53
             max_ratio: 10.0
 
     review:
@@ -1171,12 +1195,15 @@ cameras:
         person:
           # iter2 (2026-05-25): p5/p95 from soak3 dump (16 events, 72h).
           # area p5=503 p95=422832  ratio p5=0.24 p95=10.00
+          # iter3 (2026-05-26): 6 events seen, 1 above max_area → marginal, sample too small
+          #   to act definitively. Keeping max_area at 450,000 as a slight safety raise.
+          #   threshold/min_score lowered — all 6 events had scores below current threshold.
           min_area: 503
-          max_area: 422832
+          max_area: 450000          # iter3: was 422,832, raised to 450k (observed p95~369k)
           min_ratio: 0.24
           max_ratio: 10.0
-          threshold: 0.58
-          min_score: 0.53
+          threshold: 0.52           # iter3: was 0.58, lowered
+          min_score: 0.48           # iter3: was 0.53, lowered
 
     snapshots:
       enabled: true
@@ -1190,7 +1217,7 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.58
+            threshold: 0.52           # iter3: was 0.58
             min_area: 503
             min_ratio: 0.24
             max_ratio: 10.0
