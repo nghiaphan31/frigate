@@ -45,6 +45,29 @@ fail() { echo "[$(date '+%H:%M:%S')] ❌ $*" >&2; exit 1; }
 
 dc() { docker-compose -f "$COMPOSE_FILE" "$@"; }
 
+# ZMQ-fix stop+start cycle.
+# Uses `docker stop -t 30` (30s graceful timeout) instead of `dc stop` (default 10s).
+# With restart: unless-stopped, the container must be fully stopped before Docker
+# auto-restarts it. 10s is not enough for Frigate to close all ZMQ IPC sockets;
+# 30s gives the processes time to flush and exit cleanly.
+# The 3s sleep ensures the socket files are released before the new start.
+zmq_fix_cycle() {
+    local container
+    container=$(docker-compose -f "$COMPOSE_FILE" ps -q "$SERVICE" 2>/dev/null | head -1)
+    if [[ -z "$container" ]]; then
+        warn "zmq_fix_cycle: no running container found — using dc stop/start fallback"
+        dc stop "$SERVICE"
+        sleep 3
+        dc start "$SERVICE"
+        return
+    fi
+    log "ZMQ-fix: stopping container ${container} (timeout=30s)..."
+    docker stop -t 30 "$container"
+    sleep 3
+    log "ZMQ-fix: starting ${SERVICE}..."
+    dc start "$SERVICE"
+}
+
 wait_healthy() {
     local max_wait=120
     local interval=5
@@ -258,8 +281,7 @@ cmd_boot() {
 
     # ZMQ-fix stop+start cycle
     log "Performing ZMQ-fix stop+start cycle..."
-    dc stop "$SERVICE"
-    dc start "$SERVICE"
+    zmq_fix_cycle
 
     wait_healthy
     wait_detector_ready 120 || true  # engine cached — should be <10s
@@ -272,8 +294,7 @@ cmd_boot() {
     # Safety net: if process_fps still 0 on majority, do one more stop+start
     if ! all_processing; then
         warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
-        dc stop "$SERVICE"
-        dc start "$SERVICE"
+        zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120 || true
         wait_all_processing 120 || true
@@ -324,10 +345,7 @@ cmd_restart() {
     log "=== Config-only restart (stop+start — never docker-compose restart) ==="
     # IMPORTANT: `docker-compose restart` leaves ZMQ IPC sockets broken → process_fps=0.
     # Always use stop+start instead, even for config-only changes.
-    log "Stopping ${SERVICE}..."
-    dc stop "$SERVICE"
-    log "Starting ${SERVICE}..."
-    dc start "$SERVICE"
+    zmq_fix_cycle
     wait_healthy
     # Wait for detector model to load (TRT cache: ~5s; first build: ~65s)
     wait_detector_ready 120 || true
@@ -339,8 +357,7 @@ cmd_restart() {
     # If process_fps still 0 on majority of cameras, do one ZMQ-fix stop+start retry
     if ! all_processing; then
         warn "process_fps=0 on majority of cameras — ZMQ IPC stale. Retrying stop+start..."
-        dc stop "$SERVICE"
-        dc start "$SERVICE"
+        zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120 || true
         wait_all_processing 120 || true
@@ -379,8 +396,7 @@ cmd_recreate() {
     log "Step 2/2 — wait for TRT build, stop+start (ZMQ reset), confirm ZMQ healthy..."
     wait_healthy
     wait_detector_ready 300  # up to 300s for TRT engine build on first run
-    dc stop "$SERVICE"
-    dc start "$SERVICE"
+    zmq_fix_cycle
 
     wait_healthy
     wait_detector_ready 120  # engine cached now — should be <10s
@@ -392,8 +408,7 @@ cmd_recreate() {
     # Safety net: if process_fps still 0 on some cameras, do one more stop+start
     if ! all_processing; then
         warn "process_fps=0 on some cameras — doing one more ZMQ reset..."
-        dc stop "$SERVICE"
-        dc start "$SERVICE"
+        zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120
         wait_all_processing 120 || true
