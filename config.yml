@@ -227,17 +227,19 @@ go2rtc:
   streams:
     # ── Allée sur le côté — Reolink Duo 3 (192.168.50.129) ──────────────────
     # Physical sensor: dual-lens panoramic
-    # Main stream:  4096×1152  (full panoramic, used for recording)
-    # Sub stream:   1536×432   (full panoramic, used for live view)
-    # Half-crops:   2048×1152  each (produced by NUC go2rtc, used for detection)
+    # Main stream:  4096×1152  (full panoramic, pulled from NUC for crop by Calypso)
+    # Sub stream:   1536×432   (full panoramic, live view only)
+    # Half-crops:   2048×1152  each (cropped by Calypso's internal go2rtc using #video=ffmpeg)
     allee_sur_le_cote_main:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
     allee_sur_le_cote_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
     allee_sur_le_cote_left:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main_left
+      # Calypso crops left half (2048×1152) from full main using FFmpeg
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=ffmpeg:-vf crop=2048:1152:0:0
     allee_sur_le_cote_right:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main_right
+      # Calypso crops right half (2048×1152) from full main using FFmpeg
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=ffmpeg:-vf crop=2048:1152:2048:0
 
     # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ──────
     # Physical sensor: single-lens, fixed mount, north-facing
@@ -267,23 +269,27 @@ go2rtc:
     jardin_devant_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub
     jardin_devant_main_left:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_left
+      # Calypso crops left half (2048×1152) from full main using FFmpeg
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=ffmpeg:-vf crop=2048:1152:0:0
     jardin_devant_main_right:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main_right
+      # Calypso crops right half (2048×1152) from full main using FFmpeg
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=ffmpeg:-vf crop=2048:1152:2048:0
 
     # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────────
     # Physical sensor: dual-lens panoramic, rooftop mount, south-facing
-    # Main stream:  4096×1152  (full panoramic, used for recording)
-    # Sub stream:   1536×432   (full panoramic, used for live view)
-    # Half-crops:   2048×1152  each (produced by NUC go2rtc, used for detection)
+    # Main stream:  4096×1152  (full panoramic, pulled from NUC for crop by Calypso)
+    # Sub stream:   1536×432   (full panoramic, live view only)
+    # Half-crops:   2048×1152  each (cropped by Calypso's internal go2rtc using #video=ffmpeg)
     piscine_vue_toit_main:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
     piscine_vue_toit_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub
     piscine_vue_toit_left:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_left
+      # Calypso crops left half (2048×1152) from full main using FFmpeg
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=ffmpeg:-vf crop=2048:1152:0:0
     piscine_vue_toit_right:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main_right
+      # Calypso crops right half (2048×1152) from full main using FFmpeg
+      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=ffmpeg:-vf crop=2048:1152:2048:0
 
 # ============================================================================
 # 2. CAMERA DEFINITIONS
