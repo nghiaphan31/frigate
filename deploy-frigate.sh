@@ -59,8 +59,132 @@ wait_healthy() {
     ok "Frigate API is up"
 }
 
+# Wait until the detector has loaded its model and entered its ZMQ receive loop.
+# Polls /api/stats until inference_speed > 0 for any detector.
+#
+# IMPORTANT CAVEAT: inference_speed in /api/stats is STALE CACHED DATA from the
+# previous run. It becomes > 0 as soon as the API starts, even before the detector
+# process has entered its ZMQ receive loop. Do NOT use inference_speed > 0 as a
+# signal that ZMQ is healthy — use wait_all_processing() for that instead.
+#
+# This function is only useful for waiting out the TRT engine build (~65s first run)
+# before doing the ZMQ-fix stop+start. After the stop+start, use wait_all_processing()
+# to confirm the ZMQ IPC connection is actually working.
+#
+# WHY the ZMQ-fix stop+start is needed at all:
+#   After `up -d`, the detect process blocks in ort.InferenceSession() for the
+#   duration of the TRT engine build (~65s first run, ~5s from cache). During
+#   this time it has NOT entered its ZMQ IPC receive loop. The capture processes
+#   connect immediately (ZMQ connect is non-blocking) and start queuing frames.
+#   If we stop+start before the detector enters its ZMQ loop, the capture processes
+#   go through one failed connection cycle → inconsistent state → process_fps=0.
+#   Doing the stop+start AFTER the TRT build (when inference_speed first appears)
+#   gives the best chance of a clean ZMQ connection on the next start.
+wait_detector_ready() {
+    local max_wait="${1:-300}"  # default 300s — TRT build ~65s, 4× headroom
+    local interval=5
+    local elapsed=0
+    log "Waiting for detector to become ready (inference_speed > 0, timeout=${max_wait}s)..."
+    while true; do
+        local speed
+        speed=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null \
+            | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    speeds = [v.get('inference_speed', 0) for v in s.get('detectors', {}).values()]
+    print(max(speeds) if speeds else 0)
+except Exception:
+    print(0)
+" 2>/dev/null) || speed=0
+        # Use awk for float comparison (avoids bc dependency)
+        if awk "BEGIN{exit !($speed > 0)}"; then
+            ok "Detector model loaded: inference_speed=${speed}ms (stale cache — ZMQ not yet confirmed)"
+            return 0
+        fi
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+        if [[ $elapsed -ge $max_wait ]]; then
+            warn "Detector did not become ready within ${max_wait}s — proceeding anyway"
+            return 1
+        fi
+        log "  ...detector not ready yet (${elapsed}s elapsed, inference_speed=${speed}ms)"
+    done
+}
+
+# Check whether any camera has detection_fps > 0.
+# Returns 0 (success) if at least one camera is detecting, 1 otherwise.
+any_det_fps() {
+    curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null \
+        | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    fps = [v.get('detection_fps', 0) for v in s.get('cameras', {}).values()]
+    print(1 if any(f and f > 0 for f in fps) else 0)
+except Exception:
+    print(0)
+" 2>/dev/null | grep -q '^1$'
+}
+
+# Check whether a majority of cameras have process_fps > 0.
+# process_fps > 0 means the camera processor is successfully sending frames to
+# the detector via ZMQ IPC and receiving responses. This is the reliable signal
+# that the ZMQ IPC connection is healthy — unlike inference_speed which is stale
+# cached data from the previous run and does NOT indicate current ZMQ readiness.
+#
+# Uses majority (>50%) not 100% because some cameras may legitimately have
+# process_fps=0 briefly after startup (slow RTSP reconnect, motion-gated detect).
+# Returns 0 (success) if majority of detection-enabled cameras are processing.
+all_processing() {
+    curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null \
+        | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    cams = s.get('cameras', {})
+    if not cams:
+        print(0)
+        sys.exit()
+    # Only check cameras with detection enabled
+    enabled = {c: v for c, v in cams.items() if v.get('detection_enabled', True)}
+    if not enabled:
+        print(1)  # no detection-enabled cameras — nothing to wait for
+        sys.exit()
+    processing = sum(1 for v in enabled.values() if (v.get('process_fps') or 0) > 0)
+    total = len(enabled)
+    # Require majority (>50%) to be processing
+    print(1 if processing > total / 2 else 0)
+except Exception:
+    print(0)
+" 2>/dev/null | grep -q '^1$'
+}
+
+# Wait until majority of cameras are processing (process_fps > 0).
+# This is the reliable ZMQ health signal — see all_processing() above.
+# Returns 0 on success, 1 on timeout (caller should handle gracefully).
+wait_all_processing() {
+    local max_wait="${1:-120}"
+    local interval=5
+    local elapsed=0
+    log "Waiting for cameras to start processing (majority process_fps > 0, timeout=${max_wait}s)..."
+    while true; do
+        if all_processing; then
+            ok "Majority of cameras processing (ZMQ IPC healthy)"
+            return 0
+        fi
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+        if [[ $elapsed -ge $max_wait ]]; then
+            warn "Cameras not processing within ${max_wait}s — ZMQ IPC may still be broken"
+            return 1  # caller must NOT rely on set -e here — use || true if needed
+        fi
+        log "  ...waiting for process_fps > 0 on majority of cameras (${elapsed}s elapsed)"
+    done
+}
+
 check_det_fps() {
-    log "Checking det_fps on all cameras..."
+    log "Checking detection_fps on all cameras..."
     local stats
     stats=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null) || {
         warn "Could not reach stats API"
@@ -71,11 +195,12 @@ check_det_fps() {
 import sys, json
 s = json.load(sys.stdin)
 cameras = s.get('cameras', {})
-zero = [c for c, v in cameras.items() if v.get('detection', {}).get('det_fps', 0) == 0]
-nonzero = [c for c, v in cameras.items() if v.get('detection', {}).get('det_fps', 0) > 0]
-print(f'det_fps>0: {len(nonzero)}/{len(cameras)} cameras')
+# Frigate 0.17.x: detection_fps is a top-level field on each camera object
+zero    = [c for c, v in cameras.items() if not (v.get('detection_fps') or 0) > 0]
+nonzero = [c for c, v in cameras.items() if (v.get('detection_fps') or 0) > 0]
+print(f'detection_fps>0: {len(nonzero)}/{len(cameras)} cameras')
 if zero:
-    print(f'det_fps=0: {zero}')
+    print(f'detection_fps=0: {zero}')
 " 2>/dev/null)
     echo "$zero_cams"
 }
@@ -119,17 +244,32 @@ cmd_status() {
 
 cmd_restart() {
     log "=== Config-only restart (stop+start — never docker-compose restart) ==="
-    # IMPORTANT: `docker-compose restart` leaves ZMQ IPC sockets broken → det_fps=0.
+    # IMPORTANT: `docker-compose restart` leaves ZMQ IPC sockets broken → process_fps=0.
     # Always use stop+start instead, even for config-only changes.
     log "Stopping ${SERVICE}..."
     dc stop "$SERVICE"
     log "Starting ${SERVICE}..."
     dc start "$SERVICE"
     wait_healthy
-    sleep 15  # allow detectors to initialise and first frames to arrive
+    # Wait for detector model to load (TRT cache: ~5s; first build: ~65s)
+    wait_detector_ready 120 || true
+    # Wait for ZMQ IPC to be healthy: majority process_fps > 0
+    wait_all_processing 120 || true
     log "Post-restart health:"
     check_inference
     check_det_fps
+    # If process_fps still 0 on majority of cameras, do one ZMQ-fix stop+start retry
+    if ! all_processing; then
+        warn "process_fps=0 on majority of cameras — ZMQ IPC stale. Retrying stop+start..."
+        dc stop "$SERVICE"
+        dc start "$SERVICE"
+        wait_healthy
+        wait_detector_ready 120 || true
+        wait_all_processing 120 || true
+        log "Post-retry health:"
+        check_inference
+        check_det_fps
+    fi
     check_shm
     ok "Restart complete"
 }
@@ -146,27 +286,46 @@ cmd_recreate() {
     dc rm -f "$SERVICE"
     dc up -d "$SERVICE"
 
-    # Brief pause to let the container start its init sequence
-    sleep 5
-
-    # Step 2: stop + start to fix ZMQ IPC deadlock
-    # After `up -d` following `rm -f`, ZMQ IPC sockets between the capture
-    # and detect processes are in a broken state → det_fps=0 on all cameras.
-    # A stop/start cycle resets the IPC correctly.
-    log "Step 2/2 — stop + start (fix ZMQ IPC deadlock)..."
+    # Step 2: wait for TRT engine build, then do the ZMQ-fix stop+start, then
+    #         confirm ZMQ is healthy via process_fps > 0 on all cameras.
+    #
+    # WHY the order matters:
+    #   After `up -d`, the detect process blocks in ort.InferenceSession() for
+    #   the TRT engine build (~65s first run, ~5s from cache). During this time
+    #   it has NOT entered its ZMQ IPC receive loop. If we stop+start too early,
+    #   the capture processes go through one failed connection cycle → process_fps=0.
+    #   Waiting for inference_speed > 0 (TRT build done) before the stop+start
+    #   gives the best chance of a clean ZMQ connection on the next start.
+    #   After the stop+start, wait_all_processing() confirms ZMQ is actually healthy
+    #   (process_fps > 0 is the real signal — inference_speed is stale cached data).
+    log "Step 2/2 — wait for TRT build, stop+start (ZMQ reset), confirm ZMQ healthy..."
+    wait_healthy
+    wait_detector_ready 300  # up to 300s for TRT engine build on first run
     dc stop "$SERVICE"
     dc start "$SERVICE"
 
     wait_healthy
-    sleep 15  # allow detectors to initialise and first frames to arrive
+    wait_detector_ready 120  # engine cached now — should be <10s
+    wait_all_processing 120 || true  # confirm ZMQ IPC is healthy (process_fps > 0)
 
     log "Post-recreation health:"
     check_inference
     check_det_fps
+    # Safety net: if process_fps still 0 on some cameras, do one more stop+start
+    if ! all_processing; then
+        warn "process_fps=0 on some cameras — doing one more ZMQ reset..."
+        dc stop "$SERVICE"
+        dc start "$SERVICE"
+        wait_healthy
+        wait_detector_ready 120
+        wait_all_processing 120 || true
+        log "Post-retry health:"
+        check_inference
+        check_det_fps
+    fi
     check_shm
 
     ok "Recreation complete"
-    warn "If det_fps=0 persists after 60s, run: docker-compose -f ${COMPOSE_FILE} stop ${SERVICE} && docker-compose -f ${COMPOSE_FILE} start ${SERVICE}"
     echo ""
     warn "Remember to update SOAK_EPOCH in this script if this is a soak restart:"
     echo "  SOAK_EPOCH=\$(date +%s)  # current epoch: $(date +%s)"
