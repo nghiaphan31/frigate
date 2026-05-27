@@ -27,6 +27,28 @@
 # Verify after deploy:
 #   curl -s http://localhost:5000/api/stats | python3 -m json.tool | grep -E 'inference_speed|det_fps'
 #   df -h /dev/shm
+#
+# TRT ENGINE CACHE (detector device: Tensorrt):
+#   The TRT engine is built on first run (~65s on RTX 5060 Ti) and cached in
+#   ./trt-cache/ on the host (mounted as /config/model_cache inside the container).
+#   During the build: det_fps=0 on all cameras — this is normal.
+#   After build: inference_speed drops from ~122ms (CPU) to ~6-7ms (TRT).
+#   The cache survives container recreation — no rebuild needed on restart.
+#   To force a rebuild: rm -rf ./trt-cache/tensorrt && full recreate.
+#   Fallback: if TRT fails, set device: "CPU" in config.yml and restart
+#   (no recreation needed for config.yml-only changes).
+#
+# TRT RUNTIME LIBS (./trt-libs → /trt-libs in container):
+#   The stable-tensorrt image ships libonnxruntime_providers_tensorrt.so but
+#   NOT the TensorRT runtime libs (libnvinfer.so.10 etc.). These must be
+#   provided externally. ./trt-libs/ contains tensorrt-cu12-libs==10.9.0.34
+#   (pip-extracted) which supports SM 120 (Blackwell GB206, RTX 5060 Ti).
+#   The ldconfig conf is written by the entrypoint (see command: below) so
+#   the dynamic linker finds libnvinfer.so.10 at container start.
+#   TRT 10.6 and earlier do NOT support SM 120 — use 10.7+ only.
+#   To update TRT: pip download tensorrt-cu12-libs==X.Y.Z --no-deps -d /tmp/trt
+#                  pip install --target=./trt-libs /tmp/trt/*.whl
+#                  Then update the version comment here.
 # =============================================================================
 
 services:
@@ -58,10 +80,17 @@ services:
     volumes:
       - ./config.yml:/config/config.yml
       - ${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}:/media/frigate
+      - ./trt-cache:/config/model_cache  # TRT engine cache — persists across recreations (~65s build on first run)
+      - ./trt-libs:/trt-libs:ro          # TRT 10.9.0 runtime libs for SM 120 (Blackwell GB206) support
       - type: tmpfs
         target: /tmp/cache
         tmpfs:
           size: 2147483648  # 2GB in bytes (increased from 1GB — iowait 38% indicated pressure)
+    # Register TRT libs with ldconfig before Frigate starts.
+    # The stable-tensorrt image has libonnxruntime_providers_tensorrt.so but not libnvinfer.so.10.
+    # ./trt-libs (tensorrt-cu12-libs==10.9.0.34) provides libnvinfer.so.10 for SM 120 support.
+    command: >
+      sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && ldconfig && exec python3 -u -m frigate"
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl

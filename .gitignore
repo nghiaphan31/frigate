@@ -1,0 +1,8 @@
+# TRT runtime libs — 4.4GB binary, not committed to git.
+# Reproduced by: pip install --target=./trt-libs tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34
+# See docker-compose.calypso.yml TRT RUNTIME LIBS section for details.
+trt-libs/
+
+# TRT engine cache and model cache — large binary, machine-specific, regenerated on first run.
+# Committed selectively (only small JSON/ONNX metadata files, not engine binaries).
+trt-cache/tensorrt/
