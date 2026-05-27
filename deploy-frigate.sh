@@ -32,7 +32,7 @@ FRIGATE_API="http://localhost:5000"
 
 # Soak epoch — update this after each container recreation or soak reset
 # Used by the `dump` command to filter events since last soak start
-SOAK_EPOCH=1779782843  # iter3 soak start: 2026-05-26 08:06 UTC
+SOAK_EPOCH=1779919998  # soak restart after ZMQ-fix + reboot robustness: 2026-05-27 22:13 UTC
 
 # ---------------------------------------------------------------------------
 # Helpers
