@@ -261,11 +261,20 @@ After 48h of monitoring with iter2 tight parameters:
 ## Parameter Derivation Formulas
 
 ```
-min_area  = floor(min_observed_area  × 0.70)
-max_area  = ceil(max_observed_area   × 1.50)
-min_ratio = floor2dp(min_observed_ratio × 0.80)
-max_ratio = ceil2dp(max_observed_ratio  × 1.30)
+min_area  = floor(p5_area   × 0.70)
+max_area  = ceil (p95_area  × 1.30)
+min_ratio = floor2dp(p5_ratio  × 0.80)
+max_ratio = ceil2dp(p95_ratio × 1.20)
+threshold = floor2dp(p10_score × 0.95)
+min_score = floor2dp(p5_score  × 0.95)
 ```
+
+> **Note:** This uses **p5/p95 percentiles**, not raw min/max. The raw min/max
+> formulas (e.g. `max_area = ceil(max × 1.50)`) were the original plan intent
+> but were superseded by the percentile approach after soak testing confirmed
+> it produces more stable parameters. The config.yml iter2 parameters were
+> derived using the percentile formulas above (confirmed by automated
+> verification script `verify_iter2_traceability.py`).
 
 **Expected ratio ranges by camera type:**
 
@@ -540,7 +549,7 @@ objects:
     person:
       # Measured YYYY-MM-DD via Option-B event dump (N events)
       # far=NNNpx² mid=NNNpx² close=NNNpx²
-      # min = NNN × 0.70 = NNN  max = NNN × 1.50 = NNN
+      # p5 = NNN  p95 = NNN  →  min_area = floor(p5×0.70) = NNN  max_area = ceil(p95×1.30) = NNN
       min_area: NNNN
       max_area: NNNNN
       # Observed ratios: N.NN (far standing) to N.NN (close walking)
