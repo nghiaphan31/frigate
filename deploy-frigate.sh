@@ -3,11 +3,13 @@
 # deploy-frigate.sh — Safe Frigate deployment script (Calypso / RTX 5060 Ti)
 # =============================================================================
 # Usage:
-#   ./deploy-frigate.sh            # auto-detect: restart or full recreate
-#   ./deploy-frigate.sh restart    # config-only change (stop+start, NOT docker restart)
-#   ./deploy-frigate.sh recreate   # force full container recreation
-#   ./deploy-frigate.sh status     # show current health (inference speed, det_fps, shm)
-#   ./deploy-frigate.sh dump       # run Option-B event dump (Track A soak output)
+#   ./deploy-frigate.sh                  # auto-detect: restart or full recreate
+#   ./deploy-frigate.sh restart          # config-only change (stop+start, NOT docker restart)
+#   ./deploy-frigate.sh recreate         # force full container recreation
+#   ./deploy-frigate.sh boot             # ZMQ-fix cycle after host reboot (used by frigate.service)
+#   ./deploy-frigate.sh install-service  # install + enable frigate.service (requires sudo)
+#   ./deploy-frigate.sh status           # show current health (inference speed, det_fps, shm)
+#   ./deploy-frigate.sh dump             # run Option-B event dump (Track A soak output)
 #
 # Why this script exists — issues encountered 2026-05-22:
 #   1. `docker-compose up --force-recreate` fails with KeyError: 'ContainerConfig'
@@ -242,6 +244,82 @@ cmd_status() {
     check_shm
 }
 
+cmd_boot() {
+    # Called by frigate.service on host boot.
+    # Docker's `restart: unless-stopped` auto-starts the container, but does NOT
+    # run the ZMQ-fix stop+start cycle. This function does that cycle and confirms
+    # ZMQ health (process_fps > 0) before returning.
+    log "=== Boot ZMQ-fix sequence (called by frigate.service) ==="
+
+    # The container was already started by Docker's restart policy.
+    # Wait for the API to come up and the TRT engine to finish building.
+    wait_healthy
+    wait_detector_ready 300  # up to 5 min for TRT build on first run after reboot
+
+    # ZMQ-fix stop+start cycle
+    log "Performing ZMQ-fix stop+start cycle..."
+    dc stop "$SERVICE"
+    dc start "$SERVICE"
+
+    wait_healthy
+    wait_detector_ready 120 || true  # engine cached — should be <10s
+    wait_all_processing 120 || true  # confirm ZMQ IPC healthy (process_fps > 0)
+
+    log "Post-boot health:"
+    check_inference
+    check_det_fps
+
+    # Safety net: if process_fps still 0 on majority, do one more stop+start
+    if ! all_processing; then
+        warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
+        dc stop "$SERVICE"
+        dc start "$SERVICE"
+        wait_healthy
+        wait_detector_ready 120 || true
+        wait_all_processing 120 || true
+        log "Post-retry health:"
+        check_inference
+        check_det_fps
+    fi
+
+    check_shm
+    ok "Boot sequence complete"
+}
+
+cmd_install_service() {
+    # Install and enable frigate.service as a systemd unit.
+    # Must be run with sudo (or as root).
+    local SCRIPT_DIR
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local SERVICE_SRC="${SCRIPT_DIR}/frigate.service"
+    local SERVICE_DST="/etc/systemd/system/frigate.service"
+
+    if [[ ! -f "$SERVICE_SRC" ]]; then
+        err "frigate.service not found at ${SERVICE_SRC}"
+        exit 1
+    fi
+
+    log "Installing ${SERVICE_SRC} → ${SERVICE_DST}..."
+    cp "$SERVICE_SRC" "$SERVICE_DST"
+    chmod 644 "$SERVICE_DST"
+
+    log "Reloading systemd daemon..."
+    systemctl daemon-reload
+
+    log "Enabling frigate.service (auto-start on boot)..."
+    systemctl enable frigate.service
+
+    ok "frigate.service installed and enabled."
+    echo ""
+    echo "  To start now:   systemctl start frigate"
+    echo "  To check status: systemctl status frigate"
+    echo "  To view logs:   journalctl -u frigate -f"
+    echo ""
+    warn "NOTE: The service runs deploy-frigate.sh boot, which performs the ZMQ-fix"
+    warn "      stop+start cycle. Docker's restart: unless-stopped handles the initial"
+    warn "      container start; this service handles the ZMQ health check."
+}
+
 cmd_restart() {
     log "=== Config-only restart (stop+start — never docker-compose restart) ==="
     # IMPORTANT: `docker-compose restart` leaves ZMQ IPC sockets broken → process_fps=0.
@@ -431,6 +509,12 @@ case "$MODE" in
     recreate)
         cmd_recreate
         ;;
+    boot)
+        cmd_boot
+        ;;
+    install-service)
+        cmd_install_service
+        ;;
     status)
         cmd_status
         ;;
@@ -456,13 +540,15 @@ case "$MODE" in
         fi
         ;;
     *)
-        echo "Usage: $0 [restart|recreate|status|dump|auto]"
+        echo "Usage: $0 [restart|recreate|boot|install-service|status|dump|auto]"
         echo ""
-        echo "  auto      (default) detect whether recreation is needed"
-        echo "  restart   config.yml change only — no container recreation"
-        echo "  recreate  image/shm_size/devices changed — full stop+rm+up+stop+start"
-        echo "  status    show inference speed, det_fps, /dev/shm usage"
-        echo "  dump      Option-B event dump for Track A soak analysis"
+        echo "  auto             (default) detect whether recreation is needed"
+        echo "  restart          config.yml change only — no container recreation"
+        echo "  recreate         image/shm_size/devices changed — full stop+rm+up+stop+start"
+        echo "  boot             ZMQ-fix cycle after host reboot (used by frigate.service)"
+        echo "  install-service  install + enable frigate.service (requires sudo)"
+        echo "  status           show inference speed, det_fps, /dev/shm usage"
+        echo "  dump             Option-B event dump for Track A soak analysis"
         exit 1
         ;;
 esac

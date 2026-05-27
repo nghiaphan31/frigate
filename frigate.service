@@ -1,0 +1,63 @@
+# =============================================================================
+# frigate.service — systemd unit for Frigate NVR (Calypso / RTX 5060 Ti)
+# =============================================================================
+#
+# Install:
+#   sudo cp frigate.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable frigate
+#   sudo systemctl start frigate
+#
+# Or use the helper:
+#   sudo ./deploy-frigate.sh install-service
+#
+# Why this unit exists:
+#   docker-compose restart: always leaves ZMQ IPC sockets broken → process_fps=0.
+#   The `restart: unless-stopped` policy in docker-compose.calypso.yml makes Docker
+#   auto-start the container on host reboot, but Docker's built-in restart does NOT
+#   run the ZMQ-fix stop+start cycle. This unit runs `deploy-frigate.sh boot` after
+#   Docker starts, which waits for the TRT engine build and then does the ZMQ-fix
+#   stop+start cycle to ensure all cameras have process_fps > 0.
+#
+# Boot sequence:
+#   1. Docker daemon starts (docker.service)
+#   2. Docker auto-starts the frigate container (restart: unless-stopped)
+#   3. This unit runs `deploy-frigate.sh boot`:
+#      a. wait_healthy (API up)
+#      b. wait_detector_ready 300 (TRT engine build, up to 5 min)
+#      c. stop + start (ZMQ-fix cycle)
+#      d. wait_healthy + wait_detector_ready 120
+#      e. wait_all_processing 120 (confirm process_fps > 0 on majority of cameras)
+#      f. safety-net retry if still not all processing
+# =============================================================================
+
+[Unit]
+Description=Frigate NVR ZMQ-fix boot sequence
+Documentation=https://docs.frigate.video
+# Must run after Docker is up and the container has been auto-started
+After=docker.service network-online.target
+Requires=docker.service
+# Do not conflict with docker.service stop
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+# Run as the deploy user (owns the project directory and docker socket access)
+User=nghia-phan
+WorkingDirectory=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
+ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/deploy-frigate.sh boot
+# Give the TRT build + ZMQ health check plenty of time (300s build + 120s ZMQ + margin)
+TimeoutStartSec=600
+# Log to journald — view with: journalctl -u frigate -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=frigate-boot
+# Retry on failure (e.g. Docker not ready yet)
+Restart=on-failure
+RestartSec=30
+# Only retry a few times — if it keeps failing, something is wrong
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

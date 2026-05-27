@@ -59,6 +59,7 @@ services:
     # To use TensorrtExecutionProvider instead of CUDA, set detector device: "Tensorrt"
     # (exact string) — requires TRT engine cache build on first run (~5 min).
     image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
+    restart: unless-stopped  # auto-start on host reboot; ZMQ-fix handled by frigate.service
     network_mode: host
     # shm_size must be large enough for all camera frame buffers.
     # Formula: sum(width × height × 3 bytes × fps × 0.5s buffer) across all cameras,
