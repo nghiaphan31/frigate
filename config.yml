@@ -87,9 +87,11 @@ mqtt:
 # ---------------------------------------------------------------------------
 ffmpeg:
   # RTX 5060 Ti 16 GB — CUDA hardware decoding enabled.
-  # -hwaccel_output_format cuda is intentionally omitted: keeping it would
-  # leave decoded frames as CUDA surfaces in GPU memory, preventing Frigate
-  # from extracting CPU-side pixel data for snapshots and detection.
+  # -hwaccel_output_format cuda is intentionally omitted globally: it would
+  # leave decoded frames as CUDA surfaces, breaking non-crop cameras whose
+  # default -vf fps/scale filter cannot operate on CUDA surfaces.
+  # Crop cameras override hwaccel_args per-camera to add hwaccel_output_format
+  # cuda, enabling the hwdownload,format=nv12,format=yuv420p,crop= filter chain.
   hwaccel_args:
     - -hwaccel
     - cuda
@@ -422,7 +424,8 @@ cameras:
   # Position:  Left half of driveway — covers gate and street approach
   # Streams:
   #   detect  → main 4096×1152 pulled from go2rtc, cropped to left 2048×1152
-  #             crop applied via ffmpeg.output_args.detect override (-vf crop)
+  #             crop applied via CUDA filter graph (hwaccel_output_format cuda +
+  #             crop,hwdownload,format=yuv420p) — GPU crop, CPU never sees full frame
   #   record  → main 4096×1152 (shared connection, Frigate deduplicates)
   #   audio   → main (shared)
   #   live    → sub 1536×432 (full panoramic sub for UI context)
@@ -430,12 +433,17 @@ cameras:
   allee_sur_le_cote_left:
 
     ffmpeg:
+      hwaccel_args:
+        - -hwaccel
+        - cuda
+        - -hwaccel_device
+        - '0'
+        - -hwaccel_output_format
+        - cuda
       output_args:
         detect:
-          - -threads
-          - "2"
           - -vf
-          - crop=2048:1152:0:0
+          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
           - -f
           - rawvideo
           - -pix_fmt
@@ -528,19 +536,25 @@ cameras:
   # Position:  Right half of driveway — covers garden side and rear approach
   # Streams:
   #   detect  → main 4096×1152 pulled from go2rtc, cropped to right 2048×1152
-  #             crop applied via ffmpeg.output_args.detect override (-vf crop)
+  #             crop applied via CUDA filter graph (hwaccel_output_format cuda +
+  #             crop,hwdownload,format=yuv420p) — GPU crop, CPU never sees full frame
   #   record  → main 4096×1152 (shared connection, no second audio needed)
   #   live    → sub 1536×432 (full panoramic sub for UI context)
   # ==========================================================================
   allee_sur_le_cote_right:
 
     ffmpeg:
+      hwaccel_args:
+        - -hwaccel
+        - cuda
+        - -hwaccel_device
+        - '0'
+        - -hwaccel_output_format
+        - cuda
       output_args:
         detect:
-          - -threads
-          - "2"
           - -vf
-          - crop=2048:1152:2048:0
+          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
           - -f
           - rawvideo
           - -pix_fmt
@@ -867,23 +881,30 @@ cameras:
   # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
-  #   detect     = main cropped to left 2048×1152 via ffmpeg.output_args.detect
+  #   detect     = main cropped to left 2048×1152 via CUDA filter graph
+  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
+  #                GPU crop — CPU never sees full 4096×1152 frame
   #   sub        = 1536×432  — live view only
   # ========================================================================
   jardin_devant_left:
     ffmpeg:
+      hwaccel_args:
+        - -hwaccel
+        - cuda
+        - -hwaccel_device
+        - '0'
+        - -hwaccel_output_format
+        - cuda
       output_args:
         detect:
-          - -threads
-          - "2"
           - -vf
-          - crop=2048:1152:0:0
+          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
           - -f
           - rawvideo
           - -pix_fmt
           - yuv420p
       inputs:
-        # main stream → detect with crop (left half 2048×1152)
+        # main stream → detect with CUDA crop (left half 2048×1152)
         - path: rtsp://127.0.0.1:8554/jardin_devant_main
           roles: [detect]
         # main stream → record (4096×1152, shared with jardin_devant_right)
@@ -969,23 +990,30 @@ cameras:
   # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
-  #   detect     = main cropped to right 2048×1152 via ffmpeg.output_args.detect
+  #   detect     = main cropped to right 2048×1152 via CUDA filter graph
+  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
+  #                GPU crop — CPU never sees full 4096×1152 frame
   #   sub        = 1536×432  — live view only
   # ========================================================================
   jardin_devant_right:
     ffmpeg:
+      hwaccel_args:
+        - -hwaccel
+        - cuda
+        - -hwaccel_device
+        - '0'
+        - -hwaccel_output_format
+        - cuda
       output_args:
         detect:
-          - -threads
-          - "2"
           - -vf
-          - crop=2048:1152:2048:0
+          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
           - -f
           - rawvideo
           - -pix_fmt
           - yuv420p
       inputs:
-        # main stream → detect with crop (right half 2048×1152)
+        # main stream → detect with CUDA crop (right half 2048×1152)
         - path: rtsp://127.0.0.1:8554/jardin_devant_main
           roles: [detect]
         # main stream → record (4096×1152, shared with jardin_devant_left)
@@ -1147,7 +1175,9 @@ cameras:
   # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record + audio (shared connection)
-  #   main_left  = 2048×1152 (16:9 crop, left half) — detect
+  #   main_left  = 2048×1152 (16:9 crop, left half) — detect via CUDA filter graph
+  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
+  #                GPU crop — CPU never sees full 4096×1152 frame
   #   sub        = 1536×432  — live view only
   # iter1: migrated from sub_left (768×432) → main_left (2048×1152)
   #        7× more pixels → significantly better ML accuracy
@@ -1155,18 +1185,23 @@ cameras:
   piscine_vue_toit_left:
 
     ffmpeg:
+      hwaccel_args:
+        - -hwaccel
+        - cuda
+        - -hwaccel_device
+        - '0'
+        - -hwaccel_output_format
+        - cuda
       output_args:
         detect:
-          - -threads
-          - "2"
           - -vf
-          - crop=2048:1152:0:0
+          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
           - -f
           - rawvideo
           - -pix_fmt
           - yuv420p
       inputs:
-        # main stream → detect with crop (left half 2048×1152)
+        # main stream → detect with CUDA crop (left half 2048×1152)
         - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
           roles: [detect]
         # main stream → record + audio (4096×1152, shared with piscine_vue_toit_right)
@@ -1234,7 +1269,9 @@ cameras:
   # Height:    6.5m above ground
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
-  #   main_right = 2048×1152 (16:9 crop, right half) — detect
+  #   main_right = 2048×1152 (16:9 crop, right half) — detect via CUDA filter graph
+  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
+  #                GPU crop — CPU never sees full 4096×1152 frame
   #   sub        = 1536×432  — live view only
   # iter1: migrated from sub_right (768×432) → main_right (2048×1152)
   #        iter0-fix also applied: min_area was 10000 (too high for distant person ≈ 6000 px²)
@@ -1242,18 +1279,23 @@ cameras:
   piscine_vue_toit_right:
 
     ffmpeg:
+      hwaccel_args:
+        - -hwaccel
+        - cuda
+        - -hwaccel_device
+        - '0'
+        - -hwaccel_output_format
+        - cuda
       output_args:
         detect:
-          - -threads
-          - "2"
           - -vf
-          - crop=2048:1152:2048:0
+          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
           - -f
           - rawvideo
           - -pix_fmt
           - yuv420p
       inputs:
-        # main stream → detect with crop (right half 2048×1152)
+        # main stream → detect with CUDA crop (right half 2048×1152)
         - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
           roles: [detect]
         # main stream → record (4096×1152, shared with piscine_vue_toit_left)
