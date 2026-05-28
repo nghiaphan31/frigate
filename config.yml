@@ -50,10 +50,10 @@
 #
 #  DETECTION STREAM STRATEGY
 #  ─────────────────────────────────────────────────────────────────────────
-#  • Duo 3 whole-panoramic (4096×1152) is NOT used for detection — the 3.5:1
-#    aspect ratio is incompatible with the mobilenet/SSD model input shape.
-#    Instead, Frigate's own ffmpeg crops each Duo 3 main stream into two
-#    2048×1152 halves using -vf crop= in output_args.detect per camera.
+#  • Duo 3 whole-panoramic (4096×1152) is NOT used directly for detection —
+#    the 3.5:1 aspect ratio is incompatible with most object detection model
+#    input shapes. Instead, Frigate's own ffmpeg crops each Duo 3 main stream
+#    into two 2048×1152 halves using CUDA hwdownload+crop in output_args.detect.
 #  • All cameras use main-stream for detection to maximise pixel density.
 #  • jardin_arriere (4K) is capped at 5 fps for detection — the model input
 #    is 320×320 regardless, so 10 fps at 4K would waste GPU decode bandwidth.
@@ -176,7 +176,7 @@ detectors:
 # ---------------------------------------------------------------------------
 # This plus:// model was trained on snapshots from these cameras.
 # It improves detection accuracy for the specific angles, lighting, and
-# environments of this installation compared to the default mobilenet model.
+# environments of this installation compared to the default model.
 model:
   path: plus://6ea1f38db36e21f44a1eb1071d9958ed
 
@@ -804,8 +804,9 @@ cameras:
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
-  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD;
-  #       this camera provides a wide overview only — use _left/_right for accuracy.
+  # Note: panoramic 3.5:1 aspect ratio is incompatible with most detection
+  #       model input shapes; this camera provides a wide overview only —
+  #       use _left/_right half-crop cameras for high-resolution detection.
   # ========================================================================
   jardin_devant:
     ffmpeg:
@@ -1112,8 +1113,9 @@ cameras:
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
-  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD;
-  #       this camera provides a wide overview only — use _left/_right for accuracy.
+  # Note: panoramic 3.5:1 aspect ratio is incompatible with most detection
+  #       model input shapes; this camera provides a wide overview only —
+  #       use _left/_right half-crop cameras for high-resolution detection.
   # ========================================================================
   piscine_vue_toit:
 
