@@ -258,14 +258,17 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
     allee_sur_le_cote_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
-    allee_sur_le_cote_left:
-      # VESTIGIAL – go2rtc 1.9.10 cannot crop RTSP output; crop is applied by
-      # Frigate's ffmpeg via output_args.detect instead. Kept for potential
-      # future use (e.g. WebRTC live view of cropped half).
-      - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=h264 -vf crop=2048:1152:0:0
-    allee_sur_le_cote_right:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=h264 -vf crop=2048:1152:2048:0
+    # allee_sur_le_cote_left: DISABLED 2026-05-28
+    # VESTIGIAL – go2rtc 1.9.10 cannot crop RTSP output. Cropping is done by
+    # Frigate's own ffmpeg via output_args.detect (CUDA hwdownload+crop filter).
+    # This entry was registered but NEVER consumed by any Frigate camera — the
+    # _left/_right cameras point to allee_sur_le_cote_main and crop internally.
+    # Kept commented for reference until confirmed safe to remove.
+    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=h264 -vf crop=2048:1152:0:0
+
+    # allee_sur_le_cote_right: DISABLED 2026-05-28
+    # VESTIGIAL – see allee_sur_le_cote_left note above.
+    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=h264 -vf crop=2048:1152:2048:0
 
     # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ──────
     # NUC stream names: reolink_vue_nord_sur_maison_main / reolink_vue_nord_sur_maison_sub
@@ -294,12 +297,13 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
     jardin_devant_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub
-    jardin_devant_main_left:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=h264 -vf crop=2048:1152:0:0
-    jardin_devant_main_right:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=h264 -vf crop=2048:1152:2048:0
+    # jardin_devant_main_left: DISABLED 2026-05-28
+    # VESTIGIAL – see allee_sur_le_cote_left note above.
+    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=h264 -vf crop=2048:1152:0:0
+
+    # jardin_devant_main_right: DISABLED 2026-05-28
+    # VESTIGIAL – see allee_sur_le_cote_left note above.
+    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=h264 -vf crop=2048:1152:2048:0
 
     # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────────
     # NUC stream names: reolink_duo_vue_sud_main / reolink_duo_vue_sud_sub
@@ -310,12 +314,13 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
     piscine_vue_toit_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub
-    piscine_vue_toit_left:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=h264 -vf crop=2048:1152:0:0
-    piscine_vue_toit_right:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=h264 -vf crop=2048:1152:2048:0
+    # piscine_vue_toit_left: DISABLED 2026-05-28
+    # VESTIGIAL – see allee_sur_le_cote_left note above.
+    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=h264 -vf crop=2048:1152:0:0
+
+    # piscine_vue_toit_right: DISABLED 2026-05-28
+    # VESTIGIAL – see allee_sur_le_cote_left note above.
+    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=h264 -vf crop=2048:1152:2048:0
 
 # ============================================================================
 # 2. CAMERA DEFINITIONS
