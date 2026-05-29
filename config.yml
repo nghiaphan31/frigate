@@ -48,6 +48,15 @@
 #  Reolink Doorbell POE    │ 2560×1920     │ 640×480     │ —
 #  ─────────────────────────────────────────────────────────────────────────
 #
+#  CAMERA FOV REFERENCE
+#  ─────────────────────────────────────────────────────────────────────────
+#  Camera                  │ Model                        │ V-FOV │ H-FOV
+#  ────────────────────────┼──────────────────────────────┼───────┼───────
+#  Reolink Duo 3 (×3)      │ Reolink Duo 3                │ 55°   │ 180°
+#  Reolink RLC-810A        │ Reolink RLC-810A (4.0 mm)    │ 44°   │ 87°
+#  Reolink Doorbell POE    │ Reolink Doorbell POE         │ 100°  │ 135°
+#  ─────────────────────────────────────────────────────────────────────────
+#
 #  DETECTION STREAM STRATEGY
 #  ─────────────────────────────────────────────────────────────────────────
 #  • Duo 3 whole-panoramic (4096×1152) is NOT used directly for detection —
@@ -331,7 +340,9 @@ cameras:
   # ==========================================================================
   # CAMERA: ALLEE_SUR_LE_COTE
   # Hardware:  Reolink Duo 3 Wi-Fi/ETH — 192.168.50.129
-  # Height:    4m above ground
+  # Height:    3.4m above ground
+  # Tilt:      50° downward
+  # Max dist:  20m (person detection at ground level)
   # Position:  Driveway side view, eye-level, covers gate + approach
   # Streams:
   #   detect  → sub 1536×432   (full panoramic sub-stream)
@@ -638,8 +649,10 @@ cameras:
 
   # ==========================================================================
   # CAMERA: JARDIN_ARRIERE
-  # Hardware:  Reolink RLC-810A single-lens — 192.168.50.207
+  # Hardware:  Reolink RLC-810A (4.0 mm lens) — 192.168.50.207
   # Height:    2.2m above ground
+  # Tilt:      10° downward
+  # Max dist:  20m (person detection at ground level)
   # Position:  North-facing, covers rear garden, play area, and shed
   # Streams:
   #   detect  → main 3840×2160  (4K UHD)
@@ -727,7 +740,10 @@ cameras:
 
   # ========================================================================
   # CAMERA: VUE_ENTREE — Reolink Doorbell POE
-  # Height:    1.8m above ground
+  # Hardware:  Reolink Doorbell POE — 192.168.50.222
+  # Height:    1.7m above ground
+  # Tilt:      0° (doorbell at eye level)
+  # Max dist:  20m (person detection at ground level)
   # Resolution:
   #   main  = 2560×1920 (4:3, ~4.9 MP) — detect + record + audio
   #   sub   = 640×480   (4:3, ~0.3 MP) — live view only
@@ -800,7 +816,11 @@ cameras:
 
   # ========================================================================
   # CAMERA: JARDIN_DEVANT — Front garden whole-frame (Reolink Duo 3)
-  # Height:    6.5m above ground
+  # Hardware:  Reolink Duo 3 — 192.168.50.18
+  # Height:    6m above ground
+  # Tilt:      50° downward
+  # Max dist:  15m (person detection at ground level)
+  # Position:  Front garden, full panoramic view of front yard + street
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
@@ -1109,7 +1129,11 @@ cameras:
 
   # ========================================================================
   # CAMERA: PISCINE_VUE_TOIT — Pool rooftop whole-frame (Reolink Duo 3)
-  # Height:    6.5m above ground
+  # Hardware:  Reolink Duo 3 — 192.168.50.7
+  # Height:    6m above ground
+  # Tilt:      25° downward
+  # Max dist:  20m (person detection at ground level)
+  # Position:  Roof/gutter mount, looking south over pool + garden
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
