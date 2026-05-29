@@ -1,0 +1,75 @@
+# -------------------------------------------------------------------------
+# go2rtc.yaml (annotated)
+# -------------------------------------------------------------------------
+# This stand‑alone go2rtc instance pulls RTSP from ring‑mqtt (:8554 inside its
+# container) and proxies each stream back out on host port 8556.
+#
+#  • *_detect  – low‑latency copy used by Frigate for motion / AI inference
+#  • *_record  – high‑bitrate copy (plus optional transcode) for recording
+#
+#  Any 'ffmpeg:hwaccel=vaapi' line tells go2rtc to transcode using the NUC's
+#  Intel iGPU when that profile is requested (i.e. by Frigate 'record' role).
+# -------------------------------------------------------------------------
+
+log:
+  level: info                  # 2026-05-28: changed from debug to reduce log volume
+
+api:
+  listen: :1984                # container port; mapped to host 1985
+  origin: '*'                  # allow any Origin header in browser UI
+
+rtsp:
+  listen: :8554                # container port; mapped to host 8556
+  username: go2rtc             # must match ring‑mqtt LIVESTREAM_USER/PASS
+  password: go2rtc
+
+ffmpeg:
+  bin: /usr/bin/ffmpeg         # system ffmpeg inside the image
+
+streams:
+
+  reolink_duo_allee_cote_main:
+    - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+  reolink_duo_allee_cote_sub:
+    - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+  reolink_duo_vue_sud_main:
+    - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+  reolink_duo_vue_sud_sub:
+    - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+  reolink_duo_jardin_devant_main:
+    - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+  reolink_duo_jardin_devant_sub:
+    - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+# Main is configured with 3840x2160 on the reolink app
+  reolink_vue_nord_sur_maison_main:
+    - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+# Sub is configured with 640x360 on the reolink app
+  reolink_vue_nord_sur_maison_sub:
+    - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+
+# Main is configured with 2560x1920 on the reolink app
+  reolink_vue_entree_main:
+    - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_main
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
+# Sub is configured with 640x480 on the reolink app
+  reolink_vue_entree_sub:
+    - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_sub
+    - ffmpeg:rtsp_transport=tcp
+    - ffmpeg:cache=30        # 2026-05-28: reduced from 120s to 30s
