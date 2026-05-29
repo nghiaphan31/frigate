@@ -2,137 +2,455 @@
 
 ## Executive Summary
 
-Systematic determination of optimal per-camera person detection parameters using controlled walking tests. Each iteration is a git commit containing the config and the raw event data used to derive the parameters. The process starts from wide-open global defaults and tightens parameters based on observed detection statistics.
+Systematic determination of optimal per-camera person detection parameters using a two-phase approach:
 
-**Starting point:** Reset all per-camera `objects.filters.person` entries to global defaults. Camera geometry (zones, motion masks, ffmpeg crop definitions) is preserved.
+1. **Phase 1 (iter0):** Physics-based parameter computation using camera geometry (height, tilt, FOV, resolution) to reliably detect a standard 160cm person at the camera's maximum detection distance. **Also includes cleanup of all stale comments and outdated references from previous iterations.**
+2. **Phase 2 (iter1+):** Walking tests to validate and fine-tune parameters based on observed detection statistics
 
-**Walking methodology:** One physical camera unit at a time. All three logical cameras (panoramic overview + left half-crop + right half-crop) of a Duo 3 share the same walk data.
-
-**5 physical cameras → 8 logical cameras → 6 iterations:**
-
-| Iter | Physical Camera | Logical Cameras | Detection Stream |
-|------|----------------|-----------------|------------------|
-| 1 | allee_sur_le_cote | allee_sur_le_cote, allee_sur_le_cote_left, allee_sur_le_cote_right | sub 1536×432 / main 2048×1152 crops |
-| 2 | jardin_arriere | jardin_arriere | main 3840×2160 |
-| 3 | vue_entree | vue_entree | main 2560×1920 |
-| 4 | jardin_devant | jardin_devant, jardin_devant_left, jardin_devant_right | sub 1536×432 / main 2048×1152 crops |
-| 5 | piscine_vue_toit | piscine_vue_toit, piscine_vue_toit_left, piscine_vue_toit_right | sub 1536×432 / main 2048×1152 crops |
-| — | Final review | All 8 cameras | — |
+**Key insight:** Instead of starting from arbitrary global defaults and iterating blindly, we compute the expected pixel signature of a 160cm person at various distances using trigonometry, then set parameters that guarantee detection of that person with safety margins.
 
 ---
 
-## 1. Camera Descriptions
+## 1. Camera Geometry Reference
 
 ### 1.1 allee_sur_le_cote (Reolink Duo 3 — 192.168.50.129)
 
 | Property | Value |
 |----------|-------|
-| Height | 4 m above ground |
-| Mount | Eye-level side view, driveway |
-| Angle | Covers gate + approach along driveway |
-| Area surveilled | Private driveway, gate entry/exit |
-| Detection streams | **panoramic:** sub 1536×432 (full panoramic overview, 3.56:1) · **left:** main 2048×1152 crop · **right:** main 2048×1152 crop |
-| Pixel density | Panoramic sub: 663,552 px · Half-crop main: 2,359,296 px (7× more) |
+| Height | 3.4m above ground |
+| Tilt | 50° downward |
+| Max distance | 20m (person at ground level) |
+| H-FOV | 180° (panoramic) / ~90° per half |
+| V-FOV | 55° |
+| Detection streams | **panoramic:** sub 1536×432 · **half-crops:** main 2048×1152 |
 
-### 1.2 jardin_arriere (Reolink RLC-810A — 192.168.50.207)
-
-| Property | Value |
-|----------|-------|
-| Height | 2.2 m above ground |
-| Mount | North-facing, elevated-ish |
-| Angle | Rear garden, play area, shed |
-| Area surveilled | Private back garden, children's play area |
-| Detection stream | main 3840×2160 (4K UHD, 16:9) |
-| Pixel density | 8,294,400 px total |
-
-### 1.3 vue_entree (Reolink Doorbell POE — 192.168.50.222)
+### 1.2 allee_sur_le_cote_left / allee_sur_le_cote_right
 
 | Property | Value |
 |----------|-------|
-| Height | 1.8 m above ground (doorbell mount) |
-| Mount | Front door, near eye level |
-| Angle | Entry approach, visitors |
-| Area surveilled | Front door, entry path |
-| Detection stream | main 2560×1920 (4:3, ~4.9 MP) |
-| Pixel density | 4,915,200 px total |
+| Height | 3.4m (inherited from parent) |
+| Max distance | 20m (inherited from parent) |
+| H-FOV | ~90° (half of 180° panoramic) |
+| V-FOV | 55° (inherited from parent) |
+| Detection stream | main 2048×1152 (CUDA crop) |
 
-### 1.4 jardin_devant (Reolink Duo 3 — 192.168.50.18)
-
-| Property | Value |
-|----------|-------|
-| Height | 6.5 m above ground |
-| Mount | Roof eave, high angle (≈17° from horizontal) |
-| Angle | Front garden, wide overview |
-| Area surveilled | Front garden, public sidewalk |
-| Detection streams | **panoramic:** sub 1536×432 (full panoramic overview, 3.56:1) · **left:** main 2048×1152 crop · **right:** main 2048×1152 crop |
-| Pixel density | Panoramic sub: 663,552 px · Half-crop main: 2,359,296 px |
-
-### 1.5 piscine_vue_toit (Reolink Duo 3 — 192.168.50.7)
+### 1.3 jardin_arriere (Reolink RLC-810A — 192.168.50.207)
 
 | Property | Value |
 |----------|-------|
-| Height | 6.5 m above ground |
-| Mount | Roof, directly above pool |
-| Angle | Pool area, overhead |
-| Area surveilled | Pool, pool deck, garden beyond |
-| Detection streams | **panoramic:** sub 1536×432 (full panoramic overview, 3.56:1) · **left:** main 2048×1152 crop · **right:** main 2048×1152 crop |
-| Pixel density | Panoramic sub: 663,552 px · Half-crop main: 2,359,296 px |
+| Height | 2.2m above ground |
+| Tilt | 10° downward |
+| Max distance | 20m (person at ground level) |
+| H-FOV | 87° |
+| V-FOV | 44° |
+| Detection stream | main 3840×2160 (4K UHD) |
+
+### 1.4 vue_entree (Reolink Doorbell POE — 192.168.50.222)
+
+| Property | Value |
+|----------|-------|
+| Height | 1.7m above ground |
+| Tilt | 0° (eye level) |
+| Max distance | 20m (person at ground level) |
+| H-FOV | 135° |
+| V-FOV | 100° |
+| Detection stream | main 2560×1920 (4:3) |
+
+### 1.5 jardin_devant (Reolink Duo 3 — 192.168.50.18)
+
+| Property | Value |
+|----------|-------|
+| Height | 6m above ground |
+| Tilt | 50° downward |
+| Max distance | 15m (person at ground level) |
+| H-FOV | 180° (panoramic) / ~90° per half |
+| V-FOV | 55° |
+| Detection streams | **panoramic:** sub 1536×432 · **half-crops:** main 2048×1152 |
+
+### 1.6 jardin_devant_left / jardin_devant_right
+
+| Property | Value |
+|----------|-------|
+| Height | 6m (inherited from parent) |
+| Max distance | 15m (inherited from parent) |
+| H-FOV | ~90° (half of 180° panoramic) |
+| V-FOV | 55° (inherited from parent) |
+| Detection stream | main 2048×1152 (CUDA crop) |
+
+### 1.7 piscine_vue_toit (Reolink Duo 3 — 192.168.50.7)
+
+| Property | Value |
+|----------|-------|
+| Height | 6m above ground |
+| Tilt | 25° downward |
+| Max distance | 20m (person at ground level) |
+| H-FOV | 180° (panoramic) / ~90° per half |
+| V-FOV | 55° |
+| Detection streams | **panoramic:** sub 1536×432 · **half-crops:** main 2048×1152 |
+
+### 1.8 piscine_vue_toit_left / piscine_vue_toit_right
+
+| Property | Value |
+|----------|-------|
+| Height | 6m (inherited from parent) |
+| Max distance | 20m (inherited from parent) |
+| H-FOV | ~90° (half of 180° panoramic) |
+| V-FOV | 55° (inherited from parent) |
+| Detection stream | main 2048×1152 (CUDA crop) |
 
 ---
 
-## 2. Global Default Parameters (iter0 baseline)
+## 2. Phase 1: Physics-Based Parameter Computation (iter0)
 
-These are inherited from `config.yml` global `objects` block — all per-camera overrides are removed in iter0:
+### 2.1 Cleanup Tasks
 
-```yaml
-objects:
-  track: [person]
-  filters:
-    person:
-      min_area: 300
-      min_score: 0.40
-      threshold: 0.45
-      max_area: 100000
+Before applying new parameters, clean up all stale content from previous iterations:
+
+| Location | Cleanup Action |
+|----------|----------------|
+| `config.yml` header | Remove/update outdated comments about "iter2", "soak", "detection-optimisation-plan.md" |
+| Camera comments | Remove "iter2 2026-05-25", "iter3 (2026-05-26)" references from filter comments |
+| Camera comments | Remove "TEMP iter1: motion masks removed for soak period" comments |
+| Camera comments | Remove "VESTIGIAL" comments about disabled go2rtc streams |
+| Global defaults | Remove "iter2 — data-driven tight params 2026-05-25" header section |
+| Detection params | Remove all per-camera p5/p95 statistics from comments (superseded by physics calc) |
+| Motion masks | Restore proper motion masks where "TEMP iter1: masks removed" applies |
+
+### 2.2 Target Person Model
+
+| Property | Value |
+|----------|-------|
+| Height | 160cm (1.6m) |
+| Shoulder width | 50cm (0.5m) |
+| Depth | 25cm (0.25m) |
+| Aspect ratio (standing) | ~2:1 (height:width) |
+
+### 2.2 Detection Distance Strategy
+
+For each camera, compute parameters at two critical distances:
+
+1. **Near distance:** 3m (close-range, larger pixels)
+2. **Far distance:** max_distance (edge of detection range)
+
+The `min_area` parameter is set to catch a 160cm person at the **far distance** (smallest expected footprint).
+
+### 2.3 Pixel Geometry Formulas
+
+Given a camera at height `h` with tilt `θ` degrees from horizontal, a person of height `H` at ground distance `d`:
+
+```
+Slant range r = √(d² + h²)
+Elevation angle from camera = arctan(h/d)
+Depression angle to person = θ - arctan(h/d)
+Vertical pixel height = H × (V-FOV degrees / frame height pixels) × cos(depression angle)
+Horizontal pixel width = shoulder_width × (H-FOV degrees / frame width pixels) × cos(depression angle)
+Area (px²) = pixel_height × pixel_width
+Aspect ratio = pixel_height / pixel_width
 ```
 
-**Rationale:** `min_area=300` is Frigate's documented minimum for a person at typical distances. `threshold=0.45` / `min_score=0.40` are intentionally low to maximise recall during testing — we want to see the full range of true detections before filtering.
+### 2.4 iter0 Parameters Per Camera
+
+#### allee_sur_le_cote (panoramic sub 1536×432)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 1536×432 | — |
+| V-FOV | 55° | — |
+| H-FOV | 180° | — |
+| Person at 20m: pixel_height | 1.6 × (55/432) × cos(50°-9.7°) | ~31 px |
+| Person at 20m: pixel_width | 0.5 × (180/1536) × cos(50°-9.7°) | ~8 px |
+| Person at 20m: area | 31 × 8 | ~248 px² |
+| Person at 3m: area | ~15,000 px² | — |
+| **min_area** | 248 × 0.50 (50% margin) | **124** |
+| **max_area** | 15,000 × 1.50 (150% margin) | **22,500** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | Model default + 0.10 | **0.55** |
+| **min_score** | Model default + 0.05 | **0.45** |
+
+#### allee_sur_le_cote_left / allee_sur_le_cote_right (main crop 2048×1152)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 2048×1152 | — |
+| V-FOV | 55° | — |
+| H-FOV | ~90° | — |
+| Person at 20m: pixel_height | 1.6 × (55/1152) × cos(50°-9.7°) | ~12 px |
+| Person at 20m: pixel_width | 0.5 × (90/2048) × cos(50°-9.7°) | ~3 px |
+| Person at 20m: area | 12 × 3 | ~36 px² |
+| Person at 3m: area | ~6,000 px² | — |
+| **min_area** | 36 × 0.50 (50% margin) | **18** |
+| **max_area** | 6,000 × 1.50 (150% margin) | **9,000** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | 0.55 | **0.55** |
+| **min_score** | 0.45 | **0.45** |
+
+#### jardin_arriere (main 3840×2160)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 3840×2160 | — |
+| V-FOV | 44° | — |
+| H-FOV | 87° | — |
+| Person at 20m: pixel_height | 1.6 × (44/2160) × cos(10°-6.3°) | ~52 px |
+| Person at 20m: pixel_width | 0.5 × (87/3840) × cos(10°-6.3°) | ~17 px |
+| Person at 20m: area | 52 × 17 | ~884 px² |
+| Person at 3m: area | ~78,000 px² | — |
+| **min_area** | 884 × 0.50 (50% margin) | **442** |
+| **max_area** | 78,000 × 1.50 (150% margin) | **117,000** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | 0.55 | **0.55** |
+| **min_score** | 0.45 | **0.45** |
+
+#### vue_entree (main 2560×1920)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 2560×1920 | — |
+| V-FOV | 100° | — |
+| H-FOV | 135° | — |
+| Person at 20m: pixel_height | 1.6 × (100/1920) × cos(0°) | ~83 px |
+| Person at 20m: pixel_width | 0.5 × (135/2560) × cos(0°) | ~26 px |
+| Person at 20m: area | 83 × 26 | ~2,158 px² |
+| Person at 3m: area | ~96,000 px² | — |
+| **min_area** | 2158 × 0.50 (50% margin) | **1,079** |
+| **max_area** | 96,000 × 1.50 (150% margin) | **144,000** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | 0.55 | **0.55** |
+| **min_score** | 0.45 | **0.45** |
+
+#### jardin_devant (panoramic sub 1536×432)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 1536×432 | — |
+| V-FOV | 55° | — |
+| H-FOV | 180° | — |
+| Person at 15m: pixel_height | 1.6 × (55/432) × cos(50°-21.8°) | ~24 px |
+| Person at 15m: pixel_width | 0.5 × (180/1536) × cos(50°-21.8°) | ~6 px |
+| Person at 15m: area | 24 × 6 | ~144 px² |
+| Person at 3m: area | ~9,000 px² | — |
+| **min_area** | 144 × 0.50 (50% margin) | **72** |
+| **max_area** | 9,000 × 1.50 (150% margin) | **13,500** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | 0.55 | **0.55** |
+| **min_score** | 0.45 | **0.45** |
+
+#### jardin_devant_left / jardin_devant_right (main crop 2048×1152)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 2048×1152 | — |
+| V-FOV | 55° | — |
+| H-FOV | ~90° | — |
+| Person at 15m: pixel_height | 1.6 × (55/1152) × cos(50°-21.8°) | ~9 px |
+| Person at 15m: pixel_width | 0.5 × (90/2048) × cos(50°-21.8°) | ~2 px |
+| Person at 15m: area | 9 × 2 | ~18 px² |
+| Person at 3m: area | ~3,500 px² | — |
+| **min_area** | 18 × 0.50 (50% margin) | **9** |
+| **max_area** | 3,500 × 1.50 (150% margin) | **5,250** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | 0.55 | **0.55** |
+| **min_score** | 0.45 | **0.45** |
+
+#### piscine_vue_toit (panoramic sub 1536×432)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 1536×432 | — |
+| V-FOV | 55° | — |
+| H-FOV | 180° | — |
+| Person at 20m: pixel_height | 1.6 × (55/432) × cos(25°-16.7°) | ~35 px |
+| Person at 20m: pixel_width | 0.5 × (180/1536) × cos(25°-16.7°) | ~9 px |
+| Person at 20m: area | 35 × 9 | ~315 px² |
+| Person at 3m: area | ~18,000 px² | — |
+| **min_area** | 315 × 0.50 (50% margin) | **158** |
+| **max_area** | 18,000 × 1.50 (150% margin) | **27,000** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | 0.55 | **0.55** |
+| **min_score** | 0.45 | **0.45** |
+
+#### piscine_vue_toit_left / piscine_vue_toit_right (main crop 2048×1152)
+
+| Parameter | Formula | Value |
+|-----------|---------|-------|
+| Detection resolution | 2048×1152 | — |
+| V-FOV | 55° | — |
+| H-FOV | ~90° | — |
+| Person at 20m: pixel_height | 1.6 × (55/1152) × cos(25°-16.7°) | ~14 px |
+| Person at 20m: pixel_width | 0.5 × (90/2048) × cos(25°-16.7°) | ~3 px |
+| Person at 20m: area | 14 × 3 | ~42 px² |
+| Person at 3m: area | ~7,500 px² | — |
+| **min_area** | 42 × 0.50 (50% margin) | **21** |
+| **max_area** | 7,500 × 1.50 (150% margin) | **11,250** |
+| **min_ratio** | 2.0 × 0.50 | **1.0** |
+| **max_ratio** | 2.0 × 2.00 | **4.0** |
+| **threshold** | 0.55 | **0.55** |
+| **min_score** | 0.45 | **0.45** |
+
+### 2.5 iter0 Config Block
+
+```yaml
+# iter0: Physics-based parameters for 160cm person detection
+# Computed from camera geometry (height, tilt, FOV, resolution)
+
+cameras:
+  allee_sur_le_cote:
+    objects:
+      filters:
+        person:
+          min_area: 124
+          max_area: 22500
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  allee_sur_le_cote_left:
+    objects:
+      filters:
+        person:
+          min_area: 18
+          max_area: 9000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  allee_sur_le_cote_right:
+    objects:
+      filters:
+        person:
+          min_area: 18
+          max_area: 9000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  jardin_arriere:
+    objects:
+      filters:
+        person:
+          min_area: 442
+          max_area: 117000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  vue_entree:
+    objects:
+      filters:
+        person:
+          min_area: 1079
+          max_area: 144000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  jardin_devant:
+    objects:
+      filters:
+        person:
+          min_area: 72
+          max_area: 13500
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  jardin_devant_left:
+    objects:
+      filters:
+        person:
+          min_area: 9
+          max_area: 5250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  jardin_devant_right:
+    objects:
+      filters:
+        person:
+          min_area: 9
+          max_area: 5250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  piscine_vue_toit:
+    objects:
+      filters:
+        person:
+          min_area: 158
+          max_area: 27000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  piscine_vue_toit_left:
+    objects:
+      filters:
+        person:
+          min_area: 21
+          max_area: 11250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+
+  piscine_vue_toit_right:
+    objects:
+      filters:
+        person:
+          min_area: 21
+          max_area: 11250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+```
 
 ---
 
-## 3. Per-Iteration Methodology
+## 3. Phase 2: Walking Tests (iter1+)
 
 ### 3.1 Walking Protocol
 
 For each physical camera unit:
 
-1. **Before walking:** Clear Frigate event history (`./deploy-frigate.sh dump` to confirm zero events, or note the cutoff timestamp)
-2. **Walk pattern:** Walk along the representative paths a person would take through the camera's FOV. For each camera:
-   - **allee_sur_le_cote:** Walk from street gate toward house, then back. Cover both left and right halves of the driveway.
-   - **jardin_arriere:** Walk from shed toward house, traverse the play area, walk around the garden perimeter.
-   - **vue_entree:** Approach from sidewalk to front door, ring doorbell, step back, walk away.
-   - **jardin_devant:** Walk from sidewalk into front garden, approach front door area, walk along garden paths.
-   - **piscine_vue_toit:** Walk around the pool perimeter, cross the pool deck, approach from garden side.
-3. **Walk count:** 10–15 passes per logical camera (the panoramic overview camera sees the same walk as the half-crop pair, so 10–15 total passes per physical unit).
-4. **Speed:** Normal walking pace. Include at least 2–3 slow passes (elderly / child pace) to capture larger, slower-moving detections.
-5. **No soak time** — immediately after walking, run the dump script.
+1. **Before walking:** Clear or note the event cutoff timestamp
+2. **Walk pattern:** Walk along representative paths a person would take through the camera's FOV
+3. **Walk count:** 10–15 passes per physical unit
+4. **Speed:** Normal walking pace. Include 2–3 slow passes (elderly / child pace)
+5. **Immediately after walking:** Run `./deploy-frigate.sh dump`
 
 ### 3.2 Data Collection
-
-After each walk session, run:
 
 ```bash
 ./deploy-frigate.sh dump
 ```
 
-This produces `frigate_detection_optimisation_dump_iterN.txt` with per-event data:
-
+Produces `frigate_detection_optimisation_dump_iter{N}.txt` with:
 ```
 camera, timestamp, score, area_px2, ratio, zones[]
 ```
 
-### 3.3 Parameter Derivation
+### 3.3 Parameter Refinement Formula
 
-For each logical camera, compute from the collected events:
+For each logical camera, compute from collected events:
 
 | Parameter | Formula | Safety Margin |
 |-----------|---------|---------------|
@@ -143,50 +461,36 @@ For each logical camera, compute from the collected events:
 | `threshold` | p10_score × 0.95 | 5% below observed p10 |
 | `min_score` | p5_score × 0.95 | 5% below observed p5 |
 
-> **p5/p95 chosen over min/max** to exclude outlier events caused by tracking artifacts, occlusions, or rare poses. p10 for threshold because we want to keep 90% of true detections above the threshold.
-
-### 3.4 Data Visibility Requirements
-
-For each iteration, the commit must include:
-
-1. **Raw event dump** — `frigate_detection_optimisation_dump_iterN.txt`
-2. **Per-camera summary statistics** — p5/p10/p50/p95 values for area, ratio, score
-3. **Violation analysis** — how many events fall outside each parameter bound
-4. **Rationale explanation** — why each parameter was set as derived
-
 ---
 
 ## 4. Iteration Specifications
 
-### Iter 0 — Baseline (git commit: `iter0-baseline`)
+### Iter 0 — Physics Baseline (git commit: `iter0-physics-baseline`)
 
-**Action:** Remove all per-camera `objects.filters.person` overrides. All 8 logical cameras inherit global defaults.
+**Actions:**
 
-**Config change:** Delete the `filters.person` block from each camera's `objects` section.
+1. **Cleanup:** Remove all stale comments and outdated references from config.yml:
+   - Remove/update "iter2", "iter3", "soak" references from header and camera comments
+   - Remove p5/p95 statistics from filter comments (superseded by physics calc)
+   - Restore proper motion masks where "TEMP iter1: masks removed" applies
+   - Remove "VESTIGIAL" comments about disabled go2rtc streams
+
+2. **Apply physics-based parameters:** Set per-camera `objects.filters.person` using computed values from Section 2
 
 **Verification after deploy:**
-- All 8 cameras start without errors
+- All 11 cameras start without errors
 - `det_fps` > 0 for all cameras
-- Run `./deploy-frigate.sh dump` — confirm events are being captured with global defaults
-
-**Expected:** High event count (many false positives from wide-open filters), but confirms the detection pipeline is healthy.
+- Run walking test and confirm 160cm person is detected at max_distance
 
 ---
 
 ### Iter 1 — allee_sur_le_cote (git commit: `iter1-allee-sur-le-cote`)
 
-**Physical unit:** allee_sur_le_cote (Reolink Duo 3, 4m height, driveway side view)
+**Physical unit:** allee_sur_le_cote (Reolink Duo 3, 3.4m height, driveway side view)
 
-**Logical cameras (3):**
-- `allee_sur_le_cote` — panoramic sub 1536×432
-- `allee_sur_le_cote_left` — main crop 2048×1152
-- `allee_sur_le_cote_right` — main crop 2048×1152
+**Logical cameras (3):** `allee_sur_le_cote`, `allee_sur_le_cote_left`, `allee_sur_le_cote_right`
 
-**Walk:** 10–15 passes from street gate toward house, covering full driveway width.
-
-**Data output:** `frigate_detection_optimisation_dump_iter1.txt`
-
-**Analysis:** Compute p5/p10/p95 for area, ratio, score per logical camera. Apply derivation formulas. Document violations.
+**Walk:** 10–15 passes from street gate toward house.
 
 ---
 
@@ -194,163 +498,95 @@ For each iteration, the commit must include:
 
 **Physical unit:** jardin_arriere (Reolink RLC-810A, 2.2m height, rear garden)
 
-**Logical camera (1):** `jardin_arriere` — main 3840×2160
+**Logical camera (1):** `jardin_arriere`
 
-**Walk:** 10–15 passes traversing the rear garden, play area, and shed perimeter.
-
-**Data output:** `frigate_detection_optimisation_dump_iter2.txt`
+**Walk:** 10–15 passes traversing the rear garden.
 
 ---
 
 ### Iter 3 — vue_entree (git commit: `iter3-vue-entree`)
 
-**Physical unit:** vue_entree (Reolink Doorbell POE, 1.8m height, front door)
+**Physical unit:** vue_entree (Reolink Doorbell POE, 1.7m height, front door)
 
-**Logical camera (1):** `vue_entree` — main 2560×1920
+**Logical camera (1):** `vue_entree`
 
-**Walk:** 10–15 approaches from sidewalk to front door (ring, step back, walk away).
-
-**Data output:** `frigate_detection_optimisation_dump_iter3.txt`
+**Walk:** 10–15 approaches from sidewalk to front door.
 
 ---
 
 ### Iter 4 — jardin_devant (git commit: `iter4-jardin-devant`)
 
-**Physical unit:** jardin_devant (Reolink Duo 3, 6.5m height, front garden roof)
+**Physical unit:** jardin_devant (Reolink Duo 3, 6m height, front garden)
 
-**Logical cameras (3):**
-- `jardin_devant` — panoramic sub 1536×432
-- `jardin_devant_left` — main crop 2048×1152
-- `jardin_devant_right` — main crop 2048×1152
+**Logical cameras (3):** `jardin_devant`, `jardin_devant_left`, `jardin_devant_right`
 
-**Walk:** 10–15 passes from sidewalk into front garden, approaching front door area.
-
-**Data output:** `frigate_detection_optimisation_dump_iter4.txt`
+**Walk:** 10–15 passes from sidewalk into front garden.
 
 ---
 
 ### Iter 5 — piscine_vue_toit (git commit: `iter5-piscine-vue-toit`)
 
-**Physical unit:** piscine_vue_toit (Reolink Duo 3, 6.5m height, pool rooftop)
+**Physical unit:** piscine_vue_toit (Reolink Duo 3, 6m height, pool rooftop)
 
-**Logical cameras (3):**
-- `piscine_vue_toit` — panoramic sub 1536×432
-- `piscine_vue_toit_left` — main crop 2048×1152
-- `piscine_vue_toit_right` — main crop 2048×1152
+**Logical cameras (3):** `piscine_vue_toit`, `piscine_vue_toit_left`, `piscine_vue_toit_right`
 
-**Walk:** 10–15 passes around pool perimeter and across pool deck.
-
-**Data output:** `frigate_detection_optimisation_dump_iter5.txt`
+**Walk:** 10–15 passes around pool perimeter.
 
 ---
 
 ## 5. Git Commit Convention
 
-Each iteration produces a single git commit containing:
-
 ```
 iter{N}-{short-name}/
-├── config.yml                    # Updated config with new parameters
+├── config.yml                    # Updated config with parameters
 ├── frigate_detection_optimisation_dump_iter{N}.txt   # Raw event data
-├── frigate_detection_optimisation_dump_iter{N}-summary.txt  # p5/p10/p95 stats + violation analysis
+├── frigate_detection_optimisation_dump_iter{N}-summary.txt  # p5/p10/p95 stats
 └── plans/iter{N}-notes.md        # Rationale, observations, decisions
 ```
 
-Commit message format:
-
-```
-iter{N}: {camera name} detection parameters
-
-- Walk data: {N} passes, {date}
-- Events captured: {count}
-- Key parameter changes:
-  - allee_sur_le_cote: min_area={X}, max_area={Y}, threshold={Z}, ...
-  - allee_sur_le_cote_left: ...
-  - ...
-- Data: frigate_detection_optimisation_dump_iter{N}.txt
-```
-
 ---
 
-## 6. Parameter Derivation Formulas (Reference)
-
-```
-min_area  = floor(p5_area   × 0.70)
-max_area  = ceil (p95_area  × 1.30)
-min_ratio = floor2dp(p5_ratio  × 0.80)
-max_ratio = ceil2dp(p95_ratio × 1.20)
-threshold = floor2dp(p10_score × 0.95)
-min_score = floor2dp(p5_score  × 0.95)
-```
-
-Where `floor2dp` / `ceil2dp` round to 2 decimal places.
-
----
-
-## 7. Mermaid Workflow Diagram
+## 6. Mermaid Workflow Diagram
 
 ```mermaid
 flowchart TD
-    subgraph iter0["iter0 — Baseline"]
-        A0[Remove all per-camera filters<br/>Global defaults only] --> B0[Deploy config]
-        B0 --> C0[Verify all cameras healthy<br/>det_fps > 0]
+    subgraph phase1["Phase 1 — iter0 Physics Baseline"]
+        A0[Compute camera geometry<br/>height, tilt, FOV, resolution] --> B0[Calculate 160cm person<br/>pixel signature at max_distance]
+        B0 --> C0[Apply safety margins<br/>50% for min, 150% for max]
+        C0 --> D0[Deploy iter0 config]
+        D0 --> E0[Walking test verification<br/>Confirm 160cm person detected]
     end
 
-    subgraph iter1["iter1 — allee_sur_le_cote"]
-        A1[Walk driveway<br/>10-15 passes] --> B1[dump events<br/>frigate_detection_optimisation_dump_iter1.txt]
-        B1 --> C1[Compute p5/p10/p95 stats<br/>Apply derivation formulas]
-        C1 --> D1[Update allee_sur_le_cote<br/>allee_sur_le_cote_left<br/>allee_sur_le_cote_right]
-        D1 --> E1[Git commit iter1-allee-sur-le-cote]
+    subgraph phase2["Phase 2 — Walking Tests"]
+        E0 --> F1[Walk allee_sur_le_cote<br/>10-15 passes]
+        F1 --> G1[dump events<br/>Compute p5/p10/p95]
+        G1 --> H1[Refine parameters<br/>Apply derivation formulas]
+        H1 --> F2[Walk jardin_arriere<br/>10-15 passes]
+        F2 --> G2[dump events<br/>Compute p5/p10/p95]
+        G2 --> H2[Refine parameters]
+        H2 --> F3[Walk vue_entree<br/>10-15 passes]
+        F3 --> G3[dump events<br/>Compute p5/p10/p95]
+        G3 --> H3[Refine parameters]
+        H3 --> F4[Walk jardin_devant<br/>10-15 passes]
+        F4 --> G4[dump events<br/>Compute p5/p10/p95]
+        G4 --> H4[Refine parameters]
+        H4 --> F5[Walk piscine_vue_toit<br/>10-15 passes]
+        F5 --> G5[dump events<br/>Compute p5/p10/p95]
+        G5 --> H5[Refine parameters]
     end
 
-    subgraph iter2["iter2 — jardin_arriere"]
-        A2[Walk rear garden<br/>10-15 passes] --> B2[dump events<br/>frigate_detection_optimisation_dump_iter2.txt]
-        B2 --> C2[Compute p5/p10/p95 stats<br/>Apply derivation formulas]
-        C2 --> D2[Update jardin_arriere]
-        D2 --> E2[Git commit iter2-jardin-arriere]
-    end
-
-    subgraph iter3["iter3 — vue_entree"]
-        A3[Walk front door<br/>10-15 passes] --> B3[dump events<br/>frigate_detection_optimisation_dump_iter3.txt]
-        B3 --> C3[Compute p5/p10/p95 stats<br/>Apply derivation formulas]
-        C3 --> D3[Update vue_entree]
-        D3 --> E3[Git commit iter3-vue-entree]
-    end
-
-    subgraph iter4["iter4 — jardin_devant"]
-        A4[Walk front garden<br/>10-15 passes] --> B4[dump events<br/>frigate_detection_optimisation_dump_iter4.txt]
-        B4 --> C4[Compute p5/p10/p95 stats<br/>Apply derivation formulas]
-        C4 --> D4[Update jardin_devant<br/>jardin_devant_left<br/>jardin_devant_right]
-        D4 --> E4[Git commit iter4-jardin-devant]
-    end
-
-    subgraph iter5["iter5 — piscine_vue_toit"]
-        A5[Walk pool area<br/>10-15 passes] --> B5[dump events<br/>frigate_detection_optimisation_dump_iter5.txt]
-        B5 --> C5[Compute p5/p10/p95 stats<br/>Apply derivation formulas]
-        C5 --> D5[Update piscine_vue_toit<br/>piscine_vue_toit_left<br/>piscine_vue_toit_right]
-        D5 --> E5[Git commit iter5-piscine-vue-toit]
-    end
-
-    C0 --> iter1
-    E1 --> iter2
-    E2 --> iter3
-    E3 --> iter4
-    E4 --> iter5
-    E5 --> final["Final Review<br/>User approval of all parameters"]
+    H5 --> final["Final Review<br/>User approval of all parameters"]
 ```
 
 ---
 
-## 8. Key Decisions and Rationale
+## 7. Key Decisions and Rationale
 
 | Decision | Rationale |
 |----------|-----------|
-| Start from global defaults | Removes any bias from previous iterations. Clean slate. |
-| Walk one camera at a time | Isolates detection characteristics per camera. Avoids cross-camera noise. |
-| Duo 3 left+right share walk data | Same physical position → same person walking paths produce same pixel-level detections. |
-| p5/p95 percentiles | Excludes tracking artifacts and rare poses. More robust than min/max. |
-| 30% area margin / 20% ratio margin | Accommodates day-to-day variation in lighting, clothing, walking speed. |
-| 5% score margin | Small buffer above p5/p10 to reduce missed detections in borderline cases. |
-| 10–15 passes per camera | Sufficient for stable p5/p95 estimates without excessive testing time. |
-| No soak time | Initial iterations use active walking tests. Soak only if needed for edge cases. |
-| Git commit per iteration | Full traceability: config + data + rationale in one commit. |
+| Physics-based iter0 | Guarantees detection of 160cm person at max_distance without relying on arbitrary defaults |
+| 50% margin for min_area | Accommodates variation in person size, posture, and detection angle |
+| 150% margin for max_area | Allows for close-range detections and tracking artifacts |
+| 160cm person model | Standard adult height; represents the primary detection target |
+| Walking tests after iter0 | Validates physics calculations and captures real-world detection characteristics |
+| p5/p95 percentiles for refinement | Excludes tracking artifacts and rare poses |
