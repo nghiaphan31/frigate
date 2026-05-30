@@ -1,3 +1,9 @@
+# SSH private keys — never commit to git (causes GitHub Push Protection block)
+restic/ssh/id_ed25519
+restic/ssh/id_rsa
+**/id_ed25519
+**/id_rsa
+
 # TRT runtime libs — 4.4GB binary, not committed to git.
 # Reproduced by: pip install --target=./trt-libs tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34
 # See docker-compose.calypso.yml TRT RUNTIME LIBS section for details.
