@@ -442,8 +442,7 @@ cameras:
       inputs:
         - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
           roles: [detect]
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [record, audio]
+        # record removed — parent allee_sur_le_cote records via sub stream
 
     live:
       streams: {}  # Live view disabled — detection/recording/snapshots still active
@@ -451,7 +450,8 @@ cameras:
                    # full panoramic (allee_sur_le_cote) is the primary live view.
 
     audio:
-      enabled: true
+      enabled: false             # Audio captured by parent allee_sur_le_cote via sub stream
+
 
     mqtt:
       enabled: true
@@ -554,8 +554,8 @@ cameras:
       inputs:
         - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
           roles: [detect]
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [record]
+        # record removed — parent allee_sur_le_cote records via sub stream
+
 
     live:
       streams: {}  # Live view disabled — detection/recording/snapshots still active
@@ -906,9 +906,8 @@ cameras:
         # main stream → detect with CUDA crop (left half 2048×1152)
         - path: rtsp://127.0.0.1:8554/jardin_devant_main
           roles: [detect]
-        # main stream → record (4096×1152, shared with jardin_devant_right)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [record]
+        # record removed — parent jardin_devant records via sub stream
+
 
     live:
       streams: {}  # Live view disabled — detection/recording/snapshots still active
@@ -1015,9 +1014,8 @@ cameras:
         # main stream → detect with CUDA crop (right half 2048×1152)
         - path: rtsp://127.0.0.1:8554/jardin_devant_main
           roles: [detect]
-        # main stream → record (4096×1152, shared with jardin_devant_left)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [record]
+        # record removed — parent jardin_devant records via sub stream
+
 
     live:
       streams: {}  # Live view disabled — detection/recording/snapshots still active
@@ -1202,9 +1200,8 @@ cameras:
         # main stream → detect with CUDA crop (left half 2048×1152)
         - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
           roles: [detect]
-        # main stream → record + audio (4096×1152, shared with piscine_vue_toit_right)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [record, audio]
+        # record removed — parent piscine_vue_toit records via sub stream
+
 
     live:
       streams: {}  # Live view disabled — detection/recording/snapshots still active
@@ -1212,7 +1209,8 @@ cameras:
                    # full panoramic (piscine_vue_toit) is the primary live view.
 
     audio:
-      enabled: true
+      enabled: false             # Audio captured by parent piscine_vue_toit via sub stream
+
 
     detect:
       # go2rtc crops left half of Duo 3 main → 2048×1152 (16:9)
@@ -1299,9 +1297,8 @@ cameras:
         # main stream → detect with CUDA crop (right half 2048×1152)
         - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
           roles: [detect]
-        # main stream → record (4096×1152, shared with piscine_vue_toit_left)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [record]
+        # record removed — parent piscine_vue_toit records via sub stream
+
 
     live:
       streams: {}  # Live view disabled — detection/recording/snapshots still active
