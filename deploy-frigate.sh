@@ -50,29 +50,35 @@ dc() { docker-compose -f "$COMPOSE_FILE" "$@"; }
 # With restart: unless-stopped, the container must be fully stopped before Docker
 # auto-restarts it. 10s is not enough for Frigate to close all ZMQ IPC sockets;
 # 30s gives the processes time to flush and exit cleanly.
-# The 3s sleep ensures the socket files are released before the new start.
+#
+# WHY 15s sleep (not 3s):
+#   Under network_mode: host, Frigate's internal WebSocket server binds a TCP port
+#   on the HOST network namespace. After docker stop (even with SIGKILL), the OS
+#   needs ~10-15s to fully release that port — confirmed by OSError: [Errno 98]
+#   Address already in use in frigate/comms/ws.py on restart with sleep=3.
+#   15s is sufficient; raising it further adds unnecessary restart latency.
 zmq_fix_cycle() {
     local container
     container=$(docker-compose -f "$COMPOSE_FILE" ps -q "$SERVICE" 2>/dev/null | head -1)
     if [[ -z "$container" ]]; then
         warn "zmq_fix_cycle: no running container found — using dc stop/start fallback"
         dc stop "$SERVICE"
-        sleep 3
+        sleep 15
         dc start "$SERVICE"
         return
     fi
     log "ZMQ-fix: stopping container ${container} (timeout=30s)..."
     docker stop -t 30 "$container"
-    sleep 3
+    sleep 15
     log "ZMQ-fix: starting ${SERVICE}..."
     dc start "$SERVICE"
 }
 
 wait_healthy() {
-    local max_wait=120
+    local max_wait="${1:-120}"  # optional arg: wait_healthy 300 for crash-recovery scenarios
     local interval=5
     local elapsed=0
-    log "Waiting for Frigate API to become available..."
+    log "Waiting for Frigate API to become available (timeout=${max_wait}s)..."
     while ! curl -sf "${FRIGATE_API}/api/version" >/dev/null 2>&1; do
         sleep "$interval"
         elapsed=$((elapsed + interval))
@@ -395,11 +401,22 @@ cmd_recreate() {
     #   (process_fps > 0 is the real signal — inference_speed is stale cached data).
     log "Step 2/2 — wait for TRT build, stop+start (ZMQ reset), confirm ZMQ healthy..."
     wait_healthy
+    # wait_detector_ready uses inference_speed > 0 as the TRT-build-done signal.
+    # On a fresh container (after dc rm -f + dc up -d), /dev/shm is zeroed, so
+    # inference_speed truly starts at 0 and rises to >0 only after the first real
+    # detection (~5s from cache, ~65s first build). The 300s timeout covers the
+    # worst-case first-build.
     wait_detector_ready 300  # up to 300s for TRT engine build on first run
     zmq_fix_cycle
 
-    wait_healthy
-    wait_detector_ready 120  # engine cached now — should be <10s
+    # After the zmq_fix_cycle restart, inference_speed is stale in the (reused)
+    # /dev/shm — wait_detector_ready returns immediately here. That's fine: the
+    # real health signal is wait_all_processing (process_fps > 0).
+    # Use wait_healthy 300 instead of 120: if the zmq_fix_cycle caused an
+    # OSError: Address already in use crash in ws.py, s6 takes ~125s to restart
+    # Frigate, which exceeds the old 120s timeout and caused fail() → script exit.
+    wait_healthy 300
+    wait_detector_ready 120 || true  # stale data — returns immediately; kept for symmetry
     wait_all_processing 120 || true  # confirm ZMQ IPC is healthy (process_fps > 0)
 
     log "Post-recreation health:"
@@ -539,10 +556,17 @@ case "$MODE" in
     auto)
         # Detect whether the running container matches the compose definition.
         # If the image or shm_size has changed, a recreation is needed.
+        #
+        # BUG FIX: `docker inspect frigate` always failed with "no such object"
+        # because docker-compose names the container frigate_frigate_1, not frigate.
+        # Using `dc ps -q "$SERVICE"` gets the real container ID, then we inspect
+        # that ID — works regardless of the compose project name or container suffix.
         log "=== Auto-detect deploy mode ==="
-        RUNNING_IMAGE=$(docker inspect frigate --format '{{.Config.Image}}' 2>/dev/null || echo "")
+        CONTAINER_ID=$(dc ps -q "$SERVICE" 2>/dev/null | head -1)
+        RUNNING_IMAGE=$(echo "$CONTAINER_ID" \
+            | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null || echo "")
         COMPOSE_IMAGE=$(grep '^\s*image:' "$COMPOSE_FILE" | head -1 | awk '{print $2}')
-        if [[ -z "$RUNNING_IMAGE" ]]; then
+        if [[ -z "$CONTAINER_ID" ]] || [[ -z "$RUNNING_IMAGE" ]]; then
             log "No running container found — performing full recreation"
             cmd_recreate
         elif [[ "$RUNNING_IMAGE" != "$COMPOSE_IMAGE" ]]; then
@@ -550,7 +574,7 @@ case "$MODE" in
             log "Full recreation required"
             cmd_recreate
         else
-            log "Image unchanged — config-only restart"
+            log "Image unchanged (${RUNNING_IMAGE}) — config-only restart"
             cmd_restart
         fi
         ;;
