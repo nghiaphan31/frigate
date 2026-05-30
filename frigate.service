@@ -24,11 +24,11 @@
 #   2. Docker auto-starts the frigate container (restart: unless-stopped)
 #   3. This unit runs `deploy-frigate.sh boot`:
 #      a. wait_healthy (API up)
-#      b. wait_detector_ready 300 (TRT engine build, up to 5 min)
-#      c. stop + start (ZMQ-fix cycle)
-#      d. wait_healthy + wait_detector_ready 120
-#      e. wait_all_processing 120 (confirm process_fps > 0 on majority of cameras)
-#      f. safety-net retry if still not all processing
+#      b. wait_detector_ready 300 || true (TRT engine build, up to 5 min)
+#      c. zmq_fix_cycle (stop + 20s sleep + start)
+#      d. wait_healthy + wait_detector_ready 120 || true
+#      e. wait_all_processing 120 (confirm no ZMQ-stuck camera: camera_fps>0 AND process_fps=0)
+#      f. ZMQ retry loop: up to MAX_ZMQ_RETRIES=3 extra cycles if any camera is still stuck
 # =============================================================================
 
 [Unit]
@@ -46,8 +46,15 @@ Type=oneshot
 User=nghia-phan
 WorkingDirectory=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
 ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/deploy-frigate.sh boot
-# Give the TRT build + ZMQ health check plenty of time (300s build + 120s ZMQ + margin)
-TimeoutStartSec=600
+# TimeoutStartSec calculation (worst case: cold TRT cache + 3 ZMQ retry cycles):
+#   wait_healthy initial:          120s
+#   wait_detector_ready (cold):    300s
+#   zmq_fix_cycle × 4 (1+3):      100s  (4 × 25s)
+#   wait_healthy × 4:              480s  (4 × 120s)
+#   wait_all_processing × 4:       480s  (4 × 120s)
+#   Total worst case:             ~1480s → 1800s gives 5 min safety margin
+#   Typical reboot (warm TRT):    <400s  (well within 1800s)
+TimeoutStartSec=1800
 # Log to journald — view with: journalctl -u frigate -f
 StandardOutput=journal
 StandardError=journal
