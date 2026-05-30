@@ -4,5 +4,11 @@
 trt-libs/
 
 # TRT engine cache and model cache — large binary, machine-specific, regenerated on first run.
-# Committed selectively (only small JSON/ONNX metadata files, not engine binaries).
+# Exclude ONNX model files (100-300 MB each) and TRT compiled engine binaries.
+# Only small JSON/tokenizer metadata files are committed.
 trt-cache/tensorrt/
+trt-cache/**/*.onnx
+trt-cache/jinaai/**/*.onnx
+# TRT compiled engine binaries: 32-char hex filename with no extension (e.g. 6ea1f38d...)
+# Cannot glob precisely — use a sentinel pattern; add specific names below if needed.
+trt-cache/6ea1f38db36e21f44a1eb1071d9958ed
