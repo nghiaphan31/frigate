@@ -323,8 +323,8 @@ cameras:
   #             NOTE: full panoramic used here for zone coverage across the
   #             entire driveway width. Left/right split cameras handle
   #             high-res detection for each half.
-  #   record  → main 4096×1152 (full panoramic, lossless copy)
-  #   audio   → main (mic channel embedded in main stream)
+  #   record  → sub 1536×432   (same stream as detect — unified for efficiency)
+  #   audio   → sub 1536×432   (same stream as detect — audio from sub-stream)
   #   live    → sub 1536×432   (lightweight for UI grid)
   # ==========================================================================
   allee_sur_le_cote:
@@ -332,9 +332,7 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_sub
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [record, audio]
+          roles: [detect, record, audio]  # unified: same stream for all roles
 
     live:
       streams:
@@ -352,6 +350,7 @@ cameras:
     detect:
       # Sub-stream: 1536×432 (full panoramic, 3.56:1 aspect ratio)
       # Pixel density: 663,552 px total
+      # fps=5: 3m shortest walkable dim → ~10.7 frames at 1.4 m/s (was 5, unchanged)
       width: 1536
       height: 432
       fps: 5
@@ -463,9 +462,10 @@ cameras:
     detect:
       # main_left half-crop: 2048×1152 (16:9, left half of Duo 3 main)
       # Pixel density: 2,359,296 px total — 7× more than sub_left (768×432)
+      # fps=7: 1.5m shortest walkable dim → ~7.5 frames at 1.4 m/s (was 10)
       width: 2048
       height: 1152
-      fps: 10
+      fps: 7
 
     objects:
       track: [person]
@@ -574,9 +574,10 @@ cameras:
     detect:
       # main_right half-crop: 2048×1152 (16:9, right half of Duo 3 main)
       # Pixel density: 2,359,296 px total — 7× more than sub_right (768×432)
+      # fps=7: 1.5m shortest walkable dim → ~7.5 frames at 1.4 m/s (was 10)
       width: 2048
       height: 1152
-      fps: 10
+      fps: 7
 
     objects:
       track: [person]
@@ -652,8 +653,7 @@ cameras:
     detect:
       # Main stream: 3840×2160 (4K UHD, 16:9)
       # Pixel density: 8,294,400 px total
-      # fps=5: Frigate model input is 320×320 regardless of source resolution;
-      # 4K at 10fps would double GPU decode load with no detection benefit.
+      # fps=5: 5m shortest walkable dim → ~17.9 frames at 1.4 m/s (was 5, unchanged)
       width: 3840
       height: 2160
       fps: 5
@@ -737,9 +737,10 @@ cameras:
 
     detect:
       # Reolink Doorbell POE main stream = 2560×1920 (confirmed)
+      # fps=7: 3m shortest walkable dim → ~10.7 frames at 1.4 m/s (was 10)
       width: 2560
       height: 1920
-      fps: 10
+      fps: 7
 
     objects:
       track: [person]
@@ -801,12 +802,10 @@ cameras:
   jardin_devant:
     ffmpeg:
       inputs:
-        # sub stream → detect (1536×432, full panoramic overview)
+        # sub stream → detect + record (1536×432, unified for efficiency)
         - path: rtsp://127.0.0.1:8554/jardin_devant_sub
-          roles: [detect]
-        # main stream → record + audio (4096×1152)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [record, audio]
+          roles: [detect, record]  # unified: same stream for all roles
+        # main stream → not used (sub handles both detect+record)
 
     live:
       streams:
@@ -817,9 +816,10 @@ cameras:
 
     detect:
       # Reolink Duo 3 sub stream = 1536×432 (full panoramic)
+      # fps=5: 3m shortest walkable dim → ~10.7 frames at 1.4 m/s (was 10)
       width: 1536
       height: 432
-      fps: 10
+      fps: 5
 
     objects:
       track: [person]
@@ -920,9 +920,10 @@ cameras:
 
     detect:
       # go2rtc crops left half of Duo 3 main → 2048×1152 (16:9)
+      # fps=7: 1.5m shortest walkable dim → ~7.5 frames at 1.4 m/s (was 10)
       width: 2048
       height: 1152
-      fps: 10
+      fps: 7
       max_disappeared: 100
 
     motion:
@@ -1028,9 +1029,10 @@ cameras:
 
     detect:
       # go2rtc crops right half of Duo 3 main → 2048×1152 (16:9)
+      # fps=7: 1.5m shortest walkable dim → ~7.5 frames at 1.4 m/s (was 10)
       width: 2048
       height: 1152
-      fps: 10
+      fps: 7
       max_disappeared: 100
 
     motion:
@@ -1109,12 +1111,10 @@ cameras:
 
     ffmpeg:
       inputs:
-        # sub stream → detect (1536×432, full panoramic overview)
+        # sub stream → detect + record + audio (1536×432, unified for efficiency)
         - path: rtsp://127.0.0.1:8554/piscine_vue_toit_sub
-          roles: [detect]
-        # main stream → record + audio (4096×1152)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [record, audio]
+          roles: [detect, record, audio]  # unified: same stream for all roles
+        # main stream → not used (sub handles both detect+record+audio)
 
     live:
       streams:
@@ -1125,9 +1125,10 @@ cameras:
 
     detect:
       # Reolink Duo 3 sub stream = 1536×432 (full panoramic)
+      # fps=5: 5m shortest walkable dim → ~17.9 frames at 1.4 m/s (was 10)
       width: 1536
       height: 432
-      fps: 10
+      fps: 5
 
     objects:
       track: [person]
@@ -1215,9 +1216,10 @@ cameras:
 
     detect:
       # go2rtc crops left half of Duo 3 main → 2048×1152 (16:9)
+      # fps=7: 2.5m shortest walkable dim → ~12.5 frames at 1.4 m/s (was 10)
       width: 2048
       height: 1152
-      fps: 10
+      fps: 7
 
     objects:
       track: [person]
@@ -1311,9 +1313,10 @@ cameras:
 
     detect:
       # go2rtc crops right half of Duo 3 main → 2048×1152 (16:9)
+      # fps=7: 2.5m shortest walkable dim → ~12.5 frames at 1.4 m/s (was 10)
       width: 2048
       height: 1152
-      fps: 10
+      fps: 7
 
     objects:
       track: [person]
