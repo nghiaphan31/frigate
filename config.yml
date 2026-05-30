@@ -667,7 +667,7 @@ cameras:
       filters:
         person:
           # iter0: physics-based — 160cm person at 20m on 3840×2160 main stream
-          min_area: 442
+          min_area: 300
           max_area: 117000
           min_ratio: 1.0
           max_ratio: 4.0
@@ -699,7 +699,7 @@ cameras:
           person:
             # iter0: physics-based — matches camera-level filter
             threshold: 0.55
-            min_area: 442
+            min_area: 300
             min_ratio: 1.0
             max_ratio: 4.0
 
@@ -751,7 +751,7 @@ cameras:
       filters:
         person:
           # iter0: physics-based — 160cm person at 20m on 2560×1920 main stream
-          min_area: 1079
+          min_area: 300
           max_area: 144000
           min_ratio: 1.0
           max_ratio: 4.0
@@ -778,7 +778,7 @@ cameras:
           person:
             # iter0: physics-based — matches camera-level filter
             threshold: 0.55
-            min_area: 1079
+            min_area: 300
             min_ratio: 1.0
             max_ratio: 4.0
 
