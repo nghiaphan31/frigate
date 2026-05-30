@@ -27,8 +27,8 @@
 #      b. wait_detector_ready 300 || true (TRT engine build, up to 5 min)
 #      c. zmq_fix_cycle (stop + 20s sleep + start)
 #      d. wait_healthy + wait_detector_ready 120 || true
-#      e. wait_all_processing 120 (confirm no ZMQ-stuck camera: camera_fps>0 AND process_fps=0)
-#      f. ZMQ retry loop: up to MAX_ZMQ_RETRIES=3 extra cycles if any camera is still stuck
+#      e. wait_all_processing 120 || true (confirm majority cameras have process_fps > 0)
+#      f. One ZMQ retry if majority are still not processing
 # =============================================================================
 
 [Unit]

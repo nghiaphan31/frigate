@@ -29,10 +29,6 @@ set -euo pipefail
 COMPOSE_FILE="docker-compose.calypso.yml"
 SERVICE="frigate"
 FRIGATE_API="http://localhost:5000"
-# Maximum number of extra ZMQ-fix stop+start retries after the initial cycle.
-# 3 retries (4 total cycles) gives P(any camera still ZMQ-stuck) < 0.55% at 15% per-cycle
-# failure probability. See plans/deploy-reliability-fix-plan.md § REL-9 for the math.
-MAX_ZMQ_RETRIES=3
 
 # Soak epoch — update this after each container recreation or soak reset
 # Used by the `dump` command to filter events since last soak start
@@ -163,22 +159,14 @@ except Exception:
 " 2>/dev/null | grep -q '^1$'
 }
 
-# Check whether any detection-enabled camera is ZMQ-stuck.
+# Returns 0 (success) if >50% of detection-enabled cameras have process_fps > 0.
+# Returns 1 (failure) if majority do not — caller should retry a ZMQ cycle.
 #
-# A camera is ZMQ-stuck when BOTH of the following are true:
-#   camera_fps  > 0 — go2rtc is delivering RTSP frames (feed exists, not a network issue)
-#   process_fps = 0 — Frigate is NOT processing those frames (ZMQ IPC is broken)
-#
-# WHY this replaces the old majority (>50%) check:
-#   The majority check silently passes when 5 of 11 cameras are stuck — those cameras
-#   show "no frames received" in the UI permanently. Even one stuck camera is a real
-#   failure that should trigger a retry.
-#   camera_fps > 0 is the discriminator: it confirms the camera feed exists and the
-#   failure is ZMQ, not camera connectivity (camera_fps=0 → network/camera issue,
-#   not ZMQ → excluded from the stuck-camera check).
-#
-# Returns 0 (success/all clear) if no camera is ZMQ-stuck.
-# Returns 1 (failure/retry needed) if any camera is ZMQ-stuck.
+# WHY majority (not all): ZMQ IPC startup is a race. Requiring ALL cameras to
+# have process_fps > 0 immediately after a stop+start would trigger spurious
+# retries while cameras reconnect their RTSP streams (10-30s after dc start).
+# The majority threshold gives enough signal that ZMQ is healthy while tolerating
+# the last few cameras still reconnecting.
 all_processing() {
     curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null \
         | python3 -c "
@@ -187,42 +175,39 @@ try:
     s = json.load(sys.stdin)
     cams = s.get('cameras', {})
     if not cams:
-        print(0)  # no cameras yet — API not fully up, signal retry
+        print(0)
         sys.exit()
-    # A camera is ZMQ-stuck if it receives RTSP frames but Frigate does not process them.
-    # Cameras with camera_fps=0 are excluded: no feed = connectivity issue, not ZMQ.
-    stuck = [
-        c for c, v in cams.items()
-        if (v.get('camera_fps') or 0) > 0        # go2rtc delivers RTSP frames
-        and (v.get('process_fps') or 0) == 0     # Frigate does not process them
-        and v.get('detection_enabled', True)     # detection is supposed to be on
-    ]
-    print(0 if stuck else 1)
+    enabled = {c: v for c, v in cams.items() if v.get('detection_enabled', True)}
+    if not enabled:
+        print(1)  # no detection-enabled cameras — nothing to wait for
+        sys.exit()
+    processing = sum(1 for v in enabled.values() if (v.get('process_fps') or 0) > 0)
+    total = len(enabled)
+    print(1 if processing > total / 2 else 0)
 except Exception:
     print(0)
 " 2>/dev/null | grep -q '^1$'
 }
 
-# Wait until no camera is ZMQ-stuck (camera_fps > 0 AND process_fps = 0).
-# See all_processing() above for the stuck-camera definition.
+# Wait until majority of detection-enabled cameras have process_fps > 0.
 # Returns 0 on success, 1 on timeout (caller MUST use || true — set -e is active).
 wait_all_processing() {
     local max_wait="${1:-120}"
     local interval=5
     local elapsed=0
-    log "Waiting for all cameras to process frames (no ZMQ-stuck camera, timeout=${max_wait}s)..."
+    log "Waiting for majority of cameras to start processing (timeout=${max_wait}s)..."
     while true; do
         if all_processing; then
-            ok "All active cameras processing (ZMQ IPC healthy)"
+            ok "Majority of cameras processing (process_fps > 0)"
             return 0
         fi
         sleep "$interval"
         elapsed=$((elapsed + interval))
         if [[ $elapsed -ge $max_wait ]]; then
-            warn "ZMQ-stuck cameras still detected after ${max_wait}s — ZMQ IPC may need another cycle"
+            warn "Cameras not yet processing after ${max_wait}s — ZMQ IPC may need another cycle"
             return 1  # caller MUST use || true — set -e is active
         fi
-        log "  ...waiting: some cameras have camera_fps>0 but process_fps=0 (${elapsed}s elapsed)"
+        log "  ...waiting: majority of cameras don't have process_fps>0 yet (${elapsed}s elapsed)"
     done
 }
 
@@ -316,25 +301,17 @@ cmd_boot() {
     check_inference
     check_det_fps
 
-    # REL-6/REL-8/REL-9: ZMQ retry loop — up to MAX_ZMQ_RETRIES extra cycles.
-    # Triggers if ANY camera has camera_fps>0 AND process_fps=0 (ZMQ-stuck).
-    # This is stricter than the old majority check: even one stuck camera retries.
-    local zmq_retry=0
-    while ! all_processing && [[ $zmq_retry -lt $MAX_ZMQ_RETRIES ]]; do
-        zmq_retry=$((zmq_retry + 1))
-        warn "ZMQ-stuck cameras detected (retry ${zmq_retry}/${MAX_ZMQ_RETRIES}) — retrying ZMQ reset..."
+    # One ZMQ retry if majority of cameras are not yet processing.
+    if ! all_processing; then
+        warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
         check_det_fps
         zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120 || true
         wait_all_processing 120 || true
-        log "Post-retry ${zmq_retry} health:"
+        log "Post-retry health:"
         check_inference
         check_det_fps
-    done
-    if ! all_processing; then
-        warn "ZMQ IPC still unhealthy after ${MAX_ZMQ_RETRIES} retries — manual check needed"
-        warn "Run: ./deploy-frigate.sh status  to see per-camera fps"
     fi
 
     check_shm
@@ -383,31 +360,23 @@ cmd_restart() {
     wait_healthy
     # Wait for detector model to load (TRT cache: ~5s; first build: ~65s)
     wait_detector_ready 120 || true
-    # Wait for ZMQ IPC to be healthy: no ZMQ-stuck camera (camera_fps>0 AND process_fps=0)
+    # Wait for ZMQ IPC to be healthy: majority of cameras must have process_fps > 0
     wait_all_processing 120 || true
     log "Post-restart health:"
     check_inference
     check_det_fps
 
-    # REL-6/REL-8/REL-9: ZMQ retry loop — up to MAX_ZMQ_RETRIES extra cycles.
-    # Triggers if ANY camera has camera_fps>0 AND process_fps=0 (ZMQ-stuck).
-    # This is stricter than the old majority check: even one stuck camera retries.
-    local zmq_retry=0
-    while ! all_processing && [[ $zmq_retry -lt $MAX_ZMQ_RETRIES ]]; do
-        zmq_retry=$((zmq_retry + 1))
-        warn "ZMQ-stuck cameras detected (retry ${zmq_retry}/${MAX_ZMQ_RETRIES}) — retrying stop+start..."
+    # One ZMQ retry if majority of cameras are not yet processing.
+    if ! all_processing; then
+        warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
         check_det_fps
         zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120 || true
         wait_all_processing 120 || true
-        log "Post-retry ${zmq_retry} health:"
+        log "Post-retry health:"
         check_inference
         check_det_fps
-    done
-    if ! all_processing; then
-        warn "ZMQ IPC still unhealthy after ${MAX_ZMQ_RETRIES} retries — manual check needed"
-        warn "Run: ./deploy-frigate.sh status  to see per-camera fps"
     fi
 
     check_shm
@@ -489,25 +458,17 @@ cmd_recreate() {
     check_inference
     check_det_fps
 
-    # REL-6/REL-8/REL-9: ZMQ retry loop — up to MAX_ZMQ_RETRIES extra cycles.
-    # Triggers if ANY camera has camera_fps>0 AND process_fps=0 (ZMQ-stuck).
-    # This is stricter than the old majority check: even one stuck camera retries.
-    local zmq_retry=0
-    while ! all_processing && [[ $zmq_retry -lt $MAX_ZMQ_RETRIES ]]; do
-        zmq_retry=$((zmq_retry + 1))
-        warn "ZMQ-stuck cameras detected (retry ${zmq_retry}/${MAX_ZMQ_RETRIES}) — retrying ZMQ reset..."
+    # One ZMQ retry if majority of cameras are not yet processing.
+    if ! all_processing; then
+        warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
         check_det_fps
         zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120 || true
         wait_all_processing 120 || true
-        log "Post-retry ${zmq_retry} health:"
+        log "Post-retry health:"
         check_inference
         check_det_fps
-    done
-    if ! all_processing; then
-        warn "ZMQ IPC still unhealthy after ${MAX_ZMQ_RETRIES} retries — manual check needed"
-        warn "Run: ./deploy-frigate.sh status  to see per-camera fps"
     fi
 
     check_shm
