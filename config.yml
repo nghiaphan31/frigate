@@ -2,7 +2,7 @@
 #                           FRIGATE NVR – FULL CONFIGURATION
 # ============================================================================
 #  Host:    Calypso (RTX 5060 Ti 16 GB GPU)
-#  Date:    2026-05-21
+#  Date:    2026-05-30
 #  Branch:  detection-optimisation
 #
 #  Purpose: Refactored, fully-annotated, self-contained Frigate configuration
@@ -68,13 +68,11 @@
 #    is 320×320 regardless, so 10 fps at 4K would waste GPU decode bandwidth.
 #  ─────────────────────────────────────────────────────────────────────────
 #
-#  DETECTION PARAMETER STATUS (iter2 — data-driven tight params 2026-05-25)
+#  DETECTION PARAMETER STATUS (iter0 — physics-based parameters)
 #  ─────────────────────────────────────────────────────────────────────────
-#  Parameters derived from 72h soak (2026-05-22→2026-05-25, 2822 events).
-#  Method: p5/p95 percentiles with safety margins (×0.70 / ×1.30 for area,
-#  ×0.80 / ×1.20 for ratio). max_ratio capped at 10.0 (degenerate boxes).
-#  Low-sample cameras (n<50) flagged — parameters are conservative estimates.
-#  See: plans/detection-optimisation-plan.md § Track A — Soak 3 Full Dump
+#  Parameters computed from camera geometry (height, tilt, FOV, resolution)
+#  to detect a 160cm person at the camera's maximum detection distance.
+#  See: plans/detection-optimisation-v2-plan.md § Phase 1
 #  ─────────────────────────────────────────────────────────────────────────
 
 # ============================================================================
@@ -233,8 +231,8 @@ audio:
 #   go2rtc 1.9.10 cannot apply crop filters on its RTSP output. The
 #   `#video=ffmpeg:` modifier is consumer-side only (WebRTC/MSE) and does NOT
 #   affect the RTSP stream served to Frigate's ffmpeg. Therefore:
-#   • The _left/_right go2rtc stream entries below are VESTIGIAL (registered
-#     but NOT used by Frigate's ffmpeg inputs).
+#   • No _left/_right go2rtc streams are registered — cropping is handled
+#     entirely by Frigate's own ffmpeg, not go2rtc.
 #   • Actual cropping is done by Frigate's own ffmpeg via
 #     `ffmpeg.output_args.detect: [-vf, crop=W:H:X:Y]` per crop camera.
 #   • Crop camera ffmpeg.inputs.path points to the full main stream
@@ -267,17 +265,6 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
     allee_sur_le_cote_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
-    # allee_sur_le_cote_left: DISABLED 2026-05-28
-    # VESTIGIAL – go2rtc 1.9.10 cannot crop RTSP output. Cropping is done by
-    # Frigate's own ffmpeg via output_args.detect (CUDA hwdownload+crop filter).
-    # This entry was registered but NEVER consumed by any Frigate camera — the
-    # _left/_right cameras point to allee_sur_le_cote_main and crop internally.
-    # Kept commented for reference until confirmed safe to remove.
-    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=h264 -vf crop=2048:1152:0:0
-
-    # allee_sur_le_cote_right: DISABLED 2026-05-28
-    # VESTIGIAL – see allee_sur_le_cote_left note above.
-    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main#video=h264 -vf crop=2048:1152:2048:0
 
     # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ──────
     # NUC stream names: reolink_vue_nord_sur_maison_main / reolink_vue_nord_sur_maison_sub
@@ -306,13 +293,6 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
     jardin_devant_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub
-    # jardin_devant_main_left: DISABLED 2026-05-28
-    # VESTIGIAL – see allee_sur_le_cote_left note above.
-    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=h264 -vf crop=2048:1152:0:0
-
-    # jardin_devant_main_right: DISABLED 2026-05-28
-    # VESTIGIAL – see allee_sur_le_cote_left note above.
-    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main#video=h264 -vf crop=2048:1152:2048:0
 
     # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────────
     # NUC stream names: reolink_duo_vue_sud_main / reolink_duo_vue_sud_sub
@@ -323,13 +303,6 @@ go2rtc:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
     piscine_vue_toit_sub:
       - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub
-    # piscine_vue_toit_left: DISABLED 2026-05-28
-    # VESTIGIAL – see allee_sur_le_cote_left note above.
-    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=h264 -vf crop=2048:1152:0:0
-
-    # piscine_vue_toit_right: DISABLED 2026-05-28
-    # VESTIGIAL – see allee_sur_le_cote_left note above.
-    # - ffmpeg:rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main#video=h264 -vf crop=2048:1152:2048:0
 
 # ============================================================================
 # 2. CAMERA DEFINITIONS
@@ -343,7 +316,8 @@ cameras:
   # Height:    3.4m above ground
   # Tilt:      50° downward
   # Max dist:  20m (person detection at ground level)
-  # Position:  Driveway side view, eye-level, covers gate + approach
+  # FOV:       180° H-FOV / 55° V-FOV (panoramic Duo 3)
+  # Position:  Driveway side view, covers gate + approach
   # Streams:
   #   detect  → sub 1536×432   (full panoramic sub-stream)
   #             NOTE: full panoramic used here for zone coverage across the
@@ -386,19 +360,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # GEOMETRY (camera at 4m, sub-stream 1536×432):
-          #   Person 1.8m tall at 17m ground distance → slant range √(17²+4²)=17.5m
-          #   pixel_height = 1.8/17.5 × 432 = 44px  pixel_width ≈ 12px  area ≈ 530px²
-          #   Person 1.8m tall at 25m ground distance → slant range √(25²+4²)=25.3m
-          #   pixel_height = 1.8/25.3 × 432 = 31px  pixel_width ≈ 8px   area ≈ 248px²
-          # iter2 2026-05-25: 373 events, 72h soak, p5_area=17940 p95_area=248140
-          # p5_ratio=1.724 p95_ratio=4.793  p10_score=0.590 p5_score=0.545
-          min_area: 12558        # p5×0.70 (sub 1536×432 = 663552px)
-          max_area: 322582       # p95×1.30
-          min_ratio: 1.38        # p5_ratio×0.80 (panoramic sub: wide boxes expected)
-          max_ratio: 5.75        # p95_ratio×1.20
-          threshold: 0.56        # p10_score×0.95
-          min_score: 0.52        # p5_score×0.95
+          # iter0: physics-based — 160cm person at 20m on 1536×432 sub-stream
+          min_area: 124
+          max_area: 22500
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -413,10 +381,11 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.56   # iter2 2026-05-25
-            min_area: 12558
-            min_ratio: 1.38
-            max_ratio: 5.75
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 124
+            min_ratio: 1.0
+            max_ratio: 4.0
 
       rodage:
         # Fence line — alert only after 10s loitering
@@ -426,10 +395,11 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.56   # iter2 2026-05-25
-            min_area: 12558
-            min_ratio: 1.38
-            max_ratio: 5.75
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 124
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -440,7 +410,9 @@ cameras:
   # ==========================================================================
   # CAMERA: ALLEE_SUR_LE_COTE_LEFT
   # Hardware:  Reolink Duo 3 — left lens half (same physical camera as above)
-  # Height:    4m above ground
+  # Height:    3.4m above ground (inherited from parent allee_sur_le_cote)
+  # Max dist:  20m (inherited from parent)
+  # FOV:       ~90° H-FOV / 55° V-FOV (half of 180° panoramic)
   # Position:  Left half of driveway — covers gate and street approach
   # Streams:
   #   detect  → main 4096×1152 pulled from go2rtc, cropped to left 2048×1152
@@ -499,17 +471,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 2026-05-25: 38 events (LOW_N), 72h soak, p5_area=11661 p95_area=606924
-          # p5_ratio=0.046 p95_ratio=4.312  p10_score=0.718 p5_score=0.634
-          # iter3 (2026-05-26): 3 events seen, 33% below_min_ratio → p5_ratio observed at boundary
-          #   min_ratio lowered to 0.05 to capture ultra-thin (standing) detections.
-          #   threshold/min_score lowered — scores observed below current threshold.
-          min_area: 8162           # p5×0.70 (main_left 2048×1152 = 2359296px)
-          max_area: 789001         # p95×1.30
-          min_ratio: 0.05           # iter3: was 0.10, lowered for ultra-thin standing persons
-          max_ratio: 5.17          # p95_ratio×1.20
-          threshold: 0.61           # iter3: was 0.68, lowered (scores below 0.68 observed)
-          min_score: 0.55           # iter3: was 0.60, lowered
+          # iter0: physics-based — 160cm person at 20m on 2048×1152 main crop
+          min_area: 18
+          max_area: 9000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -523,10 +491,11 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.61          # iter3: was 0.68
-            min_area: 8162
-            min_ratio: 0.05          # iter3: was 0.10
-            max_ratio: 5.17
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 18
+            min_ratio: 1.0
+            max_ratio: 4.0
       rodage:
         coordinates: 0.231,0.382,0.198,0.348,0.111,0.635,0.151,0.665
         loitering_time: 10
@@ -534,10 +503,11 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.61          # iter3: was 0.68
-            min_area: 8162
-            min_ratio: 0.05          # iter3: was 0.10
-            max_ratio: 5.17
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 18
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -552,7 +522,9 @@ cameras:
   # ==========================================================================
   # CAMERA: ALLEE_SUR_LE_COTE_RIGHT
   # Hardware:  Reolink Duo 3 — right lens half (same physical camera as above)
-  # Height:    4m above ground
+  # Height:    3.4m above ground (inherited from parent allee_sur_le_cote)
+  # Max dist:  20m (inherited from parent)
+  # FOV:       ~90° H-FOV / 55° V-FOV (half of 180° panoramic)
   # Position:  Right half of driveway — covers garden side and rear approach
   # Streams:
   #   detect  → main 4096×1152 pulled from go2rtc, cropped to right 2048×1152
@@ -610,16 +582,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 2026-05-25: 267 events, 72h soak, p5_area=15351 p95_area=873425
-          # p5_ratio=0.484 p95_ratio=2.618  p10_score=0.621 p5_score=0.548
-          # iter3 (2026-05-26): 2 events seen, 50% above max_ratio → p95 observed=5.33
-          #   max_ratio too low for panoramic right half. Raised to 7.0.
-          min_area: 10745        # p5×0.70 (main_right 2048×1152 = 2359296px)
-          max_area: 1135452      # p95×1.30
-          min_ratio: 0.39        # p5_ratio×0.80
-          max_ratio: 7.00         # iter3: was 3.14, raised for wide panoramic detections
-          threshold: 0.59        # p10_score×0.95
-          min_score: 0.52        # p5_score×0.95
+          # iter0: physics-based — 160cm person at 20m on 2048×1152 main crop
+          min_area: 18
+          max_area: 9000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -633,10 +602,11 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.40          # Further lowered for far-range misses (was 0.45)
-            min_area: 10745          # iter2 2026-05-25
-            min_ratio: 0.39
-            max_ratio: 7.00           # iter3: was 3.14 (zone mirrors camera-level filter)
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 18
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -653,6 +623,7 @@ cameras:
   # Height:    2.2m above ground
   # Tilt:      10° downward
   # Max dist:  20m (person detection at ground level)
+  # FOV:       87° H-FOV / 44° V-FOV (RLC-810A 4.0 mm lens)
   # Position:  North-facing, covers rear garden, play area, and shed
   # Streams:
   #   detect  → main 3840×2160  (4K UHD)
@@ -691,17 +662,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 2026-05-25: 1184 events, 72h soak, p5_area=132492 p95_area=959812
-          # p5_ratio=0.081 p95_ratio=2.025  p10_score=0.618 p5_score=0.576
-          # iter3 (2026-05-26): 47 events seen, 4 above_max_ratio → p95 observed=5.86
-          #   max_ratio too low — panoramic overhead sees very wide boxes.
-          #   Raised to 6.5 to accommodate observed distribution.
-          min_area: 92744          # p5×0.70 (main 3840×2160 = 8294400px)
-          max_area: 1247755        # p95×1.30
-          min_ratio: 0.10          # p5_ratio floored to 0.10 (p5=0.081)
-          max_ratio: 6.50           # iter3: was 2.43, raised (observed p95=5.86)
-          threshold: 0.59          # p10_score×0.95
-          min_score: 0.55          # p5_score×0.95
+          # iter0: physics-based — 160cm person at 20m on 3840×2160 main stream
+          min_area: 442
+          max_area: 117000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -726,10 +693,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.59          # iter2 2026-05-25
-            min_area: 92744
-            min_ratio: 0.10
-            max_ratio: 6.50          # iter3: was 2.43, raised (observed p95=5.86)
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 442
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     # ----------------------------- REVIEW RULES -----------------------------
     review:
@@ -744,6 +712,7 @@ cameras:
   # Height:    1.7m above ground
   # Tilt:      0° (doorbell at eye level)
   # Max dist:  20m (person detection at ground level)
+  # FOV:       135° H-FOV / 100° V-FOV (Doorbell POE)
   # Resolution:
   #   main  = 2560×1920 (4:3, ~4.9 MP) — detect + record + audio
   #   sub   = 640×480   (4:3, ~0.3 MP) — live view only
@@ -776,14 +745,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (57 events, 72h).
-          # area p5=2366 p95=3332815  ratio p5=0.19 p95=10.00
-          min_area: 2366
-          max_area: 3332815
-          min_ratio: 0.19
-          max_ratio: 10.0
-          threshold: 0.64
-          min_score: 0.58
+          # iter0: physics-based — 160cm person at 20m on 2560×1920 main stream
+          min_area: 1079
+          max_area: 144000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -803,10 +771,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.64
-            min_area: 2366
-            min_ratio: 0.19
-            max_ratio: 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 1079
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -820,6 +789,7 @@ cameras:
   # Height:    6m above ground
   # Tilt:      50° downward
   # Max dist:  15m (person detection at ground level)
+  # FOV:       180° H-FOV / 55° V-FOV (panoramic Duo 3)
   # Position:  Front garden, full panoramic view of front yard + street
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
@@ -855,18 +825,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (162 events, 72h).
-          # area p5=1442 p95=132761  ratio p5=0.38 p95=10.00
-          # iter3 (2026-05-26): 17 events seen, 94% above max_area → p95 observed ~1.84M
-          #   max_area catastrophically too low for doorbell close-range detections.
-          #   Raised to 1,500,000 (10× iter2 max_area) to accommodate large close boxes.
-          #   threshold/min_score slightly raised as detection now includes more true persons.
-          min_area: 1442
-          max_area: 1500000     # iter3: was 132,761, raised to 1.5M (observed p95 ~1.84M)
-          min_ratio: 0.38
-          max_ratio: 10.0
-          threshold: 0.52          # iter3: was 0.55
-          min_score: 0.47          # iter3: was 0.49
+          # iter0: physics-based — 160cm person at 15m on 1536×432 sub-stream
+          min_area: 72
+          max_area: 13500
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -880,10 +845,11 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.52        # iter3: was 0.55
-            min_area: 1442
-            min_ratio: 0.38
-            max_ratio: 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 72
+            min_ratio: 1.0
+            max_ratio: 4.0
       rodage:
         coordinates:
           0.303,0,0.346,0,0.433,0,0.528,0,0.602,0,0.635,0,0.666,0.026,0.702,0.093,0.73,0.124,0.748,0.131,0.758,0.236,0.752,0.273,0.744,0.297,0.679,0.243,0.658,0.226,0.64,0.291,0.568,0.254,0.499,0.229,0.438,0.229,0.316,0.231,0.282,0.227,0.233,0.835,0.209,0.809,0.259,0.214,0.272,0.129
@@ -892,10 +858,11 @@ cameras:
         objects: [person]
         filters:
           person:
+            # iter0: physics-based — matches camera-level filter
             threshold: 0.55
-            min_area: 1442
-            min_ratio: 0.38
-            max_ratio: 10.0
+            min_area: 72
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -908,7 +875,9 @@ cameras:
 
   # ========================================================================
   # CAMERA: JARDIN_DEVANT_LEFT — Left half of front garden (Reolink Duo 3)
-  # Height:    6.5m above ground
+  # Height:    6m above ground (inherited from parent jardin_devant)
+  # Max dist:  15m (inherited from parent)
+  # FOV:       ~90° H-FOV / 55° V-FOV (half of 180° panoramic)
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
   #   detect     = main cropped to left 2048×1152 via CUDA filter graph
@@ -961,25 +930,20 @@ cameras:
       threshold: 25
       delta_alpha: 0.2
       improve_contrast: true
-      # TEMP iter1: motion masks removed for soak period to capture all pedestrian data.
-      # Original masks covered 76.5% of frame (street + sky), blocking most detections.
-      # Will be re-evaluated and re-added in iter2 based on false-positive analysis.
+      # Masks TBD — removed during iter1 soak period; add back after iter1 walking
+      # tests if false-positive analysis identifies street/sky regions to suppress.
 
     objects:
       track: [person]
       filters:
         person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (56 events, 72h).
-          # area p5=4256 p95=1228500  ratio p5=0.20 p95=10.00
-          # iter3 (2026-05-26): 5 events, 60% violations:
-          #   1 below_min_area (very small), 2 above_max_ratio → p95 ratio=293.67
-          #   max_ratio far too low for panoramic half-crop view.
-          min_area: 3500           # iter3: was 4256, lowered (observed below 4256)
-          max_area: 1228500       # p95 within range — no change
-          min_ratio: 0.10           # iter3: was 0.20, lowered (extremely wide panoramic boxes)
-          max_ratio: 300.0          # iter3: was 10.0, raised dramatically (observed p95=293.7)
-          threshold: 0.50           # iter3: was 0.56, lowered
-          min_score: 0.48           # iter3: was 0.52, lowered
+          # iter0: physics-based — 160cm person at 15m on 2048×1152 main crop
+          min_area: 9
+          max_area: 5250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -992,10 +956,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.50           # iter3: was 0.56
-            min_area: 3500           # iter3: was 4256
-            min_ratio: 0.10           # iter3: was 0.20
-            max_ratio: 300.0          # iter3: was 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 9
+            min_ratio: 1.0
+            max_ratio: 4.0
       rodage:
         coordinates:
           1,0.034,0.998,0.28,0.65,0.297,0.575,0.191,0.469,0.858,0.416,0.821,0.539,0.136,0.582,0.092,0.793,0.046
@@ -1004,10 +969,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.56
-            min_area: 4256
-            min_ratio: 0.20
-            max_ratio: 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 9
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -1017,7 +983,9 @@ cameras:
 
   # ========================================================================
   # CAMERA: JARDIN_DEVANT_RIGHT — Right half of front garden (Reolink Duo 3)
-  # Height:    6.5m above ground
+  # Height:    6m above ground (inherited from parent jardin_devant)
+  # Max dist:  15m (inherited from parent)
+  # FOV:       ~90° H-FOV / 55° V-FOV (half of 180° panoramic)
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
   #   detect     = main cropped to right 2048×1152 via CUDA filter graph
@@ -1070,27 +1038,20 @@ cameras:
       contour_area: 40
       frame_alpha: 0.4
       delta_alpha: 0.5
-      # TEMP iter1: motion masks removed for soak period to capture all pedestrian data.
-      # Original masks covered 66.9% of frame (street + sky), blocking most detections.
-      # Will be re-evaluated and re-added in iter2 based on false-positive analysis.
+      # Masks TBD — removed during iter1 soak period; add back after iter1 walking
+      # tests if false-positive analysis identifies street/sky regions to suppress.
 
     objects:
       track: [person]
       filters:
         person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (152 events, 72h).
-          # area p5=2296 p95=211100  ratio p5=0.16 p95=10.00
-          # iter3 (2026-05-26): 26 events, 65% violations — mixed pattern:
-          #   2 below_min_area (some very small persons below 2296px²)
-          #   8 above_max_area → p95 observed 668k (3× above config max)
-          #   1 below_min_ratio (very narrow), 6 above_max_ratio → p95 ratio=39.6
-          #   Both area bounds and both ratio bounds need expansion.
-          min_area: 1800           # iter3: was 2296, lowered slightly for tiny persons
-          max_area: 750000         # iter3: was 211,100, raised to cover observed p95~668k
-          min_ratio: 0.05          # iter3: was 0.16, lowered (very upright close persons)
-          max_ratio: 40.0          # iter3: was 10.0, raised (overhead wide panoramic boxes)
-          threshold: 0.57           # iter3: was 0.65, lowered (scores observed below 0.65)
-          min_score: 0.52          # iter3: was 0.56, lowered
+          # iter0: physics-based — 160cm person at 15m on 2048×1152 main crop
+          min_area: 9
+          max_area: 5250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -1104,10 +1065,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.57          # iter3: was 0.65
-            min_area: 1800           # iter3: was 2296
-            min_ratio: 0.05          # iter3: was 0.16
-            max_ratio: 40.0          # iter3: was 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 9
+            min_ratio: 1.0
+            max_ratio: 4.0
       rodage:
         coordinates:
           0,0.255,0,0,0.229,0,0.359,0.058,0.379,0.103,0.497,0.153,0.508,0.241,0.54,0.239,0.667,0.819,0.65,0.837,0.529,0.283,0.523,0.273,0.501,0.273,0.337,0.214,0.3,0.287,0.182,0.28
@@ -1116,10 +1078,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.65
-            min_area: 2296
-            min_ratio: 0.16
-            max_ratio: 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 9
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -1133,6 +1096,7 @@ cameras:
   # Height:    6m above ground
   # Tilt:      25° downward
   # Max dist:  20m (person detection at ground level)
+  # FOV:       180° H-FOV / 55° V-FOV (panoramic Duo 3)
   # Position:  Roof/gutter mount, looking south over pool + garden
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
@@ -1169,18 +1133,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (168 events, 72h).
-          # area p5=1554 p95=60901  ratio p5=0.53 p95=10.00
-          # iter3 (2026-05-26): 4 events seen, 100% above max_area → p95 observed ~233k
-          #   max_area too low for close-range rooftop detections. Raised to p95×5.
-          #   min_ratio lowered to 0.35 to allow very thin (upright) standing persons.
-          #   threshold/min_score lowered slightly (still well above model baseline).
-          min_area: 1554
-          max_area: 302935      # iter3: was 60901, raised to p95×5 (observed ~233k in 10h)
-          min_ratio: 0.35        # iter3: was 0.53, lowered to allow thin upright persons
-          max_ratio: 10.0
-          threshold: 0.61        # iter3: was 0.68, lowered (still above model floor)
-          min_score: 0.59        # iter3: was 0.65, lowered
+          # iter0: physics-based — 160cm person at 20m on 1536×432 sub-stream
+          min_area: 158
+          max_area: 27000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -1194,10 +1153,11 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.61        # iter3: was 0.68
-            min_area: 1554
-            min_ratio: 0.35        # iter3: was 0.53
-            max_ratio: 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 158
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -1207,7 +1167,9 @@ cameras:
 
   # ========================================================================
   # CAMERA: PISCINE_VUE_TOIT_LEFT — Left half of pool rooftop (Reolink Duo 3)
-  # Height:    6.5m above ground
+  # Height:    6m above ground (inherited from parent piscine_vue_toit)
+  # Max dist:  20m (inherited from parent)
+  # FOV:       ~90° H-FOV / 55° V-FOV (half of 180° panoramic)
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record + audio (shared connection)
   #   main_left  = 2048×1152 (16:9 crop, left half) — detect via CUDA filter graph
@@ -1261,14 +1223,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (349 events, 72h).
-          # area p5=19178 p95=684684  ratio p5=0.94 p95=10.00
-          min_area: 19178
-          max_area: 684684
-          min_ratio: 0.94
-          max_ratio: 10.0
-          threshold: 0.65
-          min_score: 0.59
+          # iter0: physics-based — 160cm person at 20m on 2048×1152 main crop
+          min_area: 21
+          max_area: 11250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -1282,10 +1243,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.65
-            min_area: 19178
-            min_ratio: 0.94
-            max_ratio: 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 21
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
@@ -1301,7 +1263,9 @@ cameras:
 
   # ========================================================================
   # CAMERA: PISCINE_VUE_TOIT_RIGHT — Right half of pool rooftop (Reolink Duo 3)
-  # Height:    6.5m above ground
+  # Height:    6m above ground (inherited from parent piscine_vue_toit)
+  # Max dist:  20m (inherited from parent)
+  # FOV:       ~90° H-FOV / 55° V-FOV (half of 180° panoramic)
   # Resolution:
   #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
   #   main_right = 2048×1152 (16:9 crop, right half) — detect via CUDA filter graph
@@ -1355,17 +1319,13 @@ cameras:
       track: [person]
       filters:
         person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (16 events, 72h).
-          # area p5=503 p95=422832  ratio p5=0.24 p95=10.00
-          # iter3 (2026-05-26): 6 events seen, 1 above max_area → marginal, sample too small
-          #   to act definitively. Keeping max_area at 450,000 as a slight safety raise.
-          #   threshold/min_score lowered — all 6 events had scores below current threshold.
-          min_area: 503
-          max_area: 450000          # iter3: was 422,832, raised to 450k (observed p95~369k)
-          min_ratio: 0.24
-          max_ratio: 10.0
-          threshold: 0.52           # iter3: was 0.58, lowered
-          min_score: 0.48           # iter3: was 0.53, lowered
+          # iter0: physics-based — 160cm person at 20m on 2048×1152 main crop
+          min_area: 21
+          max_area: 11250
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
 
     snapshots:
       enabled: true
@@ -1379,10 +1339,11 @@ cameras:
         objects: person
         filters:
           person:
-            threshold: 0.52           # iter3: was 0.58
-            min_area: 503
-            min_ratio: 0.24
-            max_ratio: 10.0
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 21
+            min_ratio: 1.0
+            max_ratio: 4.0
 
     review:
       alerts:
