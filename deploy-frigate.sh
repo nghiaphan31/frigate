@@ -384,6 +384,30 @@ cmd_recreate() {
     # Step 1: stop + remove + recreate
     log "Step 1/2 — stop + rm + up (container recreation)..."
     dc stop "$SERVICE"
+
+    # IMPORTANT: Delete frigate.db BEFORE removing the container.
+    # Frigate stores parsed config in frigate.db (on the overlay filesystem).
+    # The DB persists across container lifecycle operations unless explicitly
+    # deleted. Without this, config changes are ignored because Frigate loads
+    # the stale DB instead of re-parsing config.yml.
+    #
+    # CRITICAL: Do NOT use `docker cp /dev/null` — that truncates to 0 bytes
+    # and corrupts the SQLite DB, causing Frigate to crash with exit code 1.
+    # Instead, use a helper container with --volumes-from to properly rm the
+    # DB files while the Frigate container is stopped.
+    log "Clearing Frigate database (forces re-parse from config.yml)..."
+    CONTAINER_ID=$(dc ps -q "$SERVICE" 2>/dev/null | head -1)
+    if [[ -n "$CONTAINER_ID" ]]; then
+        # --volumes-from works on a STOPPED container — mounts the Frigate
+        # container's volumes into a lightweight alpine container and deletes
+        # the DB files from inside that context.
+        docker run --rm \
+            --volumes-from "$CONTAINER_ID" \
+            docker.io/library/alpine:latest \
+            sh -c 'rm -f /config/frigate.db /config/frigate.db-shm /config/frigate.db-wal' \
+            2>/dev/null || warn "DB cleanup failed (continuing anyway)"
+    fi
+
     dc rm -f "$SERVICE"
     dc up -d "$SERVICE"
 
@@ -555,17 +579,32 @@ case "$MODE" in
         ;;
     auto)
         # Detect whether the running container matches the compose definition.
-        # If the image or shm_size has changed, a recreation is needed.
+        # If the image or config.yml has changed, a recreation is needed.
         #
-        # BUG FIX: `docker inspect frigate` always failed with "no such object"
-        # because docker-compose names the container frigate_frigate_1, not frigate.
-        # Using `dc ps -q "$SERVICE"` gets the real container ID, then we inspect
-        # that ID — works regardless of the compose project name or container suffix.
+        # CRITICAL (BUG FIX #5): config.yml changes require DB cleanup (cmd_recreate),
+        # NOT cmd_restart. Frigate stores parsed config in frigate.db (named volume,
+        # persists across all container operations). /api/config serves the DB version.
+        # Even `docker-compose down && up -d` (full rm+create) keeps the old config
+        # unless the DB is explicitly cleared. The auto mode must detect config
+        # changes and call cmd_recreate (which now clears the DB) instead of
+        # cmd_restart.
         log "=== Auto-detect deploy mode ==="
         CONTAINER_ID=$(dc ps -q "$SERVICE" 2>/dev/null | head -1)
         RUNNING_IMAGE=$(echo "$CONTAINER_ID" \
             | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null || echo "")
         COMPOSE_IMAGE=$(grep '^\s*image:' "$COMPOSE_FILE" | head -1 | awk '{print $2}')
+
+        # Check if config.yml has been modified since container was created.
+        # If config.yml mtime is newer than the container creation time, the config
+        # was modified after the container started and requires full recreation.
+        # (Frigate stores parsed config in frigate.db which persists across recreates)
+        CONTAINER_CREATED=$(docker inspect --format '{{.Created}}' "$(dc ps -q "$SERVICE" | head -1)" 2>/dev/null | xargs -I{} date -d {} +%s 2>/dev/null || echo 0)
+        CONFIG_MTIME=$(stat -c %Y config.yml 2>/dev/null || echo 0)
+        CONFIG_CHANGED=false
+        if [[ "$CONFIG_MTIME" -gt "$CONTAINER_CREATED" ]] && [[ "$CONTAINER_CREATED" != "0" ]]; then
+            CONFIG_CHANGED=true
+        fi
+
         if [[ -z "$CONTAINER_ID" ]] || [[ -z "$RUNNING_IMAGE" ]]; then
             log "No running container found — performing full recreation"
             cmd_recreate
@@ -573,8 +612,12 @@ case "$MODE" in
             log "Image changed: running='${RUNNING_IMAGE}' compose='${COMPOSE_IMAGE}'"
             log "Full recreation required"
             cmd_recreate
+        elif [[ "$CONFIG_CHANGED" == "true" ]]; then
+            log "config.yml modified (mtime ${CONFIG_MTIME}) since DB init (${DB_MTIME})"
+            log "Full recreation required (DB will be cleared)"
+            cmd_recreate
         else
-            log "Image unchanged (${RUNNING_IMAGE}) — config-only restart"
+            log "Image and config unchanged — config-only restart"
             cmd_restart
         fi
         ;;
