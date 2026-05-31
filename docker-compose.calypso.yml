@@ -77,6 +77,7 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
       PLUS_API_KEY: ${FRIGATE_PLUS_API_KEY}
+      FRIGATE_DOCKER_API_KEY: ${FRIGATE_PLUS_API_KEY}
       FRIGATE_LOG_LEVEL: warning
     volumes:
       - ./config.yml:/config/config.yml
@@ -91,7 +92,7 @@ services:
     # The stable-tensorrt image has libonnxruntime_providers_tensorrt.so but not libnvinfer.so.10.
     # ./trt-libs (tensorrt-cu12-libs==10.9.0.34) provides libnvinfer.so.10 for SM 120 support.
     command: >
-      sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && ldconfig && ln -sf /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin && exec python3 -u -m frigate"
+      sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && ldconfig && ln -sf /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin && export PLUS_API_KEY=${FRIGATE_PLUS_API_KEY} && export FRIGATE_DOCKER_API_KEY=${FRIGATE_PLUS_API_KEY} && exec python3 -u -m frigate"
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl
