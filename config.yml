@@ -429,12 +429,14 @@ cameras:
         - cuda
         - -hwaccel_device
         - '0'
-        - -hwaccel_output_format
-        - cuda
+        # WORKAROUND 2026-06-01: removed -hwaccel_output_format cuda
+        # to fix per-camera CUDA detector deadlock. CPU crop applied
+        # in output_args.detect filter chain instead. See plan
+        # plans/cuda-detector-deadlock-diagnosis.md for analysis.
       output_args:
         detect:
           - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
+          - fps=7,scale=2048:1152,crop=2048:1152:0:0
           - -f
           - rawvideo
           - -pix_fmt
@@ -543,12 +545,12 @@ cameras:
         - cuda
         - -hwaccel_device
         - '0'
-        - -hwaccel_output_format
-        - cuda
+        # WORKAROUND 2026-06-01: removed -hwaccel_output_format cuda
+        # See plans/cuda-detector-deadlock-diagnosis.md
       output_args:
         detect:
           - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
+          - fps=7,scale=2048:1152,crop=2048:1152:2048:0
           - -f
           - rawvideo
           - -pix_fmt
@@ -896,12 +898,13 @@ cameras:
         - cuda
         - -hwaccel_device
         - '0'
-        - -hwaccel_output_format
-        - cuda
+        # WORKAROUND 2026-06-01: removed -hwaccel_output_format cuda
+        # to fix per-camera CUDA detector deadlock. See plan
+        # plans/cuda-detector-deadlock-diagnosis.md for analysis.
       output_args:
         detect:
           - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
+          - fps=7,scale=2048:1152,crop=2048:1152:0:0
           - -f
           - rawvideo
           - -pix_fmt
@@ -1006,12 +1009,13 @@ cameras:
         - cuda
         - -hwaccel_device
         - '0'
-        - -hwaccel_output_format
-        - cuda
+        # WORKAROUND 2026-06-01: removed -hwaccel_output_format cuda
+        # to fix per-camera CUDA detector deadlock. See plan
+        # plans/cuda-detector-deadlock-diagnosis.md for analysis.
       output_args:
         detect:
           - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
+          - fps=7,scale=2048:1152,crop=2048:1152:2048:0
           - -f
           - rawvideo
           - -pix_fmt
@@ -1193,12 +1197,13 @@ cameras:
         - cuda
         - -hwaccel_device
         - '0'
-        - -hwaccel_output_format
-        - cuda
+        # WORKAROUND 2026-06-01: removed -hwaccel_output_format cuda
+        # to fix per-camera CUDA detector deadlock. See plan
+        # plans/cuda-detector-deadlock-diagnosis.md for analysis.
       output_args:
         detect:
           - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
+          - fps=7,scale=2048:1152,crop=2048:1152:0:0
           - -f
           - rawvideo
           - -pix_fmt
@@ -1292,12 +1297,13 @@ cameras:
         - cuda
         - -hwaccel_device
         - '0'
-        - -hwaccel_output_format
-        - cuda
+        # WORKAROUND 2026-06-01: removed -hwaccel_output_format cuda
+        # to fix per-camera CUDA detector deadlock. See plan
+        # plans/cuda-detector-deadlock-diagnosis.md for analysis.
       output_args:
         detect:
           - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
+          - fps=7,scale=2048:1152,crop=2048:1152:2048:0
           - -f
           - rawvideo
           - -pix_fmt

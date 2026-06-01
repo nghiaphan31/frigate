@@ -191,31 +191,93 @@ operator's decision.
 
 ---
 
-## Followup Plan: Once the CUDA Issue Is Fixed
+## Partial Fix Applied: 2026-06-01 14:50
 
-After the operator applies the workaround (or root cause is found) and `validate`
-returns 9/9 PASS:
+The user (Zoo) applied the recommended workaround in commit TBD:
+removed `-hwaccel_output_format cuda` from all 6 crop cameras and replaced
+the GPU crop filter chain with a CPU crop:
 
-1. **Run the regression guard test**:
+```yaml
+# Before (CUDA crop — deadlocks on some cameras)
+hwaccel_args:
+  - -hwaccel cuda
+  - -hwaccel_device '0'
+  - -hwaccel_output_format cuda   # <-- REMOVED
+output_args:
+  detect:
+    - -vf
+    - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0   # <-- REPLACED
+    - -f rawvideo
+    - -pix_fmt yuv420p
+
+# After (CPU crop, scales first then crops)
+hwaccel_args:
+  - -hwaccel cuda
+  - -hwaccel_device '0'
+  # WORKAROUND 2026-06-01: removed -hwaccel_output_format cuda
+output_args:
+  detect:
+    - -vf
+    - fps=7,scale=2048:1152,crop=2048:1152:0:0   # all system memory
+    - -f rawvideo
+    - -pix_fmt yuv420p
+```
+
+### Partial recovery
+
+After the workaround + `recreate` + 2 min stabilization:
+
+| Camera | Before | After | Note |
+|---|---|---|---|
+| allee_sur_le_cote_left | STUCK | OK (pf=1.6) | **FIXED** |
+| allee_sur_le_cote_right | STUCK | OK (pf=1.6) | **FIXED** |
+| jardin_devant_left | STUCK | STUCK | not fixed |
+| jardin_devant_right | STUCK | STUCK | not fixed |
+| piscine_vue_toit_left | STUCK | STUCK | not fixed |
+| piscine_vue_toit_right | STUCK | STUCK | not fixed |
+
+Result: 7/9 PASS (was 6/9). V4 and V6 still fail.
+
+### Why only allee crops recovered
+
+The CUDA crop workaround is a true fix for the GPU/CUDA deadlock issue.
+The fact that 4 of the 6 crop cameras did NOT recover with the same
+workaround means there is a SECOND, INDEPENDENT problem affecting those
+cameras (likely NUC go2rtc stream issues, or per-camera ffmpeg filter
+issues with specific stream characteristics).
+
+jardin_arriere (4K direct detect, never had CUDA crop) was always
+stuck and remains stuck — confirms a separate issue.
+
+### Unrelated findings during investigation
+
+- **NUC go2rtc HTTP API returns HTTP/0.9** ("Received HTTP/0.9 when not
+  allowed" in curl -v). The NUC's API is HTTP/0.9 only, not HTTP/1.1.
+  This is a go2rtc quirk; RTSP on port 8554 (local) and HTTP on 8556
+  (NUC) both work. But it makes API debugging harder.
+- **NUC RTSP port 8554 is closed** when probed externally, but Frigate
+  uses `127.0.0.1:8554` (local go2rtc that re-streams from NUC). The
+  NUC itself only exposes port 8556 (HTTP/RTSP API). The local go2rtc
+  on Calypso at `*:8554` is what Frigate connects to.
+
+### Final followup actions
+
+1. **Commit the config change** with a clear note that the CUDA crop
+   workaround is applied to allee/jardin_devant/piscine _left/_right.
+
+2. **Investigate the remaining 5 stuck cameras** (1 by 1 if needed):
+   - jardin_arriere (4K direct) — possible: NVDEC + 4K scale issue
+   - jardin_devant family (3 cams) — possible: specific NUC stream issue
+   - piscine_vue_toit L+R — possible: same as jardin_devant L+R
+   - Try: `./deploy-frigate.sh restart` to re-init (already done, didn't help)
+   - Try: investigate NUC go2rtc config for these specific streams
+   - Try: temporarily disable jardin_arriere to free detector bandwidth
+   - Try: lower fps / resolution for stuck cameras (decrease load)
+
+3. **Once 9/9 PASS**:
    ```bash
-   for i in 1 2 3; do
-     ./deploy-frigate.sh restart
-     # Confirm no spurious ZMQ retries (look for "ZMQ-stuck cameras" in output)
-   done
+   ./deploy-frigate.sh validate          # 9/9 PASS
+   ./deploy-frigate.sh validate restart  # 5/5 PASS in < 5 min
    ```
-
-2. **Run the full restart-cycle validation**:
-   ```bash
-   ./deploy-frigate.sh validate restart
-   # Must show 5/5 PASS in < 5 min
-   ```
-
-3. **Run the cold-start test** (requires actual reboot):
-   ```bash
-   sudo reboot
-   journalctl -u frigate -f  # watch the boot sequence
-   ./deploy-frigate.sh validate  # 9/9 PASS after reboot
-   ```
-
-4. **Document the final fix** in a new plan (`plans/cuda-crop-fix.md` or similar)
-   so the next operator knows what was done and why.
+]<]minimax[>[</content>]<]minimax[>[</invoke>
+]<]minimax[>[</tool_call>
