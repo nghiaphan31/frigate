@@ -84,8 +84,12 @@ services:
       - ./trt-libs:/trt-libs:ro          # TRT 10.9.0 runtime libs for SM 120 (Blackwell GB206) support
       - type: tmpfs
         target: /tmp/cache
+        # Phase 5 attempted: 2GB → 4GB did NOT resolve the ZMQ-stuck state
+        # (verified: 4/11 working with both 2GB and 4GB). The /tmp/cache
+        # hypothesis is wrong — the cameras get stuck regardless of cache size.
+        # The real root cause is being investigated via config.yml review.
         tmpfs:
-          size: 2147483648  # 2GB in bytes (increased from 1GB — iowait 38% indicated pressure)
+          size: 2147483648  # 2GB in bytes (original value)
     # Register TRT libs with ldconfig before Frigate starts.
     # The stable-tensorrt image has libonnxruntime_providers_tensorrt.so but not libnvinfer.so.10.
     # ./trt-libs (tensorrt-cu12-libs==10.9.0.34) provides libnvinfer.so.10 for SM 120 support.
