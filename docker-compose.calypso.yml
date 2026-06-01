@@ -89,8 +89,24 @@ services:
     # Register TRT libs with ldconfig before Frigate starts.
     # The stable-tensorrt image has libonnxruntime_providers_tensorrt.so but not libnvinfer.so.10.
     # ./trt-libs (tensorrt-cu12-libs==10.9.0.34) provides libnvinfer.so.10 for SM 120 support.
+    #
+    # FFMPEG SYMLINK FIX (Phase 2.5, operator-approved):
+    #   The stable-tensorrt image ships ffmpeg at /usr/lib/ffmpeg/7.0/bin/ffmpeg
+    #   but Frigate's capture process looks for it at /usr/lib/ffmpeg/bin/ffmpeg
+    #   (note: no version in the path). Without a symlink, every capture process
+    #   crashes with:
+    #     FileNotFoundError: [Errno 2] No such file or directory:
+    #       '/usr/lib/ffmpeg//bin/ffmpeg'
+    #   `ln -sfn` is idempotent: it overwrites any existing symlink but never
+    #   fails if the target already points to the right place. The symlink
+    #   lives inside the container, NOT on a bind-mount, so it is lost on
+    #   every recreate — this shim makes it automatic. See
+    #   plans/startup-reliability-rock-solid-plan.md (Phase 2.5) for context.
+    #   If you need to roll back this change, simply remove the
+    #   `ln -sfn ... && ` segment from the command below — no other lines
+    #   need to change.
     command: >
-      sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && ldconfig && exec python3 -u -m frigate"
+      sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && ldconfig && ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin && exec python3 -u -m frigate"
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl
