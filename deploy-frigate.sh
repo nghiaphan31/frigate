@@ -1002,6 +1002,69 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
+# cmd_boot  (Phase 7 — boot ZMQ-fix sequence, called by frigate.service)
+# ---------------------------------------------------------------------------
+# The systemd frigate.service unit calls 'deploy-frigate.sh boot' after
+# the host reboots. Docker auto-starts the container (via
+# 'restart: unless-stopped' in docker-compose.calypso.yml), but Docker's
+# auto-start DOES NOT run the ZMQ-fix stop+start cycle. The result: the
+# first-boot container always has broken ZMQ IPC, leaving 5-7 of 11
+# cameras ZMQ-stuck (camera_fps > 0 but process_fps = 0). This is the
+# REL-7 era 'startup-refactor' regression documented in plan §1.
+#
+# This function fixes that by:
+#   1. wait_healthy     (Docker auto-started, wait for API to be up)
+#   2. sleep 30         (give the TRT engine time to build on first boot)
+#   3. safe_stop        (Phase 4 — 30s grace + port-release check)
+#   4. dc start         (start the container fresh)
+#   5. wait_healthy     (wait for the new container's API)
+#   6. sleep 15         (let detectors initialise)
+#   7. report health    (check_inference, check_det_fps, check_shm)
+#
+# NO automatic retry (per plan §3 anti-pattern '3-retry loop').
+# NO two-phase readiness check (per plan §3 anti-pattern that caused
+#   vue_entree regression in startup-refactor).
+# If something is still wrong after the boot, the operator must run
+# './deploy-frigate.sh restart' manually.
+
+cmd_boot() {
+    local container_name="frigate_${SERVICE}_1"
+    log "=== Frigate boot ZMQ-fix sequence (frigate.service on host reboot) ==="
+    log "Docker auto-started the container; waiting for API..."
+
+    # Step 1: wait for the API to be up
+    wait_healthy
+
+    # Step 2: brief settle so the detector starts and first frames arrive.
+    # First boot takes ~65s for TRT engine build; on warm cache it's a few
+    # seconds. 30s is a safe middle ground.
+    log "Giving detector 30s to initialise (TRT build on first boot takes ~65s)..."
+    sleep 30
+
+    # Step 3: ZMQ fix. First-boot ZMQ IPC is always broken — we have to do
+    # a controlled stop+start. safe_stop ensures ports 5000/5002 are
+    # fully released before the new container starts (Phase 4 fix).
+    log "ZMQ-fix: stopping ${container_name} (safe_stop — 30s grace + port check)..."
+    safe_stop "${container_name}" 5000 5002
+
+    # Step 4: start
+    log "ZMQ-fix: starting ${SERVICE}..."
+    dc start "$SERVICE"
+    wait_healthy
+    sleep 15  # allow detectors to initialise and first frames to arrive
+
+    # Step 5: report
+    log "Post-boot health:"
+    check_inference
+    check_det_fps
+    check_shm
+
+    ok "Boot ZMQ-fix sequence complete"
+    log "  Run './deploy-frigate.sh diagnose' for full 6-layer health snapshot"
+    log "  Run './deploy-frigate.sh validate restart' (Tier 2 destructive) to test restart reliability"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1022,6 +1085,9 @@ case "$MODE" in
         ;;
     diagnose)
         cmd_diagnose
+        ;;
+    boot)
+        cmd_boot
         ;;
     validate)
         cmd_validate "${2:-tier1}"
@@ -1045,7 +1111,7 @@ case "$MODE" in
         fi
         ;;
     *)
-        echo "Usage: $0 [restart|recreate|status|dump|diagnose|validate|auto]"
+        echo "Usage: $0 [restart|recreate|status|dump|diagnose|boot|validate|auto]"
         echo ""
         echo "  auto      (default) detect whether recreation is needed"
         echo "  restart   config.yml change only — no container recreation"
@@ -1053,6 +1119,7 @@ case "$MODE" in
         echo "  status    show inference speed, det_fps, /dev/shm usage"
         echo "  dump      Option-B event dump for Track A soak analysis"
         echo "  diagnose  read-only 5-layer health snapshot (no state change)"
+        echo "  boot      ZMQ-fix sequence for frigate.service on host reboot"
         echo "  validate  9 read-only Tier 1 tests; 'validate restart' is Tier 2 (destructive — restarts Frigate)"
         exit 1
         ;;
