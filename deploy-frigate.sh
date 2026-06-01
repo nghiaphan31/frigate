@@ -859,6 +859,7 @@ cmd_boot() {
     # run the ZMQ-fix stop+start cycle. This function does that cycle and confirms
     # ZMQ health (process_fps > 0) before returning.
     log "=== Boot ZMQ-fix sequence (called by frigate.service) ==="
+    local boot_ok=1   # 1 = healthy, 0 = stuck cameras remain
 
     # Cold-boot pre-flight checks (warn-only, non-fatal).
     # wait_for_nvidia: NVIDIA driver may not be fully loaded when systemd starts
@@ -908,6 +909,9 @@ cmd_boot() {
         if has_stuck_cameras; then
             warn "ZMQ IPC still unhealthy after retry — manual intervention may be needed"
             warn "  Run: ./deploy-frigate.sh status  to see per-camera fps"
+            warn "  Common causes: config error in output_args.detect CUDA crop chain,"
+            warn "  detector deadlock, or hardware fault. Check Frigate logs for stack traces."
+            boot_ok=0
         fi
     fi
 
@@ -916,7 +920,14 @@ cmd_boot() {
     check_det_fps
 
     check_shm
-    ok "Boot sequence complete"
+
+    if [[ $boot_ok -eq 1 ]]; then
+        ok "Boot sequence complete"
+        return 0
+    else
+        warn "Boot FINISHED but cameras are still stuck — system is NOT fully healthy"
+        return 1
+    fi
 }
 
 cmd_install_service() {
@@ -957,6 +968,7 @@ cmd_restart() {
     log "=== Config-only restart (stop+start — never docker-compose restart) ==="
     # IMPORTANT: `docker-compose restart` leaves ZMQ IPC sockets broken → process_fps=0.
     # Always use stop+start instead, even for config-only changes.
+    local restart_ok=1   # 1 = healthy, 0 = stuck cameras remain
     zmq_fix_cycle
     wait_healthy
     # Wait for detector model to load (TRT cache: ~5s; first build: ~65s)
@@ -984,6 +996,9 @@ cmd_restart() {
         if has_stuck_cameras; then
             warn "ZMQ IPC still unhealthy after retry — manual intervention may be needed"
             warn "  Run: ./deploy-frigate.sh status  to see per-camera fps"
+            warn "  Common causes: config error in output_args.detect CUDA crop chain,"
+            warn "  detector deadlock, or hardware fault. Check Frigate logs for stack traces."
+            restart_ok=0
         fi
     fi
 
@@ -992,13 +1007,21 @@ cmd_restart() {
     check_det_fps
 
     check_shm
-    ok "Restart complete"
+
+    if [[ $restart_ok -eq 1 ]]; then
+        ok "Restart complete"
+        return 0
+    else
+        warn "Restart FINISHED but cameras are still stuck — system is NOT fully healthy"
+        return 1   # non-zero exit so validate restart can detect the failure
+    fi
 }
 
 cmd_recreate() {
     log "=== Full container recreation ==="
     warn "This will stop Frigate and recreate the container."
     warn "shm_size, image, devices and volume changes will take effect."
+    local recreate_ok=1   # 1 = healthy, 0 = stuck cameras remain
     echo ""
 
     # Step 1: stop + remove + recreate
@@ -1086,6 +1109,9 @@ cmd_recreate() {
         if has_stuck_cameras; then
             warn "ZMQ IPC still unhealthy after retry — manual intervention may be needed"
             warn "  Run: ./deploy-frigate.sh status  to see per-camera fps"
+            warn "  Common causes: config error in output_args.detect CUDA crop chain,"
+            warn "  detector deadlock, or hardware fault. Check Frigate logs for stack traces."
+            recreate_ok=0
         fi
     fi
 
@@ -1095,10 +1121,16 @@ cmd_recreate() {
 
     check_shm
 
-    ok "Recreation complete"
     echo ""
-    warn "Remember to update SOAK_EPOCH in this script if this is a soak restart:"
-    echo "  SOAK_EPOCH=\$(date +%s)  # current epoch: $(date +%s)"
+    if [[ $recreate_ok -eq 1 ]]; then
+        ok "Recreation complete"
+        warn "Remember to update SOAK_EPOCH in this script if this is a soak restart:"
+        echo "  SOAK_EPOCH=\$(date +%s)  # current epoch: $(date +%s)"
+        return 0
+    else
+        warn "Recreation FINISHED but cameras are still stuck — system is NOT fully healthy"
+        return 1
+    fi
 }
 
 cmd_dump() {
