@@ -61,6 +61,92 @@ wait_healthy() {
     ok "Frigate API is up"
 }
 
+# wait_for_port_release <port> <timeout_seconds>
+#   Returns 0 if <port> is NOT bound to anything within <timeout_seconds>,
+#   1 otherwise. Used by safe_stop to ensure the new container's process
+#   can bind to Frigate's main API port (5000) without hitting
+#   'OSError: [Errno 98] Address already in use'. Without this check, the
+#   old Frigate process can hold the port via TIME_WAIT or half-closed
+#   sockets even after `docker stop -t 30` returns.
+#   Tries `ss` first (Linux), falls back to `/proc/net/tcp*` if missing.
+wait_for_port_release() {
+    local port="$1"
+    local timeout="${2:-30}"
+    local interval=2
+    local elapsed=0
+    # Use ss (modern) if available, else /proc/net/tcp (port in hex)
+    if command -v ss >/dev/null 2>&1; then
+        while [[ $elapsed -lt $timeout ]]; do
+            if ! ss -tlnH "sport = :$port" 2>/dev/null | grep -q LISTEN; then
+                return 0
+            fi
+            sleep "$interval"
+            elapsed=$((elapsed + interval))
+        done
+    else
+        # Fallback: parse /proc/net/tcp and /proc/net/tcp6
+        local hex_port
+        hex_port=$(printf '%04X' "$port")
+        while [[ $elapsed -lt $timeout ]]; do
+            if ! grep -E ":${hex_port} " /proc/net/tcp /proc/net/tcp6 2>/dev/null | grep -q " 0A "; then
+                # 0A = TCP_LISTEN state
+                return 0
+            fi
+            sleep "$interval"
+            elapsed=$((elapsed + interval))
+        done
+    fi
+    return 1
+}
+
+# safe_stop <container_name> <port> [<port> ...]
+#   Stops a container with 30s grace and waits for ALL named ports to be
+#   released before returning. If any port is still held after 30s, sends
+#   SIGKILL to force the container to release it, then waits 10s more.
+#   This is the shared core of cmd_restart and cmd_recreate — both
+#   previously used `dc stop` (10s default) which was too short for
+#   Frigate to release its sockets cleanly, causing the new process to
+#   hit 'OSError: [Errno 98] Address already in use' on the WebSocket
+#   server (port 5002), making the detect process unable to register.
+#   The result was a ZMQ-stuck state where ffmpeg captures ran
+#   (camera_fps > 0) but detection never registered (process_fps = 0).
+#   This function prevents that regression.
+#   Frigate ports: 5000 (main API), 5002 (WebSocket — the critical one).
+safe_stop() {
+    local container_name="$1"
+    shift
+    local ports=("$@")
+
+    log "Stopping ${container_name} (30s grace)..."
+    if ! docker stop -t 30 "$container_name" >/dev/null 2>&1; then
+        warn "docker stop returned non-zero (container may already be stopped) — continuing"
+    fi
+
+    log "Waiting for ports ${ports[*]} to be released..."
+    local all_released=true
+    for port in "${ports[@]}"; do
+        if ! wait_for_port_release "$port" 30; then
+            all_released=false
+            break
+        fi
+    done
+
+    if $all_released; then
+        ok "All ports released (${ports[*]})"
+    else
+        warn "Port still held after 30s — sending SIGKILL to force release"
+        if ! docker kill "$container_name" >/dev/null 2>&1; then
+            warn "docker kill returned non-zero (container may already be gone) — continuing"
+        fi
+        for port in "${ports[@]}"; do
+            if ! wait_for_port_release "$port" 10; then
+                fail "Port ${port} still held even after SIGKILL — manual intervention needed"
+            fi
+        done
+        ok "All ports released (after SIGKILL)"
+    fi
+}
+
 check_det_fps() {
     log "Checking det_fps on all cameras..."
     local stats
@@ -216,11 +302,14 @@ cmd_status() {
 }
 
 cmd_restart() {
+    local container_name="frigate_${SERVICE}_1"
     log "=== Config-only restart (stop+start — never docker-compose restart) ==="
     # IMPORTANT: `docker-compose restart` leaves ZMQ IPC sockets broken → det_fps=0.
     # Always use stop+start instead, even for config-only changes.
-    log "Stopping ${SERVICE}..."
-    dc stop "$SERVICE"
+    # safe_stop() ensures the old container's ports are FULLY released before
+    # the new container starts; this prevents the port-conflict regression
+    # that caused cameras to get stuck (camera_fps > 0, process_fps = 0).
+    safe_stop "$container_name" 5000 5002
     log "Starting ${SERVICE}..."
     dc start "$SERVICE"
     wait_healthy
@@ -239,8 +328,13 @@ cmd_recreate() {
     echo ""
 
     # Step 1: stop + remove + recreate
-    log "Step 1/2 — stop + rm + up (container recreation)..."
-    dc stop "$SERVICE"
+    # safe_stop() (30s grace + port-release check + SIGKILL fallback) ensures
+    # the old container's port 5000 is FULLY released before we `rm` and `up`.
+    # Without this, the new container's API server hits 'OSError: [Errno 98]
+    # Address already in use' and fails to start, leaving all cameras
+    # ZMQ-stuck (camera_fps > 0 but process_fps = 0).
+    log "Step 1/2 — stop (30s grace) + wait for port + rm + up..."
+    safe_stop "frigate_${SERVICE}_1" 5000 5002
     dc rm -f "$SERVICE"
     dc up -d "$SERVICE"
 
@@ -250,9 +344,10 @@ cmd_recreate() {
     # Step 2: stop + start to fix ZMQ IPC deadlock
     # After `up -d` following `rm -f`, ZMQ IPC sockets between the capture
     # and detect processes are in a broken state → det_fps=0 on all cameras.
-    # A stop/start cycle resets the IPC correctly.
-    log "Step 2/2 — stop + start (fix ZMQ IPC deadlock)..."
-    dc stop "$SERVICE"
+    # A stop/start cycle resets the IPC correctly. We use safe_stop() again
+    # to ensure the second start can actually bind to ports 5000 and 5002.
+    log "Step 2/2 — stop (30s grace) + wait for port + start (fix ZMQ IPC deadlock)..."
+    safe_stop "frigate_${SERVICE}_1" 5000 5002
     dc start "$SERVICE"
 
     wait_healthy
