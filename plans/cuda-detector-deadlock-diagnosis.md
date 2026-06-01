@@ -281,3 +281,62 @@ stuck and remains stuck — confirms a separate issue.
    ```
 ]<]minimax[>[</content>]<]minimax[>[</invoke>
 ]<]minimax[>[</tool_call>
+
+### State oscillation after restart (2026-06-01 15:18)
+
+After the `restart` test, the system state changed. Some previously
+working cameras became stuck, while others recovered:
+
+| Camera | Before restart | After restart |
+|---|---|---|
+| allee_sur_le_cote_left | OK (1.6) | OK (2.9) — better |
+| allee_sur_le_cote_right | OK (1.6) | OK (0.7) — worse |
+| **vue_entree** | **OK (2.9)** | **STUCK (0.0)** — **regression** |
+| jardin_devant family | STUCK | STUCK |
+| piscine_vue_toit L+R | STUCK | STUCK |
+| jardin_arriere | STUCK | STUCK |
+
+Result after restart: 4 working, 7 stuck. The restart did not help the
+remaining stuck cameras and made vue_entree regress.
+
+This confirms the diagnosis: the per-camera detector state is unstable
+and restart-sensitive. Some cameras are consistently stuck (the 4K
+direct and 4 crops), while others oscillate between working and stuck
+based on the current restart timing.
+
+**Implication for production:**
+- The system CAN operate (some cameras always work) but will never
+  reliably have all 11 cameras detecting simultaneously with the
+  current Frigate + driver + hardware combination.
+- This is not a deploy-tooling problem. It is a Frigate/detector/
+  hardware-level issue that requires either:
+  - An NVIDIA driver update
+  - A Frigate version upgrade
+  - Reducing detector load (fewer cameras or lower fps/resolution)
+  - Re-architecting the deployment (e.g., multiple Frigate instances
+    for different camera groups)
+
+### Final state summary
+
+**5 commits on `origin/startup-refactor`:**
+1. `c70be71` — Two-phase ZMQ readiness check + diagnose/validate commands
+2. `1097fe4` — Non-zero exit when cameras remain stuck after restart
+3. `f136696` — Diagnosis plan for CUDA detector deadlock
+4. `eeb92fb` — Fix NAS mount check (device ID comparison)
+5. `76f24d9` — Apply CUDA crop workaround to allee/jardin/piscine crops
+
+**Best result achieved: 7/9 PASS** (after config change + recreate)
+**Current state: 4-7 working / 7-4 stuck** (state oscillates after restarts)
+
+**What still works reliably:**
+- Validation suite (validate, diagnose, status)
+- Two-phase restart pattern
+- NAS mount check (now correct)
+- CUDA crop detection and workaround
+
+**What is not reliable (still under investigation):**
+- All 11 cameras detecting simultaneously
+- Stable state across restarts (vue_entree oscillates)
+- 4K direct detect (jardin_arriere)
+- 4 of 6 crop cameras (jardin/piscine L+R)
+- jardin_devant (sub)
