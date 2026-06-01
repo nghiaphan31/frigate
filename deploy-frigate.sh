@@ -337,13 +337,34 @@ wait_for_nvidia() {
     ok "NVIDIA GPU devices ready"
 }
 
+# Returns 0 (success) if the path is on a non-root filesystem (i.e., it IS
+# or is BELOW a mountpoint — local or network), 1 (failure) if it lives on
+# the same device as the root filesystem (just a plain local directory).
+#
+# WHY this instead of `mountpoint -q`:
+# `mountpoint -q` only returns true if the EXACT path is the mount root.
+# The Frigate media path is typically a subdirectory of an NFS/SMB mount
+# (e.g. /mnt/nas/video/frigate is a directory inside the /mnt/nas/video
+# NFS mount, not its own mountpoint). Using `mountpoint -q` would falsely
+# report the path as not mounted even though it IS on a remote filesystem.
+#
+# Implementation: compare the device ID of the path to the device ID of
+# the root filesystem. Different IDs = path is on a mount (any kind).
+is_on_mount() {
+    local path="$1"
+    local target_dev root_dev
+    target_dev=$(stat -c %d "$path" 2>/dev/null) || return 1
+    root_dev=$(stat -c %d / 2>/dev/null) || return 1
+    [[ "$target_dev" != "$root_dev" ]]
+}
+
 # Cold-boot pre-flight: warn-only checks for host-level dependencies.
 # These checks do NOT block the boot sequence — Frigate and go2rtc handle
 # reconnections internally. The value is early visibility in journald logs
 # so the operator can immediately identify which layer failed on a bad boot.
 #
 # Checks:
-#   1. NAS mount at ${FRIGATE_MEDIA_PATH} — if not a mountpoint, recordings
+#   1. NAS mount at ${FRIGATE_MEDIA_PATH} — if not on a mount, recordings
 #      will be written to the container overlay (data loss risk).
 #   2. NUC RTSP proxy at 192.168.50.112:8556 — if unreachable, all cameras
 #      will show "no frames received" until it comes back.
@@ -351,9 +372,7 @@ wait_for_nvidia() {
 #      events won't publish until it comes back.
 check_host_readiness() {
     local media_path="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
-    local nas_base
-    nas_base=$(df "$media_path" 2>/dev/null | tail -1 | awk '{print $6}')
-    if [[ "$nas_base" == "/" ]] || ! mountpoint -q "$media_path" 2>/dev/null; then
+    if ! is_on_mount "$media_path"; then
         warn "NAS may not be mounted at ${media_path} — recordings may go to wrong location"
         warn "  → Fix: sudo mount -a  OR  check NAS connectivity and /etc/fstab"
     else
@@ -409,13 +428,16 @@ cmd_diagnose() {
         warn "  → Fix: sudo modprobe nvidia nvidia-uvm nvidia-modeset"
     fi
 
-    # NAS mount
+    # NAS mount — check device ID, not exact path (NFS subdirs aren't
+    # mountpoints themselves, but they ARE on a remote filesystem).
     local media_path="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
-    if mountpoint -q "$media_path" 2>/dev/null; then
-        ok "NAS mount            $media_path is a mountpoint"
+    if is_on_mount "$media_path"; then
+        local dev_id
+        dev_id=$(stat -c %d "$media_path" 2>/dev/null)
+        ok "NAS mount            $media_path (device $dev_id — on mounted filesystem)"
     else
-        warn "NAS mount           $media_path exists but is NOT a mountpoint"
-        warn "  → Recordings will be written to container overlay (data LOSS risk)"
+        warn "NAS mount           $media_path exists but is NOT on a mount"
+        warn "  → Recordings will be written to local overlay (data LOSS risk)"
         warn "  → Fix: sudo mount -a  OR  check NAS connectivity and /etc/fstab"
     fi
 
@@ -835,13 +857,14 @@ except Exception: print('0|0|0')
         fail=$((fail+1))
     fi
 
-    # V9 — NAS mounted
+    # V9 — NAS mounted (check device ID, not exact path; NFS subdirs are
+    # on a mount but aren't mountpoints themselves).
     log "[V9]  NAS mount ................... "
     local media_path_v="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
-    if mountpoint -q "$media_path_v" 2>/dev/null; then
-        ok "PASS  ($media_path_v is mountpoint)"; pass=$((pass+1))
+    if is_on_mount "$media_path_v"; then
+        ok "PASS  ($media_path_v is on a mounted filesystem)"; pass=$((pass+1))
     else
-        warn "WARN  ($media_path_v is not a mountpoint — recordings at risk)"
+        warn "WARN  ($media_path_v is NOT on a mount — recordings at risk)"
         warn "  → Fix: sudo mount -a  OR  check NAS connectivity"
         fail=$((fail+1))
     fi
