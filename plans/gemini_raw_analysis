@@ -1,0 +1,95 @@
+Here is the fully expanded operational sequence. I have maintained the exact structure and depth of the previous breakdown while injecting rigorous anti-deadlock protocols into the specific transport and memory layers where process synchronization typically fails.
+
+### 1. Detailed Cold-Start Sequence (Full System Boot)
+
+A cold start requires building the infrastructure from the ground up. If any of the hardware or network layers fail to initialize in this exact order, the subsequent Frigate container processes will either deadlock or enter crash loops.
+
+**Phase 1: Host & Hardware Provisioning (Layer 1 & 2)**
+
+1. **OS Initialization & Storage:** The host Linux kernel boots and mounts the physical disk targeted by `${FRIGATE_MEDIA_PATH}`. *Dependency Check:* If this mount fails, Frigate will immediately crash upon trying to write the SQLite database or video segments.
+2. **GPU Kernel Modules Load:** The NVIDIA drivers initialize, probing the RTX 5060 Ti via the PCIe bus and exposing the necessary device nodes (`/dev/nvidia0`, `/dev/nvidiactl`, etc.) to the host OS.
+3. **Network Stack & External Proxy Binding:** The host's network interfaces come online. *Dependency Check:* The host must successfully route TCP traffic to the NUC proxy at `192.168.50.112:8556` and the MQTT broker at `192.168.50.125:1883`.
+* **[ANTI-DEADLOCK MEASURE - Host IPC Clear]:** Before Docker starts, the host OS clears `/dev/shm` and any orphaned ZeroMQ socket files. If a previous hard crash left zombie memory pointers in the host's RAM, Docker might attempt to attach to corrupted memory addresses, causing an immediate kernel-level deadlock when `ffmpeg` requests the space.
+
+
+
+**Phase 2: Docker Environment Allocation**
+4. **Docker Daemon Starts:** Docker reads the `docker-compose.calypso.yml` file and begins constructing the sandbox.
+5. **Memory & Cache Reservation:** Docker explicitly claims 5120MB of the host's RAM to create the `/dev/shm` shared memory block, and another 2GB for the `/tmp/cache` `tmpfs`. *Communication impact:* This guarantees the memory space is locked and ready for `ffmpeg` zero-copy frame dumps.
+6. **Device Passthrough:** Docker maps the NVIDIA `/dev/` nodes into the container space, bridging the containerized applications directly to the physical GPU.
+
+**Phase 3: Container Entrypoint & Linking**
+7. **Dynamic Library Linking:** Before the main Python application starts, the container executes the `command` string. It runs `ldconfig` to register the TensorRT libraries mounted at `/trt-libs`. *Dependency Check:* Without this, the ONNX runtime will fail to find the TensorRT Execution Provider and crash.
+
+**Phase 4: Internal Process Cascade (Layer 3 & 4)**
+8. **Python Core & ZMQ Binding:** The main Frigate supervisor process starts. It immediately opens internal ZeroMQ (ZMQ) sockets. *Communication impact:* The IPC backbone is now listening, waiting for the capture process to send memory pointers.
+9. **TensorRT Engine Initialization:** The detection process loads the `plus://` model and connects to the GPU.
+* **[ANTI-DEADLOCK MEASURE - TRT Build Block]:** If the `./trt-cache` is empty, the TensorRT engine must be compiled from scratch (which takes several minutes). During this window, the detection process intentionally blocks the ZMQ queue. It will not accept frame pointers from the capture process. This prevents a buffer overflow in shared memory (`/dev/shm`) where frames stack up endlessly while waiting for the GPU to become ready. Once compiled, the block lifts, and frames are processed at ~5ms.
+10. **Internal Stream Routing:** The internal `go2rtc` service starts, opening a persistent RTSP TCP connection to the external NUC and re-broadcasting those streams on the internal loopback (`127.0.0.1:8554`).
+11. **Capture & Hardware Decode:** Finally, `ffmpeg` instances are spawned. They pull the RTSP streams from the loopback, push the compressed packets to the GPU's NVDEC via CUDA, execute any spatial crops, and dump the raw `yuv420p` frames into `/dev/shm`. The ZMQ sockets signal the Python core, and the end-to-end flow is complete.
+
+---
+
+### 2. Detailed Hot-Start Sequences (Without Reboot)
+
+When modifying the system on the fly, you must choose the correct sequence based on which communication layer you are disrupting. Failure to clear process states correctly here is the primary cause of system lockups.
+
+#### Sequence A: Soft Restart (Configuration Changes Only)
+
+Use this sequence if you have **only** modified parameters inside `config.yml` (e.g., tweaking zones, motion masks, or adding a camera). The underlying hardware mappings and shared memory allocations do not need to change.
+
+**Command:**
+
+```bash
+docker compose -f docker-compose.calypso.yml restart frigate
+
+```
+
+**What happens at the transport layer:**
+
+1. Docker sends a `SIGTERM` to the Frigate supervisor.
+2. Frigate gracefully closes the RTSP connections to the NUC, unloads the TensorRT model from GPU VRAM, and shuts down the internal `ffmpeg` and `go2rtc` processes.
+* **[ANTI-DEADLOCK MEASURE - ZMQ Teardown]:** The Python core specifically issues a termination command to the ZMQ sockets. If it fails to do this within the default Docker timeout (usually 10 seconds), Docker will send a `SIGKILL`. A `SIGKILL` skips this cleanup and can leave orphaned socket files in the container, meaning the restart will fail to bind the IPC layer. Soft restarts rely on the graceful `SIGTERM` succeeding.
+
+
+3. The ZMQ sockets are destroyed, but Docker **retains** the 5120MB `/dev/shm` block and the `/dev/nvidia*` hardware bindings.
+4. The container starts back up, re-running Phases 3 and 4 of the cold-start sequence.
+
+#### Sequence B: Hard Recreation (Infrastructure Changes)
+
+You **must** use this sequence if you modify the `docker-compose.calypso.yml` file (e.g., changing `shm_size`, adjusting volume mounts, or updating the Docker image) or if you update the host NVIDIA drivers.
+
+**Commands:**
+
+```bash
+docker compose -f docker-compose.calypso.yml stop frigate
+docker compose -f docker-compose.calypso.yml rm -f frigate
+docker compose -f docker-compose.calypso.yml up -d frigate
+
+```
+
+**What happens at the transport layer:**
+
+1. **`stop`**: Safely halts the Frigate processes, closing open file descriptors to avoid corrupting the SQLite database.
+2. **`rm -f`**: Completely destroys the container sandbox. *Crucial impact:* This flushes the `/dev/shm` memory block entirely, destroys the `tmpfs` cache, and severs the `/dev/nvidia*` hardware bridges.
+3. **`up -d`**: Forces Docker to request fresh resource allocations from the host kernel. It requests a new memory block, re-establishes the hardware bridges, and boots the container from scratch (running Phases 2 through 4 of the cold-start sequence).
+
+**[CRITICAL ANTI-DEADLOCK MEASURE - The ZMQ Synchronization Flush]**
+When `up -d` is executed immediately after `rm -f`, Docker creates the new container IPC namespace very rapidly. Frequently, the internal Frigate Python capture and detection processes boot out of sync. `ffmpeg` begins dumping frames into `/dev/shm` and firing ZMQ messages, but the detection process hasn't successfully bound its listening socket to the new namespace yet.
+
+The result is a silent deadlock: memory fills up, the UI loads, streams display, but `det_fps` sits exactly at `0` because the ZMQ messages are broadcasting into the void.
+
+To guarantee 100% reliability, you must explicitly flush the state machine **after** the recreation by executing a secondary power cycle:
+
+**Required Post-Recreation Commands:**
+
+```bash
+docker compose -f docker-compose.calypso.yml stop frigate
+docker compose -f docker-compose.calypso.yml start frigate
+
+```
+
+*Why this breaks the deadlock:*
+
+* The `stop` command halts the desynchronized internal processes without destroying the newly allocated Docker sandbox (`/dev/shm` and GPU links remain intact).
+* The `start` command re-initializes the Python supervisor. Because the Docker sandbox is already established and warm, the capture and detect processes initialize synchronously. The ZMQ sockets bind correctly, the memory pointers are received, and `det_fps` instantly ramps up as inference resumes.

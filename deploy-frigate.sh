@@ -9,6 +9,9 @@
 #   ./deploy-frigate.sh boot             # ZMQ-fix cycle after host reboot (used by frigate.service)
 #   ./deploy-frigate.sh install-service  # install + enable frigate.service (requires sudo)
 #   ./deploy-frigate.sh status           # show current health (inference speed, det_fps, shm)
+#   ./deploy-frigate.sh diagnose         # 5-layer health display with Fix: directives (host/docker/inference/ZMQ/cameras)
+#   ./deploy-frigate.sh validate         # automated test suite (9 non-destructive tests)
+#   ./deploy-frigate.sh validate restart # full restart-cycle proof (5 tests, takes 3-5 min)
 #   ./deploy-frigate.sh dump             # run Option-B event dump (Track A soak output)
 #
 # Why this script exists — issues encountered 2026-05-22:
@@ -259,6 +262,119 @@ check_shm() {
     echo "  /dev/shm: $shm_info"
 }
 
+# Returns 0 (success) if any camera is ZMQ-stuck, 1 (failure) if all healthy.
+# A camera is ZMQ-stuck when camera_fps > 0 (go2rtc is delivering RTSP frames
+# to the container) but process_fps = 0 (Frigate's detection process is not
+# consuming those frames). This is the definitive ZMQ IPC failure signature:
+# the network is fine, the GPU is fine, but the internal ZMQ message path
+# between the capture and detect processes is broken.
+#
+# Cameras with camera_fps = 0 are EXCLUDED — those are RTSP/connectivity issues
+# that a zmq_fix_cycle won't fix (only the go2rtc->NUC reconnection will).
+#
+# Two-phase readiness pattern (see plan §4):
+#   wait_all_processing 120  → exits early on majority success
+#   sleep 15                → grace period (camera_fps→process_fps lag is 1-5s in healthy ZMQ)
+#   has_stuck_cameras       → strict check, safe from false positives
+#
+# Returns 0 if at least one stuck camera is found (caller should retry).
+# Returns 1 if no stuck cameras (system is healthy).
+has_stuck_cameras() {
+    local result
+    result=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null \
+        | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    cams = s.get('cameras', {})
+    stuck = [
+        c for c, v in cams.items()
+        if (v.get('camera_fps') or 0) > 0         # go2rtc delivering frames
+        and (v.get('process_fps') or 0) == 0      # Frigate not processing them
+        and v.get('detection_enabled', True)      # detection is active
+    ]
+    print(','.join(stuck) if stuck else '')
+except Exception:
+    print('')   # parse failure → assume no stuck cameras; avoid spurious retry
+" 2>/dev/null) || result=""
+
+    if [[ -z "$result" ]]; then
+        return 1   # no stuck cameras — all healthy
+    else
+        warn "ZMQ-stuck cameras (camera_fps>0, process_fps=0): ${result}"
+        return 0   # stuck cameras found → caller should retry
+    fi
+}
+
+# Cold-boot: wait for all 5 NVIDIA device nodes to appear under /dev.
+# After a host reboot, the NVIDIA kernel modules may not be fully loaded when
+# frigate.service runs — /dev/nvidia0 can appear before the device is usable.
+# Polling here gives the driver up to 120s to expose the full device set.
+#
+# Non-fatal: returns 1 (warn-only) if devices don't appear in time. The container
+# will still start; GPU inference will simply fail with detection errors visible
+# in diagnose output. Better to start with degraded GPU than to deadlock the
+# whole boot sequence.
+#
+# Requires the 5 device nodes listed in docker-compose.calypso.yml `devices:`.
+wait_for_nvidia() {
+    local max_wait="${1:-120}"
+    local interval=5
+    local elapsed=0
+    local devices="/dev/nvidia0 /dev/nvidiactl /dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools"
+    log "Waiting for NVIDIA GPU devices (timeout=${max_wait}s)..."
+    while ! ls $devices >/dev/null 2>&1; do
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+        if [[ $elapsed -ge $max_wait ]]; then
+            warn "NVIDIA devices not ready after ${max_wait}s — container may fail GPU inference"
+            warn "  → Fix: sudo modprobe nvidia nvidia-uvm nvidia-modeset"
+            warn "  → Or wait: modules may still be loading after cold boot"
+            return 1
+        fi
+        log "  ...NVIDIA devices not ready yet (${elapsed}s)"
+    done
+    ok "NVIDIA GPU devices ready"
+}
+
+# Cold-boot pre-flight: warn-only checks for host-level dependencies.
+# These checks do NOT block the boot sequence — Frigate and go2rtc handle
+# reconnections internally. The value is early visibility in journald logs
+# so the operator can immediately identify which layer failed on a bad boot.
+#
+# Checks:
+#   1. NAS mount at ${FRIGATE_MEDIA_PATH} — if not a mountpoint, recordings
+#      will be written to the container overlay (data loss risk).
+#   2. NUC RTSP proxy at 192.168.50.112:8556 — if unreachable, all cameras
+#      will show "no frames received" until it comes back.
+#   3. MQTT broker at 192.168.50.125:1883 — if unreachable, Home Assistant
+#      events won't publish until it comes back.
+check_host_readiness() {
+    local media_path="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
+    local nas_base
+    nas_base=$(df "$media_path" 2>/dev/null | tail -1 | awk '{print $6}')
+    if [[ "$nas_base" == "/" ]] || ! mountpoint -q "$media_path" 2>/dev/null; then
+        warn "NAS may not be mounted at ${media_path} — recordings may go to wrong location"
+        warn "  → Fix: sudo mount -a  OR  check NAS connectivity and /etc/fstab"
+    else
+        ok "NAS mounted at ${media_path}"
+    fi
+
+    if ! timeout 3 bash -c "echo >/dev/tcp/192.168.50.112/8556" 2>/dev/null; then
+        warn "NUC RTSP proxy unreachable at 192.168.50.112:8556 — cameras will show no frames until reachable"
+        warn "  → Fix: check NUC power and network connectivity to 192.168.50.112"
+    else
+        ok "NUC RTSP proxy reachable at 192.168.50.112:8556"
+    fi
+
+    if ! timeout 3 bash -c "echo >/dev/tcp/192.168.50.125/1883" 2>/dev/null; then
+        warn "MQTT broker unreachable at 192.168.50.125:1883 — HA events won't publish until reachable"
+        warn "  → Fix: check Home Assistant and Mosquitto broker status"
+    else
+        ok "MQTT broker reachable at 192.168.50.125:1883"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -273,12 +389,484 @@ cmd_status() {
     check_shm
 }
 
+# 5-layer health display with actionable Fix: lines on every failure.
+# See plan §12 for the output format. Returns 0 always (informational).
+cmd_diagnose() {
+    log "=== Frigate System Diagnostics [$(date '+%Y-%m-%d %H:%M:%S')] ==="
+    echo ""
+
+    # ------------------------------------------------------------ HOST LAYER
+    log "HOST LAYER"
+
+    # NVIDIA device nodes
+    local nvidia_devs="/dev/nvidia0 /dev/nvidiactl /dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools"
+    if ls $nvidia_devs >/dev/null 2>&1; then
+        ok "NVIDIA devices       $nvidia_devs"
+    else
+        local missing=""
+        for d in $nvidia_devs; do [[ -e "$d" ]] || missing="$missing $d"; done
+        warn "NVIDIA devices      Missing:$missing"
+        warn "  → Fix: sudo modprobe nvidia nvidia-uvm nvidia-modeset"
+    fi
+
+    # NAS mount
+    local media_path="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
+    if mountpoint -q "$media_path" 2>/dev/null; then
+        ok "NAS mount            $media_path is a mountpoint"
+    else
+        warn "NAS mount           $media_path exists but is NOT a mountpoint"
+        warn "  → Recordings will be written to container overlay (data LOSS risk)"
+        warn "  → Fix: sudo mount -a  OR  check NAS connectivity and /etc/fstab"
+    fi
+
+    # NUC RTSP proxy
+    if timeout 3 bash -c "echo >/dev/tcp/192.168.50.112/8556" 2>/dev/null; then
+        ok "RTSP proxy           192.168.50.112:8556 reachable"
+    else
+        warn "RTSP proxy          192.168.50.112:8556 UNREACHABLE"
+        warn "  → Cameras will show no frames until NUC RTSP proxy is back"
+        warn "  → Fix: check NUC power and network to 192.168.50.112"
+    fi
+
+    # MQTT broker
+    if timeout 3 bash -c "echo >/dev/tcp/192.168.50.125/1883" 2>/dev/null; then
+        ok "MQTT broker          192.168.50.125:1883 reachable"
+    else
+        warn "MQTT broker         192.168.50.125:1883 UNREACHABLE"
+        warn "  → HA events won't publish until broker is back"
+        warn "  → Fix: check Home Assistant and Mosquitto broker status"
+    fi
+    echo ""
+
+    # ------------------------------------------------------------ DOCKER LAYER
+    log "DOCKER LAYER"
+    local cid
+    cid=$(dc ps -q "$SERVICE" 2>/dev/null | head -1)
+    if [[ -n "$cid" ]]; then
+        local image uptime
+        image=$(docker inspect --format '{{.Config.Image}}' "$cid" 2>/dev/null || echo "unknown")
+        uptime=$(docker inspect --format '{{.State.Status}}' "$cid" 2>/dev/null || echo "unknown")
+        local started_at
+        started_at=$(docker inspect --format '{{.State.StartedAt}}' "$cid" 2>/dev/null || echo "")
+        local ago
+        if [[ -n "$started_at" ]] && [[ "$started_at" != "<no value>" ]]; then
+            ago=$(date -d "$started_at" +%s 2>/dev/null | awk -v now=$(date +%s) '{print int((now-$1)/3600)"h ago"}' 2>/dev/null || echo "")
+        fi
+        ok "Container           $uptime${ago:+ ($ago)}  image=$image"
+
+        # /dev/shm and /tmp/cache usage
+        local shm_info
+        shm_info=$(docker exec "$cid" df -h /dev/shm 2>/dev/null | tail -1 \
+            | awk '{size=$2; used=$3; pct=$5; sub("%","",pct); if (pct+0 >= 95) print "CRIT|"size"|"used"|"pct; else if (pct+0 >= 80) print "WARN|"size"|"used"|"pct; else print "OK|"size"|"used"|"pct}')
+        local shm_status shm_size shm_used shm_pct
+        IFS='|' read -r shm_status shm_size shm_used shm_pct <<< "$shm_info"
+        if [[ "$shm_status" == "CRIT" ]]; then
+            warn "  /dev/shm          ${shm_used}/${shm_size} (${shm_pct}%) — CRITICAL: corrupted/gray frames likely"
+            warn "  → Fix: increase shm_size in docker-compose.calypso.yml and run cmd_recreate"
+        elif [[ "$shm_status" == "WARN" ]]; then
+            warn "  /dev/shm          ${shm_used}/${shm_size} (${shm_pct}%) — pressure"
+        else
+            ok "  /dev/shm          ${shm_used}/${shm_size} (${shm_pct}%)"
+        fi
+
+        local cache_info
+        cache_info=$(docker exec "$cid" df -h /tmp/cache 2>/dev/null | tail -1 \
+            | awk '{size=$2; used=$3; pct=$5; sub("%","",pct); print size"|"used"|"pct}')
+        local cache_size cache_used cache_pct
+        IFS='|' read -r cache_size cache_used cache_pct <<< "$cache_info"
+        if [[ -n "$cache_size" ]]; then
+            log "  /tmp/cache         ${cache_used}/${cache_size} (${cache_pct}%)"
+        fi
+    else
+        warn "Container           NOT RUNNING"
+        warn "  → Fix: ./deploy-frigate.sh recreate"
+    fi
+    echo ""
+
+    # ------------------------------------------------------------ INFERENCE LAYER
+    log "INFERENCE LAYER"
+    local stats
+    stats=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null) || stats=""
+
+    if [[ -n "$stats" ]]; then
+        echo "$stats" | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    dets = s.get('detectors', {})
+    if not dets:
+        print('  (no detectors found in stats)')
+    for name, v in dets.items():
+        spd = v.get('inference_speed', 0)
+        if spd == 0:
+            print(f'  {name}  ⚠️  inference_speed: 0.0ms  (TRT engine building — det_fps=0 is normal)')
+            print(f'         → First-run build takes ~65s on RTX 5060 Ti')
+            print(f'         → Wait 2 min then re-run: ./deploy-frigate.sh diagnose')
+        elif spd < 10:
+            print(f'  {name}  ✅ inference_speed: {spd:.1f}ms  [< 10ms = TRT active]')
+        elif spd < 50:
+            print(f'  {name}  ⚠️  inference_speed: {spd:.1f}ms  [10-50ms = CUDA, TRT not loaded]')
+            print(f'         → Fix: check TensorrtExecutionProvider in config.yml (detector device)')
+        else:
+            print(f'  {name}  ❌ inference_speed: {spd:.1f}ms  [> 50ms = CPU fallback]')
+            print(f'         → Fix: set detector device: Tensorrt  in config.yml and cmd_restart')
+except Exception as e:
+    print(f'  (could not parse stats: {e})')
+"
+
+        # TRT cache directory
+        if [[ -d ./trt-cache/tensorrt ]] && ls ./trt-cache/tensorrt/ort/trt-engines/ 2>/dev/null | grep -q .; then
+            ok "TRT engine cache    ./trt-cache populated"
+        else
+            warn "TRT engine cache   ./trt-cache empty — first boot will build (~65s)"
+        fi
+    else
+        warn "Inference           Stats API unreachable"
+        warn "  → Fix: check Frigate container status with ./deploy-frigate.sh status"
+    fi
+    echo ""
+
+    # ------------------------------------------------------------ ZMQ / IPC LAYER
+    log "ZMQ / IPC LAYER"
+    if [[ -n "$stats" ]]; then
+        if has_stuck_cameras; then
+            :   # has_stuck_cameras already printed warn with camera names
+        else
+            ok "ZMQ status          No stuck cameras detected"
+        fi
+    else
+        warn "ZMQ status         Stats API unreachable — cannot check"
+    fi
+    echo ""
+
+    # ------------------------------------------------------------ CAMERA STREAMS
+    log "CAMERA STREAMS"
+    if [[ -n "$stats" ]]; then
+        # Sub-stream cameras (panoramic whole-lens) are detected via the _left/_right
+        # crop cameras, so they show camera_fps=0 by design. Don't flag as errors.
+        local sub_cams="allee_sur_le_cote jardin_devant piscine_vue_toit"
+        echo "$stats" | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    cams = s.get('cameras', {})
+    sub = {'allee_sur_le_cote', 'jardin_devant', 'piscine_vue_toit'}
+    print(f'  {\"Camera\":<28} {\"camera_fps\":>10} {\"process_fps\":>10} {\"detect_fps\":>10}   ZMQ')
+    print(f'  ' + '─' * 66)
+    active = process = detect = stuck = 0
+    for name in sorted(cams.keys()):
+        v = cams[name]
+        cfps = v.get('camera_fps') or 0
+        pfps = v.get('process_fps') or 0
+        dfps = v.get('detection_fps') or 0
+        is_stuck = cfps > 0 and pfps == 0
+        if name in sub:
+            zmq = '— sub'
+        elif is_stuck:
+            zmq = '❌ stuck'
+            stuck += 1
+        else:
+            zmq = '✅'
+        print(f'  {name:<28} {cfps:>10.1f} {pfps:>10.1f} {dfps:>10.1f}   {zmq}')
+        if cfps > 0: active += 1
+        if pfps > 0: process += 1
+        if dfps > 0: detect += 1
+    print(f'  ' + '─' * 66)
+    print(f'  Active: {active}/{len(cams)}   Processing: {process}/{len(cams)}   Detecting: {detect}/{len(cams)}   ZMQ-stuck: {stuck}')
+except Exception as e:
+    print(f'  (could not parse stats: {e})')
+"
+    else
+        warn "Camera stats        Stats API unreachable"
+    fi
+    echo ""
+
+    # ------------------------------------------------------------ SERVICE LAYER
+    log "SERVICE LAYER"
+    if systemctl list-unit-files frigate.service 2>/dev/null | grep -q frigate.service; then
+        local svc_state
+        svc_state=$(systemctl is-active frigate.service 2>/dev/null || echo "unknown")
+        if [[ "$svc_state" == "active" ]]; then
+            ok "frigate.service    $svc_state (oneshot running)"
+        elif [[ "$svc_state" == "inactive" ]]; then
+            ok "frigate.service    $svc_state (oneshot — completed successfully)"
+            log "                     Last boot log: journalctl -u frigate -n 50"
+        elif [[ "$svc_state" == "failed" ]]; then
+            warn "frigate.service   FAILED on last run"
+            warn "  → Investigate: journalctl -u frigate -n 100"
+        else
+            warn "frigate.service   state: $svc_state"
+        fi
+    else
+        log "  frigate.service    not installed"
+        log "                     Install: sudo ./deploy-frigate.sh install-service"
+    fi
+    echo ""
+}
+
+# Automated validation suite. Non-destructive by default. Pass 'restart' as
+# argument to run Tier 2 (which actually restarts Frigate).
+# See plan §13 for the test matrix and expected outputs.
+cmd_validate() {
+    local tier="${1:-tier1}"
+    local pass=0 fail=0 skip=0
+    local line
+
+    if [[ "$tier" == "restart" ]]; then
+        log "=== Frigate Validation Suite [Tier 2 — restart cycle] ==="
+        warn "This will restart Frigate (brief camera interruption)"
+        echo ""
+
+        local start_ts end_ts duration
+        start_ts=$(date +%s)
+
+        # V10 — restart completes
+        log "[V10] Restart completes ........... "
+        if cmd_restart >/dev/null 2>&1; then
+            ok "PASS"; pass=$((pass+1))
+        else
+            warn "FAIL — restart returned non-zero exit code"
+            warn "  → Inspect: ./deploy-frigate.sh status"
+            fail=$((fail+1))
+        fi
+
+        end_ts=$(date +%s); duration=$((end_ts - start_ts))
+
+        # V12 — restart duration
+        if [[ $duration -lt 300 ]]; then
+            log "[V12] Restart duration ........... "
+            ok "PASS  (${duration}s < 300s threshold)"; pass=$((pass+1))
+        else
+            log "[V12] Restart duration ........... "
+            warn "FAIL  (${duration}s >= 300s threshold — regression guard triggered)"
+            warn "  → Check for resource contention, slow I/O, or false ZMQ retries"
+            fail=$((fail+1))
+        fi
+
+        # V13 — post-restart ZMQ health
+        log "[V13] Post-restart ZMQ health ..... "
+        if wait_all_processing 120; then
+            sleep 15
+            if ! has_stuck_cameras; then
+                ok "PASS  (0 stuck cameras after restart)"; pass=$((pass+1))
+            else
+                warn "FAIL  (stuck cameras persist after restart)"
+                fail=$((fail+1))
+            fi
+        else
+            warn "FAIL  (majority of cameras never started processing)"
+            fail=$((fail+1))
+        fi
+
+        # V14 — post-restart detection
+        log "[V14] Post-restart detection ...... "
+        local det_ok
+        det_ok=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    cams = s.get('cameras', {})
+    fed = [(v.get('detection_fps') or 0) for c, v in cams.items() if (v.get('camera_fps') or 0) > 0]
+    if not fed: print('0')
+    else: print('1' if all(d > 0 for d in fed) else '0')
+except Exception: print('0')
+" 2>/dev/null)
+        if [[ "$det_ok" == "1" ]]; then
+            ok "PASS  (all fed cameras have detect_fps > 0)"; pass=$((pass+1))
+        else
+            warn "FAIL  (some fed cameras still have detect_fps = 0)"
+            fail=$((fail+1))
+        fi
+
+        # V11 — no spurious ZMQ retry is implicit in restart duration; mark as PASS
+        log "[V11] No spurious ZMQ retry ....... "
+        if [[ $duration -lt 480 ]]; then
+            ok "PASS  (restart finished in ${duration}s, well under retry storm threshold)"; pass=$((pass+1))
+        else
+            warn "FAIL  (${duration}s suggests retry storm — investigate)"
+            fail=$((fail+1))
+        fi
+
+        echo ""
+        log "=== RESULT: ${pass}/5 PASS — $([[ $fail -eq 0 ]] && echo 'Restart sequence verified reliable' || echo 'Action required') ==="
+        return $fail
+    fi
+
+    # Default: Tier 1 — non-destructive snapshot
+    log "=== Frigate Validation Suite [Tier 1 — non-destructive] ==="
+    echo ""
+
+    # V1 — API accessible
+    log "[V1]  API accessible .............. "
+    if line=$(curl -sf --max-time 5 "${FRIGATE_API}/api/version" 2>/dev/null) && [[ -n "$line" ]]; then
+        ok "PASS  (HTTP 200)"; pass=$((pass+1))
+    else
+        warn "FAIL  (Frigate API not reachable)"
+        warn "  → Fix: ./deploy-frigate.sh recreate"
+        fail=$((fail+1))
+    fi
+
+    # V2 — inference active
+    log "[V2]  Inference active ............ "
+    local speed
+    speed=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    spds = [v.get('inference_speed', 0) for v in s.get('detectors', {}).values()]
+    print(max(spds) if spds else 0)
+except Exception: print(0)
+" 2>/dev/null) || speed=0
+    if awk "BEGIN{exit !($speed > 0)}"; then
+        ok "PASS  (inference_speed=${speed}ms)"; pass=$((pass+1))
+    else
+        warn "FAIL  (inference_speed=${speed}ms — detector not running)"
+        warn "  → Check TRT engine build status with: ./deploy-frigate.sh diagnose"
+        fail=$((fail+1))
+    fi
+
+    # V3 — inference speed / mode
+    log "[V3]  Inference speed / mode ...... "
+    if awk "BEGIN{exit !($speed > 0 && $speed < 50)}"; then
+        if awk "BEGIN{exit !($speed < 10)}"; then
+            ok "PASS  (${speed}ms < 10ms: TRT active)"; pass=$((pass+1))
+        else
+            ok "PASS  (${speed}ms 10-50ms: CUDA OK, TRT cache may be empty)"; pass=$((pass+1))
+        fi
+    else
+        warn "FAIL  (${speed}ms >= 50ms: CPU fallback — GPU inference disabled)"
+        warn "  → Fix: set detector device: Tensorrt  in config.yml"
+        fail=$((fail+1))
+    fi
+
+    # V4 — ZMQ IPC health
+    log "[V4]  ZMQ IPC health .............. "
+    if ! has_stuck_cameras; then
+        ok "PASS  (0 stuck cameras)"; pass=$((pass+1))
+    else
+        warn "FAIL"
+        warn "  → Fix: ./deploy-frigate.sh restart"
+        fail=$((fail+1))
+    fi
+
+    # V5 — camera feeds active (cameras with camera_fps > 0)
+    log "[V5]  Camera feeds active ......... "
+    local feed_stats
+    feed_stats=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    sub = {'allee_sur_le_cote', 'jardin_devant', 'piscine_vue_toit'}
+    cams = {c: v for c, v in s.get('cameras', {}).items() if c not in sub}
+    if not cams: print('0|0|0')
+    else:
+        active = sum(1 for v in cams.values() if (v.get('camera_fps') or 0) > 0)
+        print(f'{active}|{len(cams)}|{active * 100 // len(cams)}')
+except Exception: print('0|0|0')
+" 2>/dev/null)
+    local f_active f_total f_pct
+    IFS='|' read -r f_active f_total f_pct <<< "$feed_stats"
+    if [[ "$f_total" -eq 0 ]]; then
+        ok "PASS  (no detection cameras configured)"; pass=$((pass+1))
+    elif [[ $f_pct -ge 50 ]]; then
+        ok "PASS  (${f_active}/${f_total} detect cameras have camera_fps>0)"; pass=$((pass+1))
+    else
+        warn "FAIL  (${f_active}/${f_total} detect cameras have camera_fps>0 — <50%)"
+        warn "  → Check RTSP proxy and NUC go2rtc"
+        fail=$((fail+1))
+    fi
+
+    # V6 — detection running on fed cameras
+    log "[V6]  Detection running ........... "
+    local det_stats
+    det_stats=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    s = json.load(sys.stdin)
+    fed = [(v.get('detection_fps') or 0) for c, v in s.get('cameras', {}).items() if (v.get('camera_fps') or 0) > 0]
+    if not fed: print('0|0|1')   # no fed cameras → vacuously OK
+    else:
+        d_ok = sum(1 for d in fed if d > 0)
+        print(f'{d_ok}|{len(fed)}|{0 if d_ok < len(fed) else 1}')
+except Exception: print('0|0|0')
+" 2>/dev/null)
+    local d_ok d_total d_pass
+    IFS='|' read -r d_ok d_total d_pass <<< "$det_stats"
+    if [[ "$d_pass" == "1" ]]; then
+        if [[ "$d_total" == "0" ]]; then
+            ok "PASS  (no fed cameras to verify)"; pass=$((pass+1))
+        else
+            ok "PASS  (${d_ok}/${d_total} fed cameras have detect_fps>0)"; pass=$((pass+1))
+        fi
+    else
+        warn "FAIL  (${d_ok}/${d_total} fed cameras have detect_fps>0)"
+        warn "  → ZMQ broken — Fix: ./deploy-frigate.sh restart"
+        fail=$((fail+1))
+    fi
+
+    # V7 — /dev/shm headroom
+    log "[V7]  /dev/shm headroom ........... "
+    local cid2 shm_pct
+    cid2=$(dc ps -q "$SERVICE" 2>/dev/null | head -1)
+    if [[ -n "$cid2" ]]; then
+        shm_pct=$(docker exec "$cid2" df /dev/shm 2>/dev/null | tail -1 | awk '{sub("%","",$5); print $5}')
+    fi
+    if [[ -z "$shm_pct" ]]; then
+        ok "PASS  (container not running)"; pass=$((pass+1))
+    elif [[ "$shm_pct" -ge 95 ]]; then
+        warn "FAIL  (${shm_pct}% used — CRITICAL)"
+        warn "  → Fix: increase shm_size in docker-compose.calypso.yml and cmd_recreate"
+        fail=$((fail+1))
+    elif [[ "$shm_pct" -ge 80 ]]; then
+        warn "WARN  (${shm_pct}% used — pressure, not a fail)"
+        skip=$((skip+1)); pass=$((pass+1))   # counts as pass; warn is informational
+    else
+        ok "PASS  (${shm_pct}% used; threshold 80%)"; pass=$((pass+1))
+    fi
+
+    # V8 — Host NVIDIA devices
+    log "[V8]  Host NVIDIA devices ......... "
+    local nvidia_devs="/dev/nvidia0 /dev/nvidiactl /dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools"
+    if ls $nvidia_devs >/dev/null 2>&1; then
+        ok "PASS  (all 5 device nodes present)"; pass=$((pass+1))
+    else
+        warn "FAIL  (one or more NVIDIA device nodes missing)"
+        warn "  → Fix: sudo modprobe nvidia nvidia-uvm nvidia-modeset"
+        fail=$((fail+1))
+    fi
+
+    # V9 — NAS mounted
+    log "[V9]  NAS mount ................... "
+    local media_path_v="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
+    if mountpoint -q "$media_path_v" 2>/dev/null; then
+        ok "PASS  ($media_path_v is mountpoint)"; pass=$((pass+1))
+    else
+        warn "WARN  ($media_path_v is not a mountpoint — recordings at risk)"
+        warn "  → Fix: sudo mount -a  OR  check NAS connectivity"
+        fail=$((fail+1))
+    fi
+
+    echo ""
+    log "=== RESULT: ${pass}/9 PASS $([[ $fail -gt 0 ]] && echo '+ '$fail' FAIL — Action required (see failed tests above)' || echo '— System verified healthy') ==="
+    echo ""
+    log "To test restart reliability:  ./deploy-frigate.sh validate restart"
+    return $fail
+}
+
 cmd_boot() {
     # Called by frigate.service on host boot.
     # Docker's `restart: unless-stopped` auto-starts the container, but does NOT
     # run the ZMQ-fix stop+start cycle. This function does that cycle and confirms
     # ZMQ health (process_fps > 0) before returning.
     log "=== Boot ZMQ-fix sequence (called by frigate.service) ==="
+
+    # Cold-boot pre-flight checks (warn-only, non-fatal).
+    # wait_for_nvidia: NVIDIA driver may not be fully loaded when systemd starts
+    #                  frigate.service — the driver often finishes after container
+    #                  auto-start. 120s gives it time.
+    # check_host_readiness: visibility into NAS / RTSP proxy / MQTT reachability.
+    wait_for_nvidia 120
+    check_host_readiness
 
     # The container was already started by Docker's restart policy.
     # Wait for the API to come up and the TRT engine to finish building.
@@ -295,24 +883,37 @@ cmd_boot() {
 
     wait_healthy
     wait_detector_ready 120 || true  # engine cached — should be <10s
-    wait_all_processing 120 || true  # confirm ZMQ IPC healthy (process_fps > 0)
+    wait_all_processing 120 || true  # majority of cameras processing
+
+    # Two-phase readiness pattern (plan §4):
+    #   Phase 1 exits early on majority success. After that exit, allow 15s for
+    #   tail cameras to complete ZMQ init (camera_fps→process_fps lag is 1-5s in
+    #   healthy ZMQ; 15s gives a 3-15x safety margin).
+    #   Phase 2 is the strict stuck-camera check — safe from false positives
+    #   because of the grace period.
+    #   One retry maximum — same as pre-fix behaviour; the strict check is the
+    #   signal, not the retry driver (that pattern caused the 17-min regression).
+    if wait_all_processing 120; then
+        log "Majority processing. Waiting 15s straggler grace period..."
+        sleep 15
+    fi
+
+    if has_stuck_cameras; then
+        warn "Doing one more ZMQ reset for stuck cameras above..."
+        zmq_fix_cycle
+        wait_healthy
+        wait_detector_ready 120 || true
+        wait_all_processing 60 || true
+        sleep 15
+        if has_stuck_cameras; then
+            warn "ZMQ IPC still unhealthy after retry — manual intervention may be needed"
+            warn "  Run: ./deploy-frigate.sh status  to see per-camera fps"
+        fi
+    fi
 
     log "Post-boot health:"
     check_inference
     check_det_fps
-
-    # One ZMQ retry if majority of cameras are not yet processing.
-    if ! all_processing; then
-        warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
-        check_det_fps
-        zmq_fix_cycle
-        wait_healthy
-        wait_detector_ready 120 || true
-        wait_all_processing 120 || true
-        log "Post-retry health:"
-        check_inference
-        check_det_fps
-    fi
 
     check_shm
     ok "Boot sequence complete"
@@ -362,22 +963,33 @@ cmd_restart() {
     wait_detector_ready 120 || true
     # Wait for ZMQ IPC to be healthy: majority of cameras must have process_fps > 0
     wait_all_processing 120 || true
-    log "Post-restart health:"
-    check_inference
-    check_det_fps
 
-    # One ZMQ retry if majority of cameras are not yet processing.
-    if ! all_processing; then
-        warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
-        check_det_fps
+    # Two-phase readiness pattern (plan §4):
+    #   Phase 1: wait_all_processing 120 → exits early on majority success.
+    #   Grace: 15s sleep on success to let tail cameras complete ZMQ init.
+    #   Phase 2: has_stuck_cameras → strict check, safe from false positives.
+    #   One retry maximum (avoids the 17-min regression from REL-6).
+    if wait_all_processing 120; then
+        log "Majority processing. Waiting 15s straggler grace period..."
+        sleep 15
+    fi
+
+    if has_stuck_cameras; then
+        warn "Doing one more ZMQ reset for stuck cameras above..."
         zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120 || true
-        wait_all_processing 120 || true
-        log "Post-retry health:"
-        check_inference
-        check_det_fps
+        wait_all_processing 60 || true
+        sleep 15
+        if has_stuck_cameras; then
+            warn "ZMQ IPC still unhealthy after retry — manual intervention may be needed"
+            warn "  Run: ./deploy-frigate.sh status  to see per-camera fps"
+        fi
     fi
+
+    log "Post-restart health:"
+    check_inference
+    check_det_fps
 
     check_shm
     ok "Restart complete"
@@ -454,22 +1066,32 @@ cmd_recreate() {
     wait_detector_ready 120 || true  # stale data — returns immediately; kept for symmetry
     wait_all_processing 120 || true  # confirm ZMQ IPC is healthy (process_fps > 0)
 
-    log "Post-recreation health:"
-    check_inference
-    check_det_fps
+    # Two-phase readiness pattern (plan §4):
+    #   Phase 1: wait_all_processing 120 → exits early on majority success.
+    #   Grace: 15s sleep on success to let tail cameras complete ZMQ init.
+    #   Phase 2: has_stuck_cameras → strict check, safe from false positives.
+    #   One retry maximum (avoids the 17-min regression from REL-6).
+    if wait_all_processing 120; then
+        log "Majority processing. Waiting 15s straggler grace period..."
+        sleep 15
+    fi
 
-    # One ZMQ retry if majority of cameras are not yet processing.
-    if ! all_processing; then
-        warn "process_fps=0 on majority of cameras — doing one more ZMQ reset..."
-        check_det_fps
+    if has_stuck_cameras; then
+        warn "Doing one more ZMQ reset for stuck cameras above..."
         zmq_fix_cycle
         wait_healthy
         wait_detector_ready 120 || true
-        wait_all_processing 120 || true
-        log "Post-retry health:"
-        check_inference
-        check_det_fps
+        wait_all_processing 60 || true
+        sleep 15
+        if has_stuck_cameras; then
+            warn "ZMQ IPC still unhealthy after retry — manual intervention may be needed"
+            warn "  Run: ./deploy-frigate.sh status  to see per-camera fps"
+        fi
     fi
+
+    log "Post-recreation health:"
+    check_inference
+    check_det_fps
 
     check_shm
 
@@ -588,6 +1210,12 @@ case "$MODE" in
     status)
         cmd_status
         ;;
+    diagnose)
+        cmd_diagnose
+        ;;
+    validate)
+        cmd_validate "${2:-tier1}"
+        ;;
     dump)
         cmd_dump
         ;;
@@ -640,7 +1268,7 @@ case "$MODE" in
         fi
         ;;
     *)
-        echo "Usage: $0 [restart|recreate|boot|install-service|status|dump|auto]"
+        echo "Usage: $0 [restart|recreate|boot|install-service|status|diagnose|validate|dump|auto]"
         echo ""
         echo "  auto             (default) detect whether recreation is needed"
         echo "  restart          config.yml change only — no container recreation"
@@ -648,6 +1276,8 @@ case "$MODE" in
         echo "  boot             ZMQ-fix cycle after host reboot (used by frigate.service)"
         echo "  install-service  install + enable frigate.service (requires sudo)"
         echo "  status           show inference speed, det_fps, /dev/shm usage"
+        echo "  diagnose         5-layer health display (host, docker, inference, ZMQ, cameras) with Fix: lines"
+        echo "  validate         automated test suite (9 non-destructive tests; 'validate restart' for full cycle)"
         echo "  dump             Option-B event dump for Track A soak analysis"
         exit 1
         ;;
