@@ -524,24 +524,24 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# cmd_validate  (Phase 2 — Tier 1 only, 9 read-only tests)
+# cmd_validate  (Phase 2 — Tier 1 + Phase 3 — Tier 2)
 # ---------------------------------------------------------------------------
-# STRICTLY READ-ONLY. Does NOT modify any state. Run at any time.
-# Tier 2 (validate restart) is Phase 3 of the rock-solid plan and is NOT
-# yet implemented — calling it returns a clear "not yet" message.
+# Tier 1 (default): STRICTLY READ-ONLY. Does NOT modify any state. 9 tests.
+# Tier 2 ('restart'): DESTRUCTIVE — runs cmd_restart and validates the
+#   post-restart state. Opt-in by passing 'restart' as the second arg.
+#   5 tests: V10 (restart completes), V11 (no spurious ZMQ retry),
+#   V12 (duration < 5 min), V13 (post-restart ZMQ health), V14 (post-restart detection).
 
 cmd_validate() {
     local tier="${1:-tier1}"
 
     if [[ "$tier" == "restart" ]]; then
-        warn "Tier 2 (validate restart) is NOT yet implemented."
-        warn "This is Phase 3 of the rock-solid plan — see plans/startup-reliability-rock-solid-plan.md."
-        warn "For now, run: ./deploy-frigate.sh restart  and then  ./deploy-frigate.sh validate"
-        return 1
+        cmd_validate_restart
+        return $?
     fi
 
     if [[ "$tier" != "tier1" && "$tier" != "" ]]; then
-        warn "Unknown validate tier: '${tier}'. Supported: 'tier1' (default), 'restart' (Phase 3)"
+        warn "Unknown validate tier: '${tier}'. Supported: 'tier1' (default), 'restart' (Tier 2 — destructive)"
         return 1
     fi
 
@@ -751,10 +751,157 @@ PYEOF
     if [[ "$fail" -eq 0 ]]; then
         ok "=== RESULT: ${pass}/${total} PASS — System verified healthy ==="
         echo ""
-        echo "To test restart reliability (Phase 3, not yet implemented):"
+        echo "To test restart reliability (Tier 2 — destructive, will restart Frigate):"
         echo "  ./deploy-frigate.sh validate restart"
     else
         warn "=== RESULT: ${pass}/${total} PASS, ${fail}/${total} FAIL — Action required ==="
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# cmd_validate_restart  (Phase 3 — Tier 2, 5 tests, DESTRUCTIVE)
+# ---------------------------------------------------------------------------
+# Runs cmd_restart and validates that the restart cycle is reliable:
+#   V10: cmd_restart returned 0 and 'Restart complete' in its output
+#   V11: cmd_restart did NOT log a spurious ZMQ retry (anti-pattern guard)
+#   V12: restart duration < 5 min (regression guard against REL-6 17-min bug)
+#   V13: within 120s of restart, no cameras ZMQ-stuck (camera_fps>0 & process_fps=0)
+#   V14: within 120s of restart, all active cameras have detect_fps>0
+#
+# This is the "opt-in destructive" test from plan §9 open question #1.
+# The default ./deploy-frigate.sh validate is still Tier 1 (read-only).
+#
+# Safety: this function does NOT introduce any new restart retry logic.
+# It calls the existing cmd_restart exactly once. If V13/V14 fail, the
+# operator must run ./deploy-frigate.sh restart manually — no automatic
+# retries are attempted (this is intentional, per plan §3 anti-patterns).
+
+cmd_validate_restart() {
+    log "=== Frigate Validation Suite [Tier 2 — restart cycle] ==="
+    warn "⚠️  This test will RESTART Frigate. Cameras will briefly lose detection."
+    warn "    Total expected time: 1–3 minutes. There are NO automatic retries."
+    echo ""
+
+    local pass=0 fail=0
+
+    # ----- V10: Run the restart and verify it completes -----
+    log "Running restart (V10/V11)..."
+    local restart_start_ts restart_end_ts restart_duration restart_output restart_rc
+    restart_start_ts=$(date +%s)
+    restart_output=$(cmd_restart 2>&1) || restart_rc=$?
+    restart_rc=${restart_rc:-0}
+    restart_end_ts=$(date +%s)
+    restart_duration=$((restart_end_ts - restart_start_ts))
+
+    if [[ $restart_rc -eq 0 ]] && echo "$restart_output" | grep -q "Restart complete"; then
+        ok "  [V10] Restart completes ........... ✅ PASS  (${restart_duration}s; 'Restart complete' in output)"
+        pass=$((pass+1))
+    else
+        warn "  [V10] Restart completes ........... ❌ FAIL  (rc=${restart_rc}; no 'Restart complete' in output)"
+        fail=$((fail+1))
+        warn "Cannot run V11–V14 if restart itself failed. Aborting Tier 2."
+        echo ""
+        warn "=== RESULT: ${pass}/5 PASS, ${fail}/5 FAIL — Action required ==="
+        return 1
+    fi
+
+    # ----- V11: No spurious ZMQ retry -----
+    # The current cmd_restart does NOT retry, so this should always pass.
+    # It is a guard against accidentally re-introducing the REL-6 anti-pattern
+    # (a 3-retry loop that caused a 17-min regression).
+    if echo "$restart_output" | grep -qiE "zmq[- ]?stuck|zmq[- ]?retry|retry.*zmq"; then
+        warn "  [V11] No spurious ZMQ retry ....... ❌ FAIL  (ZMQ retry was triggered — see anti-pattern §3)"
+        fail=$((fail+1))
+    else
+        ok "  [V11] No spurious ZMQ retry ....... ✅ PASS  (no spurious retry triggered)"
+        pass=$((pass+1))
+    fi
+
+    # ----- V12: Restart duration < 5 min (300s) -----
+    if [[ $restart_duration -lt 300 ]]; then
+        ok "  [V12] Restart duration ............ ✅ PASS  (${restart_duration}s < 300s threshold)"
+        pass=$((pass+1))
+    else
+        warn "  [V12] Restart duration ............ ❌ FAIL  (${restart_duration}s ≥ 300s — regression guard)"
+        warn "                              The REL-6 17-min regression should never return."
+        fail=$((fail+1))
+    fi
+
+    # ----- V13 + V14: Wait for cameras to come up -----
+    # Poll for up to 120s. DO NOT exit early when cf=0 on all cameras —
+    # that would give a false-positive "0 stuck" reading. The full 120s
+    # is needed to allow cameras to fully come up after a restart.
+    log "Waiting up to 120s for cameras to come up (V13/V14)..."
+    local post_working=0 post_stuck=0 post_total=0 detect_ok=0 detect_total=0
+    local last_stats=""
+    local deadline_ts=$(($(date +%s) + 120))
+    while [[ $(date +%s) -lt $deadline_ts ]]; do
+        last_stats=$(curl -sf "${FRIGATE_API}/api/stats" 2>/dev/null) || { sleep 5; continue; }
+        [[ -z "$last_stats" ]] && { sleep 5; continue; }
+        read -r post_working post_stuck post_total detect_ok detect_total <<< "$(_py "$last_stats" <<'PYEOF'
+import sys, json
+s = json.load(sys.stdin)
+SUB = {'allee_sur_le_cote', 'jardin_devant', 'piscine_vue_toit'}
+cams = s.get('cameras', {})
+working = stuck = total = det_ok = det_total = 0
+for n, v in cams.items():
+    if n in SUB:
+        continue
+    total += 1
+    cf = v.get('camera_fps') or 0
+    pf = v.get('process_fps') or 0
+    df = v.get('detection', {}).get('det_fps', 0) or 0
+    if cf > 0 and pf > 0:
+        working += 1
+    elif cf > 0 and pf == 0:
+        stuck += 1
+    if cf > 0:
+        det_total += 1
+        if df > 0:
+            det_ok += 1
+print(working, stuck, total, det_ok, det_total)
+PYEOF
+)"
+        # Show polling progress (every iteration)
+        log "  poll t-$((deadline_ts - $(date +%s)))s: working=${post_working}/${post_total} stuck=${post_stuck} detecting=${detect_ok}/${detect_total}"
+        # No early-exit: wait the full 120s so cameras have time to come up.
+        sleep 5
+    done
+
+    # ----- V13: Post-restart ZMQ health -----
+    # Require at least some cameras to be working (post_working > 0); otherwise
+    # "0 stuck" is a meaningless reading (no cameras are running at all).
+    if [[ $post_working -gt 0 && $post_stuck -eq 0 ]]; then
+        ok "  [V13] Post-restart ZMQ health ..... ✅ PASS  (0 stuck cameras; ${post_working}/${post_total} processing)"
+        pass=$((pass+1))
+    elif [[ $post_total -eq 0 ]]; then
+        warn "  [V13] Post-restart ZMQ health ..... ❌ FAIL  (no cameras reported in 120s — restart is broken)"
+        fail=$((fail+1))
+    else
+        warn "  [V13] Post-restart ZMQ health ..... ❌ FAIL  (${post_stuck} stuck cameras of ${post_total}; only ${post_working} processing)"
+        warn "                              → Fix: ./deploy-frigate.sh restart  (manual; no auto-retry)"
+        fail=$((fail+1))
+    fi
+
+    # ----- V14: Post-restart detection -----
+    if [[ $detect_total -eq 0 ]]; then
+        warn "  [V14] Post-restart detection ...... ❌ FAIL  (no active cameras found in 120s — restart is broken)"
+        fail=$((fail+1))
+    elif [[ $detect_ok -eq $detect_total ]]; then
+        ok "  [V14] Post-restart detection ...... ✅ PASS  (${detect_ok}/${detect_total} active cameras have detect_fps>0)"
+        pass=$((pass+1))
+    else
+        warn "  [V14] Post-restart detection ...... ❌ FAIL  (${detect_ok}/${detect_total} active cameras have detect_fps>0)"
+        warn "                              → Fix: ./deploy-frigate.sh restart"
+        fail=$((fail+1))
+    fi
+
+    echo ""
+    if [[ $fail -eq 0 ]]; then
+        ok "=== RESULT: ${pass}/5 PASS — Restart sequence verified reliable ==="
+    else
+        warn "=== RESULT: ${pass}/5 PASS, ${fail}/5 FAIL — Action required ==="
         return 1
     fi
 }
@@ -811,7 +958,7 @@ case "$MODE" in
         echo "  status    show inference speed, det_fps, /dev/shm usage"
         echo "  dump      Option-B event dump for Track A soak analysis"
         echo "  diagnose  read-only 5-layer health snapshot (no state change)"
-        echo "  validate  9 read-only validation tests; 'validate restart' is Phase 3 (not yet)"
+        echo "  validate  9 read-only Tier 1 tests; 'validate restart' is Tier 2 (destructive — restarts Frigate)"
         exit 1
         ;;
 esac
