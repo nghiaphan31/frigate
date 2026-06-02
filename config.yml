@@ -22,8 +22,8 @@
 #         1.7  MODEL        – Frigate+ custom trained model
 #         1.8  MOTION       – global pre-filter (before ML)
 #         1.9  AUDIO        – security-event audio analysis
-#         1.10 GO2RTC       – proxy via NUC go2rtc (192.168.50.112:8556); crops done by Frigate ffmpeg
-#    2. CAMERAS
+#         1.10 GO2RTC       – direct RTSP via Frigate internal go2rtc (NUC retired 2026-06-02)
+#    2. CAMERAS — OUTDOOR (5)
 #         ├─ allee_sur_le_cote        Reolink Duo 3  – 192.168.50.129
 #         │    ├─ allee_sur_le_cote_left   (left half)
 #         │    └─ allee_sur_le_cote_right  (right half)
@@ -35,6 +35,10 @@
 #         └─ piscine_vue_toit         Reolink Duo 3  – 192.168.50.7
 #              ├─ piscine_vue_toit_left    (left half)
 #              └─ piscine_vue_toit_right   (right half)
+#    2b. CAMERAS — INDOOR TP-LINK TAPO C210 (3, added 2026-06-02)
+#         ├─ salon                    TP-Link Tapo C210 2K – 192.168.50.17
+#         ├─ buro                     TP-Link Tapo C210 2K – 192.168.50.70
+#         └─ cuisine                  TP-Link Tapo C210 2K – 192.168.50.16
 #    3. ADVANCED FEATURES
 #         3.1 SEMANTIC SEARCH
 # ----------------------------------------------------------------------------
@@ -46,6 +50,7 @@
 #  Reolink Duo 3 (×3)      │ 4096×1152     │ 1536×432    │ 2048×1152 (L or R)
 #  Reolink RLC-810A        │ 3840×2160 4K  │ 640×360     │ —
 #  Reolink Doorbell POE    │ 2560×1920     │ 640×480     │ —
+#  TP-Link Tapo C210 (×3)  │ 2304×1296 2K  │ 640×360     │ —
 #  ─────────────────────────────────────────────────────────────────────────
 #
 #  DETECTION STREAM STRATEGY
@@ -86,6 +91,19 @@ mqtt:
 # 1.2 FFMPEG – CUDA HARDWARE ACCELERATION & OUTPUT PROFILES
 # ---------------------------------------------------------------------------
 ffmpeg:
+  # Explicit binary directory (added 2026-06-02).
+  # The stable-tensorrt image ships ffmpeg at /usr/lib/ffmpeg/7.0/bin/ffmpeg
+  # but Frigate's default lookup expects /usr/lib/ffmpeg/bin/ffmpeg.
+  # Frigate's `ffmpeg.path` is treated as a DIRECTORY and `/bin/ffmpeg` is
+  # appended automatically, so the directory containing the binary goes here.
+  # The docker-compose.calypso.yml entrypoint creates a symlink to bridge
+  # that gap, but the running container was created BEFORE the symlink shim
+  # was added (commit a49aa6d, 2026-06-01) and lacks it.
+  # Setting path: here bypasses the symlink requirement entirely. Once a
+  # container recreate is performed, this becomes a harmless explicit
+  # override that documents the actual binary location.
+  path: /usr/lib/ffmpeg/7.0
+
   # RTX 5060 Ti 16 GB — CUDA hardware decoding enabled.
   # -hwaccel_output_format cuda is intentionally omitted globally: it would
   # leave decoded frames as CUDA surfaces, breaking non-crop cameras whose
@@ -209,16 +227,25 @@ audio:
   #   smoke_alarm, fire_alarm, carbon_monoxide_alarm, car_alarm, siren
 
 # ---------------------------------------------------------------------------
-# 1.10 GO2RTC – PROXY VIA NUC go2rtc (192.168.50.112:8556)
+# 1.10 GO2RTC – DIRECT RTSP via Frigate internal go2rtc (NUC retired 2026-06-02)
 # ---------------------------------------------------------------------------
 # Frigate's internal go2rtc instance powers the web UI live view and provides
-# streams to Frigate's ffmpeg inputs.
+# streams to Frigate's ffmpeg inputs. Calypso's go2rtc now pulls RTSP
+# directly from each camera.
 #
-# Architecture:
-#   Camera (RTSP) → NUC go2rtc (:8556) → Calypso go2rtc (here) → Frigate ffmpeg
+# Architecture (since 2026-06-02):
+#   Camera (RTSP) → Calypso go2rtc (here, 127.0.0.1:8554) → Frigate ffmpeg
 #
-# The NUC go2rtc acts as a single-connection proxy per camera, reducing direct
-# RTSP load on the cameras. Calypso's go2rtc re-streams from the NUC.
+# Previously: Camera → NUC go2rtc (:8556) → Calypso go2rtc → Frigate ffmpeg.
+# The NUC proxy hop was retired so the Calypso go2rtc is the single re-stream
+# point. go2rtc reuses one upstream RTSP connection per camera across all
+# downstream Frigate consumers, so the per-camera load is unchanged.
+#
+# Reliability options (applied to every stream):
+#   • ffmpeg:rtsp_transport=tcp  — TCP transport prevents UDP packet loss
+#   • ffmpeg:cache=30            — 30-packet jitter buffer in go2rtc's ffmpeg
+# These mirror the options that the NUC go2rtc used previously and are
+# required to keep 4K main streams stable.
 #
 # IMPORTANT – CROP STRATEGY:
 #   go2rtc 1.9.10 cannot apply crop filters on its RTSP output. The
@@ -231,14 +258,26 @@ audio:
 #   • Crop camera ffmpeg.inputs.path points to the full main stream
 #     (rtsp://127.0.0.1:8554/<camera>_main), and Frigate crops before detect.
 #
-# NUC go2rtc RTSP endpoint: rtsp://go2rtc:go2rtc@192.168.50.112:8556/<stream>
+# Credentials:
+#   • Outdoor Reolink cams (Duo 3 / RLC-810A / Doorbell POE) use the
+#     built-in 'admin' account: admin:fG-56lui
+#   • Indoor TP-Link Tapo C210 cams use a dedicated 'frigate_nghia' account
+#     (the Tapo app's RTSP user): frigate_nghia:fG-56lui
+#   The Tapo C210 is a different vendor from the outdoor Reolink cams —
+#   it is NOT a Reolink product and is NOT related to ring-mqtt. It is
+#   used as an indoor Ring replacement.
 #
-# NUC stream name → Calypso logical name mapping:
-#   reolink_duo_allee_cote_main/sub      → allee_sur_le_cote   (192.168.50.129)
-#   reolink_duo_vue_sud_main/sub         → piscine_vue_toit    (192.168.50.7)
-#   reolink_duo_jardin_devant_main/sub   → jardin_devant       (192.168.50.18)
-#   reolink_vue_nord_sur_maison_main/sub → jardin_arriere      (192.168.50.207)
-#   reolink_vue_entree_main/sub          → vue_entree          (192.168.50.222)
+# Stream inventory (8 cameras, 16 unique physical streams, 22 entries):
+#   Outdoor Reolink (admin:fG-56lui):
+#     allee_sur_le_cote_main/sub     ← 192.168.50.129  Reolink Duo 3
+#     jardin_arriere_main/sub        ← 192.168.50.207  Reolink RLC-810A
+#     vue_entree_main/sub            ← 192.168.50.222  Reolink Doorbell POE
+#     jardin_devant_main/sub         ← 192.168.50.18   Reolink Duo 3
+#     piscine_vue_toit_main/sub      ← 192.168.50.7    Reolink Duo 3
+#   Indoor TP-Link Tapo C210 (frigate_nghia:fG-56lui, port 554):
+#     tapo_c210_salon_main/sub       ← 192.168.50.17   TP-Link Tapo C210 2K
+#     tapo_c210_buro_main/sub        ← 192.168.50.70   TP-Link Tapo C210 2K
+#     tapo_c210_cuisine_main/sub     ← 192.168.50.16   TP-Link Tapo C210 2K
 # ---------------------------------------------------------------------------
 go2rtc:
   webrtc:
@@ -250,85 +289,87 @@ go2rtc:
 
   streams:
     # ── Allée sur le côté — Reolink Duo 3 (192.168.50.129) ──────────────────
-    # NUC stream names: reolink_duo_allee_cote_main / reolink_duo_allee_cote_sub
-    # Main stream:  4096×1152  (full panoramic)
-    # Sub stream:   1536×432   (full panoramic, live view only)
+    # Main stream:  4096×1152  (full panoramic, used for recording)
+    # Sub stream:   1536×432   (full panoramic, used for live view)
     # Half-crops:   2048×1152  each (cropped by Frigate ffmpeg output_args.detect)
     allee_sur_le_cote_main:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
     allee_sur_le_cote_sub:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_sub
+      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
     allee_sur_le_cote_left:
       # VESTIGIAL – go2rtc 1.9.10 cannot crop RTSP output; crop is applied by
       # Frigate's ffmpeg via output_args.detect instead. Kept for potential
-      # future use (e.g. WebRTC live view of cropped half).
-      # Phase 5 surgical test: changed from ffmpeg-with-crop (which was
-      # returning HTTP 500 from go2rtc and leaving "consumers: null") to
-      # the plain main stream. Frigate's output_args.detect will crop.
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+      # future use (e.g. WebRTC live view of cropped half) and for external
+      # RTSP consumers (HA, browser) that may reference the logical name.
+      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
     allee_sur_le_cote_right:
       # VESTIGIAL – see allee_sur_le_cote_left note above.
-      # Phase 5 fix: replaced ffmpeg-with-crop with plain main stream
-      # pass-through. Frigate's output_args.detect does the crop.
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_allee_cote_main
+      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
 
     # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ──────
-    # NUC stream names: reolink_vue_nord_sur_maison_main / reolink_vue_nord_sur_maison_sub
     # Main stream:  3840×2160  (4K UHD, used for detection + recording)
     # Sub stream:   640×360    (used for live view only)
     jardin_arriere_main:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_main
+      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_main
     jardin_arriere_sub:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_nord_sur_maison_sub
+      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub
 
     # ── Vue entrée — Reolink Doorbell POE (192.168.50.222) ──────────────────
-    # NUC stream names: reolink_vue_entree_main / reolink_vue_entree_sub
     # Main stream:  2560×1920  (4:3 aspect, used for detection + recording)
     # Sub stream:   640×480    (4:3 aspect, used for live view only)
     vue_entree_main:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_main
+      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_main
     vue_entree_sub:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_vue_entree_sub
+      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_sub
 
     # ── Jardin devant — Reolink Duo 3 (192.168.50.18) ───────────────────────
-    # NUC stream names: reolink_duo_jardin_devant_main / reolink_duo_jardin_devant_sub
     # Main stream:  4096×1152  (full panoramic, used for recording)
     # Sub stream:   1536×432   (full panoramic, used for live view)
     # Half-crops:   2048×1152  each (cropped by Frigate ffmpeg output_args.detect)
     jardin_devant_main:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
+      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
     jardin_devant_sub:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_sub
+      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
     jardin_devant_main_left:
       # VESTIGIAL – see allee_sur_le_cote_left note above.
-      # Phase 5 fix: replaced ffmpeg-with-crop with plain main stream
-      # pass-through. Frigate's output_args.detect does the crop.
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
+      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
     jardin_devant_main_right:
       # VESTIGIAL – see allee_sur_le_cote_left note above.
-      # Phase 5 fix: replaced ffmpeg-with-crop with plain main stream
-      # pass-through. Frigate's output_args.detect does the crop.
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_jardin_devant_main
+      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
 
     # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────────
-    # NUC stream names: reolink_duo_vue_sud_main / reolink_duo_vue_sud_sub
     # Main stream:  4096×1152  (full panoramic)
     # Sub stream:   1536×432   (full panoramic, live view only)
     # Half-crops:   2048×1152  each (cropped by Frigate ffmpeg output_args.detect)
     piscine_vue_toit_main:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
     piscine_vue_toit_sub:
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_sub
+      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
     piscine_vue_toit_left:
       # VESTIGIAL – see allee_sur_le_cote_left note above.
-      # Phase 5 fix: replaced ffmpeg-with-crop with plain main stream
-      # pass-through. Frigate's output_args.detect does the crop.
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
     piscine_vue_toit_right:
       # VESTIGIAL – see allee_sur_le_cote_left note above.
-      # Phase 5 fix: replaced ffmpeg-with-crop with plain main stream
-      # pass-through. Frigate's output_args.detect does the crop.
-      - rtsp://go2rtc:go2rtc@192.168.50.112:8556/reolink_duo_vue_sud_main
+      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
+
+    # ── TP-Link Tapo C210 indoor cameras (added 2026-06-02) ────────────────
+    # Indoor TP-Link Tapo C210 2K cams used as Ring replacements.
+    # Different vendor from the outdoor Reolink cams (NOT Reolink, NOT
+    # related to ring-mqtt). Tapo uses standard RTSP on port 554 with
+    # /stream1 (main) and /stream2 (sub) path conventions.
+    # Main: 2304×1296 (2K QHD)  Sub: 640×360
+    tapo_c210_salon_main:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream1
+    tapo_c210_salon_sub:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream2
+    tapo_c210_buro_main:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream1
+    tapo_c210_buro_sub:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream2
+    tapo_c210_cuisine_main:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream1
+    tapo_c210_cuisine_sub:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream2
 
 # ============================================================================
 # 2. CAMERA DEFINITIONS
@@ -1375,6 +1416,149 @@ cameras:
     motion:
       mask:
         0,0,0.571,0,0.485,0.288,0.439,0.524,0.435,0.568,0.413,0.565,0.347,0.444,0.299,0.45,0.263,0.424,0.235,0.425,0.225,0.402,0.208,0.349,0.195,0.348,0.111,0.361,0.074,0.314,0.039,0.276,0.018,0.236,0.037,0.138,0.078,0.117,0.029,0.055
+
+  # ==========================================================================
+  # INDOOR REOLINK C210 CAMERAS (added 2026-06-02)
+  # TP-Link Tapo C210 2K indoor cams used as Ring replacements inside the house.
+  # These use a dedicated 'frigate_nghia' account with limited permissions
+  # (view-only, no PTZ). NOT related to ring-mqtt.
+  # All three use DEFAULT detection parameters — track: [person] and inherit
+  # global objects.filters.person from section 1.5
+  # (min_area: 300, min_score: 0.40, threshold: 0.45, max_area: 100000).
+  # Indoor scenes are simple and subjects are close (~3-5m), so global
+  # defaults are appropriate. Per-cam overrides can be added if false
+  # positives/negatives are observed.
+  # Resolution: main 2304×1296 (2K QHD), sub 640×360.
+  # ==========================================================================
+
+  # ==========================================================================
+  # CAMERA: SALON — TP-Link Tapo C210 2K (indoor, living room)
+  # Position:  Indoor, living room
+  # Streams:
+  #   detect  → main 2304×1296 (2K QHD)
+  #   record  → main 2304×1296 (shared connection, Frigate deduplicates)
+  #   audio   → main (built-in mic)
+  #   live    → sub 640×360   (lightweight for UI grid)
+  # ==========================================================================
+  salon:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/tapo_c210_salon_main
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/tapo_c210_salon_main
+          roles: [record, audio]
+
+    live:
+      streams:
+        Salon: tapo_c210_salon_sub
+
+    audio:
+      enabled: true
+
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+
+    detect:
+      # TP-Link Tapo C210 2K main stream = 2304×1296 (2K QHD)
+      width: 2304
+      height: 1296
+      fps: 10
+
+    objects:
+      track: [person]
+      # Inherits global filters.person from section 1.5 (no override).
+
+    snapshots:
+      enabled: true
+
+    review:
+      alerts: {}
+      detections: {}
+
+  # ==========================================================================
+  # CAMERA: BURO — TP-Link Tapo C210 2K (indoor, office/study)
+  # ==========================================================================
+  buro:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/tapo_c210_buro_main
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/tapo_c210_buro_main
+          roles: [record, audio]
+
+    live:
+      streams:
+        Bureau: tapo_c210_buro_sub
+
+    audio:
+      enabled: true
+
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+
+    detect:
+      # TP-Link Tapo C210 2K main stream = 2304×1296 (2K QHD)
+      width: 2304
+      height: 1296
+      fps: 10
+
+    objects:
+      track: [person]
+      # Inherits global filters.person from section 1.5 (no override).
+
+    snapshots:
+      enabled: true
+
+    review:
+      alerts: {}
+      detections: {}
+
+  # ==========================================================================
+  # CAMERA: CUISINE — TP-Link Tapo C210 2K (indoor, kitchen)
+  # ==========================================================================
+  cuisine:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/tapo_c210_cuisine_main
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/tapo_c210_cuisine_main
+          roles: [record, audio]
+
+    live:
+      streams:
+        Cuisine: tapo_c210_cuisine_sub
+
+    audio:
+      enabled: true
+
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+
+    detect:
+      # TP-Link Tapo C210 2K main stream = 2304×1296 (2K QHD)
+      width: 2304
+      height: 1296
+      fps: 10
+
+    objects:
+      track: [person]
+      # Inherits global filters.person from section 1.5 (no override).
+
+    snapshots:
+      enabled: true
+
+    review:
+      alerts: {}
+      detections: {}
 
 # ===========================================================================
 # GLOBAL FOOTER
