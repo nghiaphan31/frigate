@@ -7,8 +7,12 @@ Wants=frigate-stack.service
 
 [Service]
 Type=oneshot
+# NOTE: paths must match the real on-disk location. If you ever move the
+# repo, re-run ./install-systemd.sh so the installed units in
+# /etc/systemd/system are rewritten. Hand-editing is fine for one-offs
+# but a re-install is the durable fix.
 WorkingDirectory=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
-ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/frigate/bring-up.sh
+ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/bring-up.sh
 EnvironmentFile=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/.env
 StandardOutput=journal
 StandardError=journal
