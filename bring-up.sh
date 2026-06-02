@@ -112,6 +112,7 @@ fi
 STEP_OK=0
 STEP_WARN=0
 STEP_FAIL=0
+STEP_SKIP=0
 TOTAL_STEPS=14
 SKIP_BRINGUP=0
 MQTT_ENABLED=1
@@ -164,16 +165,47 @@ except Exception:
 }
 
 # Report a single pipeline step.  Args: name status detail
+# First-failure short-circuit: once any check FAILs, all later checks report
+# SKIP (with the failing prereq as the reason). This stops the report from
+# cascading into a wall of misleading red FAILs after a single root cause.
+FIRST_FAIL_STEP=0
+
+# Result store — REPORT_RESULTS is a bash array of
+#   "<STATUS>|<name>|<detail>|<remediation>"
+# one entry per check (including SKIPs). Used by --snapshot (commit 2)
+# to serialise the 14-step outcome as a single JSON.
+REPORT_RESULTS=()
+
 report() {
-    local name="$1" status="$2" detail="$3"
+    local name="$1" status="$2" detail="$3" remediation="${4:-}"
     local color tag
     case "$status" in
         OK)   color=$GRN; tag="  OK  "; STEP_OK=$((STEP_OK+1))   ;;
         WARN) color=$YEL; tag="  WARN "; STEP_WARN=$((STEP_WARN+1)) ;;
-        FAIL) color=$RED; tag="  FAIL "; STEP_FAIL=$((STEP_FAIL+1)) ;;
+        FAIL) color=$RED; tag="  FAIL "; STEP_FAIL=$((STEP_FAIL+1))
+              [ "$FIRST_FAIL_STEP" -eq 0 ] && \
+                  FIRST_FAIL_STEP=$(echo "$name" | cut -d/ -f1 | tr -d ' ') ;;
     esac
     printf "  [%s] %-30s %b%s%b   %s\n" \
         "$tag" "$name" "$color" "$status" "$NC" "$detail"
+    if [ -n "$remediation" ]; then
+        # Word-wrap the remediation at ~80 cols; if the operator's terminal
+        # is narrower the wrap will just be approximate.
+        local fix_indent="              "
+        printf "%s%bfix:%b %s\n" "$fix_indent" "$DIM" "$NC" "$remediation"
+    fi
+    REPORT_RESULTS+=("$status|$name|$detail|$remediation")
+}
+
+report_skip() {
+    # Called by checks when a prior step has already FAILed. Records the
+    # skip in REPORT_RESULTS (so --snapshot sees the full 14-step matrix
+    # even when the first failure short-circuits the rest).
+    local name="$1" reason="$2"
+    printf "  [ SKIP ] %-30s %b%s%b   %s\n" \
+        "$name" "$DIM" "SKIP" "$NC" "$reason"
+    STEP_SKIP=$((STEP_SKIP+1))
+    REPORT_RESULTS+=("SKIP|$name|$reason|")
 }
 
 # ------------------------------------------------------------------------------
@@ -469,6 +501,12 @@ except Exception as e:
 # 5. Per-pipeline-step status report (14 steps)
 # ------------------------------------------------------------------------------
 status_report() {
+    # Reset per-run state so --status can be called repeatedly without
+    # contamination from a prior invocation.
+    FIRST_FAIL_STEP=0
+    REPORT_RESULTS=()
+    STEP_SKIP=0
+
     echo
     echo "═══════════════════════════════════════════════════════════════════════"
     echo "  FRIGATE PIPELINE STATUS REPORT — $CAMERA_NAME"
@@ -484,109 +522,148 @@ status_report() {
     go2rtc_json=$(curl -fsS --max-time 3 "$GO2RTC_API/api/streams" 2>/dev/null || echo "")
 
     # --- 1/14: NVIDIA GPU ---
-    local gpu_line
-    gpu_line=$(nvidia-smi --query-gpu=driver_version,name,utilization.gpu,memory.used,memory.total \
-        --format=csv,noheader,nounits 2>/dev/null | head -1)
-    if [ -n "$gpu_line" ]; then
-        IFS=',' read -r drv name util memu memt <<< "$gpu_line"
-        drv=$(echo "$drv" | tr -d ' '); name=$(echo "$name" | sed 's/^ *//')
-        report "1/14  NVIDIA GPU" "OK" "driver=$drv, $name, util=${util}%, mem=${memu}/${memt} MiB"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "1/14  NVIDIA GPU" "prereq (see above) failed"
     else
-        report "1/14  NVIDIA GPU" "FAIL" "nvidia-smi returned no data"
+        local gpu_line
+        gpu_line=$(nvidia-smi --query-gpu=driver_version,name,utilization.gpu,memory.used,memory.total \
+            --format=csv,noheader,nounits 2>/dev/null | head -1)
+        if [ -n "$gpu_line" ]; then
+            IFS=',' read -r drv name util memu memt <<< "$gpu_line"
+            drv=$(echo "$drv" | tr -d ' '); name=$(echo "$name" | sed 's/^ *//')
+            report "1/14  NVIDIA GPU" "OK" "driver=$drv, $name, util=${util}%, mem=${memu}/${memt} MiB"
+        else
+            report "1/14  NVIDIA GPU" "FAIL" "nvidia-smi returned no data" \
+                "sudo modprobe nvidia nvidia-uvm nvidia-modeset nvidia-uvm-tools  # then re-run"
+        fi
     fi
 
     # --- 2/14: Camera RTSP ---
-    local rtt
-    rtt=$(ping -c 1 -W 1 "$CAMERA_IP" 2>/dev/null \
-        | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
-    if [ -n "$rtt" ]; then
-        report "2/14  Camera RTSP reachability" "OK" \
-            "$CAMERA_IP:$CAMERA_RTSP_PORT reachable (${rtt} ms RTT)"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "2/14  Camera RTSP reachability" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "2/14  Camera RTSP reachability" "FAIL" \
-            "$CAMERA_IP:$CAMERA_RTSP_PORT unreachable"
+        local rtt
+        rtt=$(ping -c 1 -W 1 "$CAMERA_IP" 2>/dev/null \
+            | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
+        if [ -n "$rtt" ]; then
+            report "2/14  Camera RTSP reachability" "OK" \
+                "$CAMERA_IP:$CAMERA_RTSP_PORT reachable (${rtt} ms RTT)"
+        else
+            report "2/14  Camera RTSP reachability" "FAIL" \
+                "$CAMERA_IP:$CAMERA_RTSP_PORT unreachable" \
+                "timeout 3 bash -c '>/dev/tcp/$CAMERA_IP/$CAMERA_RTSP_PORT'  # LAN / camera / firewall"
+        fi
     fi
 
     # --- 3/14: go2rtc internal ---
-    if [ -n "$go2rtc_json" ]; then
-        local streams_count
-        streams_count=$(jget "$go2rtc_json" "len(d)")
-        report "3/14  go2rtc internal" "OK" \
-            "8554 listening, ${streams_count} stream(s), WebRTC on 8555"
-    elif timeout 2 bash -c ">/dev/tcp/127.0.0.1/8554" 2>/dev/null; then
-        report "3/14  go2rtc internal" "WARN" \
-            "port 8554 listening, but $GO2RTC_API/api/streams not responding"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "3/14  go2rtc internal" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "3/14  go2rtc internal" "FAIL" \
-            "go2rtc not reachable on 8554 or $GO2RTC_API"
+        if [ -n "$go2rtc_json" ]; then
+            local streams_count
+            streams_count=$(jget "$go2rtc_json" "len(d)")
+            report "3/14  go2rtc internal" "OK" \
+                "8554 listening, ${streams_count} stream(s), WebRTC on 8555"
+        elif timeout 2 bash -c ">/dev/tcp/127.0.0.1/8554" 2>/dev/null; then
+            report "3/14  go2rtc internal" "WARN" \
+                "port 8554 listening, but $GO2RTC_API/api/streams not responding" \
+                "curl -fsS $GO2RTC_API/api/streams  # check go2rtc health"
+        else
+            report "3/14  go2rtc internal" "FAIL" \
+                "go2rtc not reachable on 8554 or $GO2RTC_API" \
+                "docker logs --tail=100 frigate | grep -E 'go2rtc|listen'"
+        fi
     fi
 
     # --- 4/14: Capture ffmpeg (allee) ---
-    local cam camfps
-    cam=$(jget "$cam_stats" "json.dumps(d.get('cameras',{}).get('$CAMERA_NAME', {}))")
-    camfps=$(jget "$cam" "d.get('camera_fps', 0)")
-    if [ -n "$camfps" ] && [ "${camfps%.*}" -ge 1 ] 2>/dev/null; then
-        report "4/14  Capture ffmpeg ($CAMERA_NAME)" "OK" \
-            "1 ffmpeg process, ${camfps} fps, roles=[detect, record, audio]"
-    elif [ "$cam" != "{}" ] && [ -n "$cam" ]; then
-        report "4/14  Capture ffmpeg ($CAMERA_NAME)" "WARN" \
-            "camera present, camera_fps=${camfps:-0}"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "4/14  Capture ffmpeg ($CAMERA_NAME)" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "4/14  Capture ffmpeg ($CAMERA_NAME)" "FAIL" \
-            "$CAMERA_NAME not in /api/stats.cameras"
+        local cam camfps
+        cam=$(jget "$cam_stats" "json.dumps(d.get('cameras',{}).get('$CAMERA_NAME', {}))")
+        camfps=$(jget "$cam" "d.get('camera_fps', 0)")
+        if [ -n "$camfps" ] && [ "${camfps%.*}" -ge 1 ] 2>/dev/null; then
+            report "4/14  Capture ffmpeg ($CAMERA_NAME)" "OK" \
+                "1 ffmpeg process, ${camfps} fps, roles=[detect, record, audio]"
+        elif [ "$cam" != "{}" ] && [ -n "$cam" ]; then
+            report "4/14  Capture ffmpeg ($CAMERA_NAME)" "WARN" \
+                "camera present, camera_fps=${camfps:-0}" \
+                "sleep 5 && ./bring-up.sh --status  # transient during startup"
+        else
+            report "4/14  Capture ffmpeg ($CAMERA_NAME)" "FAIL" \
+                "$CAMERA_NAME not in /api/stats.cameras" \
+                "docker logs --tail=100 frigate | grep -E 'capture|ffmpeg|$CAMERA_NAME'"
+        fi
     fi
 
     # --- 5/14: Detect process ---
     # Try the same 3 fallback paths the wait-detection poll uses. The report
     # otherwise reports FAIL when Frigate 0.17 only populates process_fps.
-    local detfps detfield pfps
-    detfps=$(jget "$cam" "d.get('detection_fps',0)") || detfps=0
-    [ -z "$detfps" ] && detfps=0
-    if [ "${detfps%.*}" -ge 1 ] 2>/dev/null; then
-        detfield=detection_fps
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "5/14  Detect process ($CAMERA_NAME)" "prereq step $FIRST_FAIL_STEP failed"
     else
-        pfps=$(jget "$cam" "d.get('process_fps',0)") || pfps=0
-        [ -z "$pfps" ] && pfps=0
-        if [ "${pfps%.*}" -ge 1 ] 2>/dev/null; then
-            detfps=$pfps
-            detfield=process_fps
-        else
+        local detfps detfield pfps
+        detfps=$(jget "$cam" "d.get('detection_fps',0)") || detfps=0
+        [ -z "$detfps" ] && detfps=0
+        if [ "${detfps%.*}" -ge 1 ] 2>/dev/null; then
             detfield=detection_fps
+        else
+            pfps=$(jget "$cam" "d.get('process_fps',0)") || pfps=0
+            [ -z "$pfps" ] && pfps=0
+            if [ "${pfps%.*}" -ge 1 ] 2>/dev/null; then
+                detfps=$pfps
+                detfield=process_fps
+            else
+                detfield=detection_fps
+            fi
         fi
-    fi
-    if [ -n "$detfps" ] && [ "${detfps%.*}" -ge 1 ] 2>/dev/null; then
-        report "5/14  Detect process ($CAMERA_NAME)" "OK" \
-            "det=$detfps ($detfield), camera_fps=$camfps"
-    else
-        report "5/14  Detect process ($CAMERA_NAME)" "FAIL" \
-            "det=${detfps:-0} (expected >= 1)"
+        if [ -n "$detfps" ] && [ "${detfps%.*}" -ge 1 ] 2>/dev/null; then
+            report "5/14  Detect process ($CAMERA_NAME)" "OK" \
+                "det=$detfps ($detfield), camera_fps=$camfps"
+        else
+            report "5/14  Detect process ($CAMERA_NAME)" "FAIL" \
+                "det=${detfps:-0} (expected >= 1)" \
+                "docker logs --tail=100 frigate | grep -E 'TRT|engine|motion'  # if no TRT errors: scene may be quiet (throw a sheet in front of the camera); if 'engine build failed' see STARTUP.md §5.3"
+        fi
     fi
 
     # --- 6/14: Motion pre-filter ---
-    local motion_t motion_c
-    motion_t=$(jget "$cfg_json" "d.get('motion',{}).get('threshold', '?')")
-    motion_c=$(jget "$cfg_json" "d.get('motion',{}).get('contour_area', '?')")
-    report "6/14  Motion pre-filter" "OK" \
-        "threshold=$motion_t, contour_area=$motion_c, improve_contrast=true"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "6/14  Motion pre-filter" "prereq step $FIRST_FAIL_STEP failed"
+    else
+        local motion_t motion_c
+        motion_t=$(jget "$cfg_json" "d.get('motion',{}).get('threshold', '?')")
+        motion_c=$(jget "$cfg_json" "d.get('motion',{}).get('contour_area', '?')")
+        report "6/14  Motion pre-filter" "OK" \
+            "threshold=$motion_t, contour_area=$motion_c, improve_contrast=true"
+    fi
 
     # --- 7/14: Object detection (TRT) ---
-    local det_inf det_model
-    det_inf=$(jget "$stats_json" "d.get('detectors',{}).get('onnx1',{}).get('inference_speed', '?')")
-    det_model=$(jget "$cfg_json" "d.get('model',{}).get('path', '?')")
-    if [ -n "$det_inf" ] && [ "$det_inf" != "?" ]; then
-        report "7/14  Object detection (TRT)" "OK" \
-            "model=$det_model, inference=${det_inf} ms"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "7/14  Object detection (TRT)" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "7/14  Object detection (TRT)" "WARN" \
-            "inference_speed not yet reported (TRT still building?)"
+        local det_inf det_model
+        det_inf=$(jget "$stats_json" "d.get('detectors',{}).get('onnx1',{}).get('inference_speed', '?')")
+        det_model=$(jget "$cfg_json" "d.get('model',{}).get('path', '?')")
+        if [ -n "$det_inf" ] && [ "$det_inf" != "?" ]; then
+            report "7/14  Object detection (TRT)" "OK" \
+                "model=$det_model, inference=${det_inf} ms"
+        else
+            report "7/14  Object detection (TRT)" "WARN" \
+                "inference_speed not yet reported (TRT still building?)" \
+                "docker logs --tail=50 frigate | grep -E 'TRT|tensorrt'  # first-run build is ~65s"
+        fi
     fi
 
     # --- 8/14: Person filter (physics) ---
-    # Frigate 0.17 has no /api/config endpoint. Read the per-camera filter
-    # directly from the local config.yml on the host (which is also what
-    # the container sees at /config/config.yml).
-    local pfilt
-    pfilt=$(python3 -c "
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "8/14  Person filter (physics)" "prereq step $FIRST_FAIL_STEP failed"
+    else
+        # Frigate 0.17 has no /api/config endpoint. Read the per-camera filter
+        # directly from the local config.yml on the host (which is also what
+        # the container sees at /config/config.yml).
+        local pfilt
+        pfilt=$(python3 -c "
 import yaml
 try:
     d = yaml.safe_load(open('config.yml'))
@@ -594,37 +671,47 @@ try:
 except Exception as e:
     print('PARSE_ERROR: ' + str(e))
 " 2>/dev/null)
-    if [ -n "$pfilt" ] && [[ "$pfilt" != "PARSE_ERROR:"* ]] && [ -n "$(echo "$pfilt" | tr -d '[:space:]')" ]; then
-        local min_a max_a min_r max_r thr ms
-        min_a=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_area','?'))" 2>/dev/null)
-        max_a=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('max_area','?'))" 2>/dev/null)
-        min_r=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_ratio','?'))" 2>/dev/null)
-        max_r=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('max_ratio','?'))" 2>/dev/null)
-        thr=$(echo   "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('threshold','?'))" 2>/dev/null)
-        ms=$(echo    "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_score','?'))" 2>/dev/null)
-        report "8/14  Person filter (physics)" "OK" \
-            "min_area=$min_a, max_area=$max_a, ratio=$min_r/$max_r, threshold=$thr, min_score=$ms"
-    else
-        report "8/14  Person filter (physics)" "FAIL" \
-            "person filter not found at cameras.$CAMERA_NAME.objects.filters.person in config.yml"
+        if [ -n "$pfilt" ] && [[ "$pfilt" != "PARSE_ERROR:"* ]] && [ -n "$(echo "$pfilt" | tr -d '[:space:]')" ]; then
+            local min_a max_a min_r max_r thr ms
+            min_a=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_area','?'))" 2>/dev/null)
+            max_a=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('max_area','?'))" 2>/dev/null)
+            min_r=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_ratio','?'))" 2>/dev/null)
+            max_r=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('max_ratio','?'))" 2>/dev/null)
+            thr=$(echo   "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('threshold','?'))" 2>/dev/null)
+            ms=$(echo    "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_score','?'))" 2>/dev/null)
+            report "8/14  Person filter (physics)" "OK" \
+                "min_area=$min_a, max_area=$max_a, ratio=$min_r/$max_r, threshold=$thr, min_score=$ms"
+        else
+            report "8/14  Person filter (physics)" "FAIL" \
+                "person filter not found at cameras.$CAMERA_NAME.objects.filters.person in config.yml" \
+                "see config.yml cameras.$CAMERA_NAME.objects.filters.person  # add min_area, max_area, etc."
+        fi
     fi
 
     # --- 9/14: Zone filters ---
-    local zones p_lo r_lo
-    zones=$(jget "$cfg_json" "list(d['cameras']['$CAMERA_NAME'].get('zones',{}).keys())")
-    if [ -n "$zones" ] && [ "$zones" != "[]" ]; then
-        p_lo=$(jget "$cfg_json" "d['cameras']['$CAMERA_NAME']['zones'].get('prive',{}).get('loitering_time', '?')")
-        r_lo=$(jget "$cfg_json" "d['cameras']['$CAMERA_NAME']['zones'].get('rodage',{}).get('loitering_time', '?')")
-        report "9/14  Zone filters" "OK" \
-            "zones=$zones (prive loiter=${p_lo}s, rodage loiter=${r_lo}s)"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "9/14  Zone filters" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "9/14  Zone filters" "FAIL" "no zones configured for $CAMERA_NAME"
+        local zones p_lo r_lo
+        zones=$(jget "$cfg_json" "list(d['cameras']['$CAMERA_NAME'].get('zones',{}).keys())")
+        if [ -n "$zones" ] && [ "$zones" != "[]" ]; then
+            p_lo=$(jget "$cfg_json" "d['cameras']['$CAMERA_NAME']['zones'].get('prive',{}).get('loitering_time', '?')")
+            r_lo=$(jget "$cfg_json" "d['cameras']['$CAMERA_NAME']['zones'].get('rodage',{}).get('loitering_time', '?')")
+            report "9/14  Zone filters" "OK" \
+                "zones=$zones (prive loiter=${p_lo}s, rodage loiter=${r_lo}s)"
+        else
+            report "9/14  Zone filters" "FAIL" "no zones configured for $CAMERA_NAME" \
+                "add zones under cameras.$CAMERA_NAME.zones in config.yml"
+        fi
     fi
 
     # --- 10/14: Event lifecycle ---
-    local events_24h
-    events_24h=$(curl -fsS --max-time 3 "$FRIGATE_API/api/events?limit=100" 2>/dev/null \
-        | python3 -c '
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "10/14  Event lifecycle" "prereq step $FIRST_FAIL_STEP failed"
+    else
+        local events_24h
+        events_24h=$(curl -fsS --max-time 3 "$FRIGATE_API/api/events?limit=100" 2>/dev/null \
+            | python3 -c '
 import json, sys, time
 try:
     d = json.load(sys.stdin)
@@ -633,10 +720,12 @@ try:
 except Exception:
     print("?")
 ' 2>/dev/null || echo "?")
-    if [ "$events_24h" = "?" ]; then
-        report "10/14  Event lifecycle" "WARN" "could not query /api/events"
-    else
-        report "10/14  Event lifecycle" "OK" "events in last 24h: $events_24h"
+        if [ "$events_24h" = "?" ]; then
+            report "10/14  Event lifecycle" "WARN" "could not query /api/events" \
+                "curl -fsS '$FRIGATE_API/api/events?limit=5'  # Frigate still starting up, or DB locked"
+        else
+            report "10/14  Event lifecycle" "OK" "events in last 24h: $events_24h"
+        fi
     fi
 
     # --- 11/14: MQTT publisher ---
@@ -645,36 +734,51 @@ except Exception:
     # we can detect by tailing the recent journal. We mark this as WARN
     # because the script cannot definitively prove the broker is unreachable
     # from inside /api/stats alone — only the log or a manual probe can.
-    local mqtt_log_hits
-    mqtt_log_hits=$(docker logs --tail=200 "$CONTAINER_NAME" 2>&1 \
-        | grep -c "frigate.comms.mqtt.*ERROR.*MQTT disconnected" || true)
-    if [ "${mqtt_log_hits:-0}" -ge 1 ] 2>/dev/null; then
-        report "11/14  MQTT publisher" "WARN" \
-            "$MQTT_HOST disconnects seen in container log ($mqtt_log_hits in last 200 lines) — check client_id, ACL, or broker reachability"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "11/14  MQTT publisher" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "11/14  MQTT publisher" "OK" \
-            "$MQTT_HOST: no MQTT-disconnect log lines in recent container output (Frigate 0.17 does not expose /api/stats.mqtt, so this is a best-effort log check)"
+        local mqtt_log_hits
+        mqtt_log_hits=$(docker logs --tail=200 "$CONTAINER_NAME" 2>&1 \
+            | grep -c "frigate.comms.mqtt.*ERROR.*MQTT disconnected" || true)
+        if [ "${mqtt_log_hits:-0}" -ge 1 ] 2>/dev/null; then
+            report "11/14  MQTT publisher" "WARN" \
+                "$MQTT_HOST disconnects seen in container log ($mqtt_log_hits in last 200 lines) — check client_id, ACL, or broker reachability" \
+                "mosquitto_sub -h $MQTT_HOST -p $MQTT_PORT -u $MQTT_USER -P $MQTT_PASS -t '\$SYS/broker/version' -W 5  # check broker; verify client_id 'frigate_calypso' is unique"
+        else
+            report "11/14  MQTT publisher" "OK" \
+                "$MQTT_HOST: no MQTT-disconnect log lines in recent container output (Frigate 0.17 does not expose /api/stats.mqtt, so this is a best-effort log check)"
+        fi
     fi
 
     # --- 12/14: Recording path ---
-    if [ -d "$MEDIA_PATH" ] && [ -w "$MEDIA_PATH" ]; then
-        local free
-        free=$(df -BG "$MEDIA_PATH" 2>/dev/null | tail -1 | awk '{print $4}')
-        report "12/14  Recording path" "OK" \
-            "$MEDIA_PATH (${free} free, writable)"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "12/14  Recording path" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "12/14  Recording path" "FAIL" \
-            "$MEDIA_PATH missing or not writable"
+        if [ -d "$MEDIA_PATH" ] && [ -w "$MEDIA_PATH" ]; then
+            local free
+            free=$(df -BG "$MEDIA_PATH" 2>/dev/null | tail -1 | awk '{print $4}')
+            report "12/14  Recording path" "OK" \
+                "$MEDIA_PATH (${free} free, writable)"
+        else
+            report "12/14  Recording path" "FAIL" \
+                "$MEDIA_PATH missing or not writable" \
+                "mountpoint -q \"$MEDIA_PATH\"  # if not mounted: sudo mount -a  (NFS); if not writable: check perms / NAS export"
+        fi
     fi
 
     # --- 13/14: Semantic search ---
-    local sem
-    sem=$(jget "$stats_json" "d.get('semantic_search',{}).get('model_name', '?')")
-    if [ -n "$sem" ] && [ "$sem" != "?" ]; then
-        report "13/14  Semantic search" "OK" "model=$sem"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "13/14  Semantic search" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "13/14  Semantic search" "WARN" \
-            "stats not reporting semantic_search (model not loaded yet?)"
+        local sem
+        sem=$(jget "$stats_json" "d.get('semantic_search',{}).get('model_name', '?')")
+        if [ -n "$sem" ] && [ "$sem" != "?" ]; then
+            report "13/14  Semantic search" "OK" "model=$sem"
+        else
+            report "13/14  Semantic search" "WARN" \
+                "stats not reporting semantic_search (model not loaded yet?)" \
+                "docker logs --tail=50 frigate | grep -E 'semantic|embedding|jina'  # model loads lazily on first event"
+        fi
     fi
 
     # --- 14/14: Web UI / API ---
@@ -682,17 +786,23 @@ except Exception:
     # responded (200), so the API is up — only the version field is empty.
     # Treat empty as WARN (not FAIL); only a non-response (jget returns "?")
     # is a hard fail.
-    local ver
-    ver=$(jget "$ver_json" "d.get('version','?')")
-    if [ "$ver" = "?" ]; then
-        report "14/14  Web UI / API" "FAIL" \
-            "$FRIGATE_API/api/version not responding"
-    elif [ -z "$ver" ]; then
-        report "14/14  Web UI / API" "WARN" \
-            "$FRIGATE_API listening, /api/version returned empty version field"
+    if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
+        report_skip "14/14  Web UI / API" "prereq step $FIRST_FAIL_STEP failed"
     else
-        report "14/14  Web UI / API" "OK" \
-            "$FRIGATE_API listening, /api/version=$ver"
+        local ver
+        ver=$(jget "$ver_json" "d.get('version','?')")
+        if [ "$ver" = "?" ]; then
+            report "14/14  Web UI / API" "FAIL" \
+                "$FRIGATE_API/api/version not responding" \
+                "docker logs --tail=100 frigate | grep -E 'uvicorn|web|ERROR'  # is the web server thread alive?"
+        elif [ -z "$ver" ]; then
+            report "14/14  Web UI / API" "WARN" \
+                "$FRIGATE_API listening, /api/version returned empty version field" \
+                "curl -v $FRIGATE_API/api/version  # Frigate 0.17 known cosmetic bug; safe to ignore"
+        else
+            report "14/14  Web UI / API" "OK" \
+                "$FRIGATE_API listening, /api/version=$ver"
+        fi
     fi
 
     echo "───────────────────────────────────────────────────────────────────────"
@@ -701,12 +811,12 @@ except Exception:
         printf "  %bSUMMARY: %d/%d OK%b\n" "$GRN" "$STEP_OK" "$TOTAL_STEPS" "$NC"
         final_state="HEALTHY"
     elif [ "$STEP_FAIL" -eq 0 ]; then
-        printf "  %bSUMMARY: %d OK, %d WARN, 0 FAIL%b\n" \
-            "$YEL" "$STEP_OK" "$STEP_WARN" "$NC"
+        printf "  %bSUMMARY: %d OK, %d WARN, %d SKIP, 0 FAIL%b\n" \
+            "$YEL" "$STEP_OK" "$STEP_WARN" "$STEP_SKIP" "$NC"
         final_state="DEGRADED"
     else
-        printf "  %bSUMMARY: %d OK, %d WARN, %d FAIL%b\n" \
-            "$RED" "$STEP_OK" "$STEP_WARN" "$STEP_FAIL" "$NC"
+        printf "  %bSUMMARY: %d OK, %d WARN, %d SKIP, %d FAIL%b\n" \
+            "$RED" "$STEP_OK" "$STEP_WARN" "$STEP_SKIP" "$STEP_FAIL" "$NC"
         final_state="UNHEALTHY"
     fi
     echo "═══════════════════════════════════════════════════════════════════════"
