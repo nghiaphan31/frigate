@@ -121,10 +121,27 @@ FINAL_STATE=""
 # ------------------------------------------------------------------------------
 # Parse args
 # ------------------------------------------------------------------------------
+# Snapshot / baseline flags (commit 2: feature C). All three are no-ops
+# during pre-flight / waits — they only take effect after the
+# 14-step report has populated REPORT_RESULTS[].
+#   --snapshot                       print a JSON snapshot of the 14
+#                                    checks to stdout (in addition to the
+#                                    normal human-readable report)
+#   --snapshot-write=PATH            same JSON, written to file PATH
+#                                    (overwrites)
+#   --snapshot-compare=BASELINE      compare current snapshot to baseline
+#                                    JSON; exit 1 on drift, 0 on match
+SNAPSHOT_MODE=0
+SNAPSHOT_WRITE_PATH=""
+SNAPSHOT_BASELINE=""
+
 for arg in "$@"; do
     case "$arg" in
-        --status)    SKIP_BRINGUP=1 ;;
-        --no-mqtt)   MQTT_ENABLED=0 ;;
+        --status)             SKIP_BRINGUP=1 ;;
+        --no-mqtt)            MQTT_ENABLED=0 ;;
+        --snapshot)           SNAPSHOT_MODE=1 ;;
+        --snapshot-write=*)   SNAPSHOT_MODE=1; SNAPSHOT_WRITE_PATH="${arg#*=}" ;;
+        --snapshot-compare=*) SNAPSHOT_MODE=1; SNAPSHOT_BASELINE="${arg#*=}" ;;
         --help|-h)
             sed -n '2,40p' "$0"
             exit 0
@@ -806,24 +823,26 @@ except Exception:
     fi
 
     echo "───────────────────────────────────────────────────────────────────────"
-    local final_state
+    # FINAL_STATE is global so the snapshot / baseline functions (commit 2)
+    # can read it without us having to plumb it through return values.
+    FINAL_STATE=""
     if [ "$STEP_FAIL" -eq 0 ] && [ "$STEP_WARN" -eq 0 ]; then
         printf "  %bSUMMARY: %d/%d OK%b\n" "$GRN" "$STEP_OK" "$TOTAL_STEPS" "$NC"
-        final_state="HEALTHY"
+        FINAL_STATE="HEALTHY"
     elif [ "$STEP_FAIL" -eq 0 ]; then
         printf "  %bSUMMARY: %d OK, %d WARN, %d SKIP, 0 FAIL%b\n" \
             "$YEL" "$STEP_OK" "$STEP_WARN" "$STEP_SKIP" "$NC"
-        final_state="DEGRADED"
+        FINAL_STATE="DEGRADED"
     else
         printf "  %bSUMMARY: %d OK, %d WARN, %d SKIP, %d FAIL%b\n" \
             "$RED" "$STEP_OK" "$STEP_WARN" "$STEP_SKIP" "$STEP_FAIL" "$NC"
-        final_state="UNHEALTHY"
+        FINAL_STATE="UNHEALTHY"
     fi
     echo "═══════════════════════════════════════════════════════════════════════"
 
     # Final MQTT state with full pipeline summary
-    mqtt_state "$final_state" "$(cat <<JSON
-{"state":"${final_state}","host":"$(hostname)","pid":${SCRIPT_PID},"elapsed_s":$(( $(date +%s) - SCRIPT_START )),"step_ok":${STEP_OK},"step_warn":${STEP_WARN},"step_fail":${STEP_FAIL},"camera":"${CAMERA_NAME}","detection_fps":$(jget "$cam" "d.get('detection_fps',0)"),"camera_fps":$(jget "$cam" "d.get('camera_fps',0)"),"frigate_version":$(jget "$ver_json" "d.get('version','null')" | sed 's/^"//;s/"$//') , "inference_ms":${det_inf:-null}}
+    mqtt_state "$FINAL_STATE" "$(cat <<JSON
+{"state":"${FINAL_STATE}","host":"$(hostname)","pid":${SCRIPT_PID},"elapsed_s":$(( $(date +%s) - SCRIPT_START )),"step_ok":${STEP_OK},"step_warn":${STEP_WARN},"step_fail":${STEP_FAIL},"camera":"${CAMERA_NAME}","detection_fps":$(jget "$cam" "d.get('detection_fps',0)"),"camera_fps":$(jget "$cam" "d.get('camera_fps',0)"),"frigate_version":$(jget "$ver_json" "d.get('version','null')" | sed 's/^"//;s/"$//') , "inference_ms":${det_inf:-null}}
 JSON
 )"
 
@@ -859,6 +878,174 @@ main() {
     fi
 
     status_report
+
+    # ---- Snapshot / baseline (commit 2: feature C) ----
+    # Emit a JSON snapshot of the 14-step outcome, optionally writing to
+    # a file (--snapshot-write=PATH) or comparing to a baseline JSON
+    # (--snapshot-compare=BASELINE). The snapshot is the single source of
+    # truth for archival, regression detection, and HA integration.
+    if [ "$SNAPSHOT_MODE" -eq 1 ]; then
+        if [ -n "$SNAPSHOT_BASELINE" ]; then
+            # Compare: write the current snapshot to a tempfile, diff it
+            # against the baseline, then clean up. Exit 1 on drift, 0 on
+            # match. Note: we capture the exit code of print_snapshot and
+            # compare_baseline explicitly rather than via $? inside an
+            # if/else (the latter would always see 0, since the if-then
+            # chain itself succeeds).
+            local snap_tmp rc
+            snap_tmp=$(mktemp --suffix=.json)
+            if ! print_snapshot "$snap_tmp"; then
+                rc=$?
+                rm -f "$snap_tmp"
+                exit "$rc"
+            fi
+            compare_baseline "$SNAPSHOT_BASELINE" "$snap_tmp"
+            rc=$?
+            rm -f "$snap_tmp"
+            [ "$rc" -eq 0 ] || exit "$rc"
+        else
+            local out_path="${SNAPSHOT_WRITE_PATH:-/dev/stdout}"
+            print_snapshot "$out_path" || exit 1
+        fi
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Snapshot serialisation (commit 2: feature C)
+# ------------------------------------------------------------------------------
+# Converts REPORT_RESULTS[] (the 14 entry bash array populated by report()
+# and report_skip()) into a single JSON document. Uses python3 (already a
+# hard dep of the script) for the JSON formatting so we don't have to
+# hand-escape the bash strings. The output schema:
+#
+#   {
+#     "ts":          "2026-06-02T19:14:00Z",
+#     "host":        "Calypso",
+#     "camera":      "allee_sur_le_cote",
+#     "state":       "HEALTHY" | "DEGRADED" | "UNHEALTHY",
+#     "step_ok":     12, "step_warn": 2, "step_fail": 0, "step_skip": 0,
+#     "steps": [
+#       {"status": "OK",   "name": "1/14  NVIDIA GPU", "detail": "...", "remediation": ""},
+#       ...
+#     ]
+#   }
+print_snapshot() {
+    local out_path="$1"
+    # Pipe REPORT_RESULTS (one per line, | delimited) to python for JSON
+    # serialisation. Use a temp file rather than a process substitution so
+    # the python script can read the array safely even with newlines /
+    # weird characters in remediation strings.
+    local tmp
+    tmp=$(mktemp --suffix=.tsv)
+    for r in "${REPORT_RESULTS[@]}"; do
+        # Split on the first 3 '|' only; detail / remediation may contain
+        # additional '|' (e.g., from grep alternation in remediation hints).
+        local status name detail remediation rest
+        IFS='|' read -r status name detail rest <<< "$r"
+        remediation="${rest:-}"
+        # Strip newlines / tabs that would break TSV.
+        status=${status//$'\n'/ }
+        status=${status//$'\t'/ }
+        name=${name//$'\n'/ }
+        name=${name//$'\t'/ }
+        detail=${detail//$'\n'/ }
+        detail=${detail//$'\t'/ }
+        remediation=${remediation//$'\n'/ }
+        remediation=${remediation//$'\t'/ }
+        printf '%s\t%s\t%s\t%s\n' "$status" "$name" "$detail" "$remediation" >> "$tmp"
+    done
+    # Snapshot metadata is exported as env vars so python3 (a child process)
+    # can read them without us having to serialise them too.
+    STEP_OK="$STEP_OK" STEP_WARN="$STEP_WARN" \
+    STEP_FAIL="$STEP_FAIL" STEP_SKIP="$STEP_SKIP" \
+    CAMERA_NAME="$CAMERA_NAME" FINAL_STATE="$FINAL_STATE" \
+    python3 - "$tmp" "$out_path" <<'PY'
+import json, os, sys, time
+tsv_path, out_path = sys.argv[1], sys.argv[2]
+steps = []
+with open(tsv_path) as f:
+    for line in f:
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        parts = line.split("\t", 3)
+        if len(parts) == 4:
+            status, name, detail, remediation = parts
+        else:
+            status, name, detail = parts[:3]
+            remediation = ""
+        steps.append({
+            "status": status,
+            "name": name,
+            "detail": detail,
+            "remediation": remediation,
+        })
+snap = {
+    "ts":         time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    "host":       os.uname().nodename,
+    "camera":     os.environ.get("CAMERA_NAME", "?"),
+    "state":      os.environ.get("FINAL_STATE", "UNKNOWN"),
+    "step_ok":    int(os.environ.get("STEP_OK", 0)),
+    "step_warn":  int(os.environ.get("STEP_WARN", 0)),
+    "step_fail":  int(os.environ.get("STEP_FAIL", 0)),
+    "step_skip":  int(os.environ.get("STEP_SKIP", 0)),
+    "steps":      steps,
+}
+out = sys.stdout if out_path == "/dev/stdout" else open(out_path, "w")
+try:
+    json.dump(snap, out, indent=2, sort_keys=True)
+    if out_path != "/dev/stdout":
+        out.write("\n")
+finally:
+    if out_path != "/dev/stdout":
+        out.close()
+PY
+    local rc=$?
+    rm -f "$tmp"
+    return $rc
+}
+
+# Compare a current snapshot (file) to a baseline snapshot (file). Exits
+# 0 on match, 1 on drift. Prints a human-readable diff. Drift is any
+# change in step status (OK/WARN/FAIL/SKIP) or in the overall state
+# (HEALTHY/DEGRADED/UNHEALTHY). Detail / remediation text changes are
+# NOT drift — they reflect ephemeral runtime values (e.g. fps) and
+# would generate false positives.
+compare_baseline() {
+    local baseline_path="$1" current_path="$2"
+    python3 - "$baseline_path" "$current_path" <<'PY'
+import json, sys
+baseline_path, current_path = sys.argv[1], sys.argv[2]
+try:
+    with open(baseline_path) as f: base = json.load(f)
+except Exception as e:
+    print(f"ERROR: cannot read baseline {baseline_path}: {e}", file=sys.stderr)
+    sys.exit(2)
+try:
+    with open(current_path) as f: curr = json.load(f)
+except Exception as e:
+    print(f"ERROR: cannot read current snapshot {current_path}: {e}", file=sys.stderr)
+    sys.exit(2)
+def step_map(d): return {s["name"]: s["status"] for s in d.get("steps", [])}
+bm, cm = step_map(base), step_map(curr)
+drift = []
+if base.get("state") != curr.get("state"):
+    drift.append(f"  state: {base.get('state')} -> {curr.get('state')}")
+for name in sorted(set(bm) | set(cm)):
+    bs, cs = bm.get(name, "<missing>"), cm.get(name, "<missing>")
+    if bs != cs:
+        drift.append(f"  {name}: {bs} -> {cs}")
+if drift:
+    print("DRIFT DETECTED between baseline and current snapshot:")
+    for d in drift: print(d)
+    sys.exit(1)
+else:
+    print(f"OK: snapshot matches baseline "
+          f"({len(cm)} steps, state={curr.get('state')}, "
+          f"OK={curr.get('step_ok')} WARN={curr.get('step_warn')} "
+          f"FAIL={curr.get('step_fail')} SKIP={curr.get('step_skip')})")
+    sys.exit(0)
+PY
 }
 
 main "$@"
