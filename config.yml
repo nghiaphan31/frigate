@@ -1,9 +1,11 @@
 mqtt:
   host: 192.168.50.125
-  user: mosquito
-  password: mosquito
+  port: 1883
+  user: mosquitto
+  password: "mosquitto"
+  client_id: frigate_calypso     # UNIQUE — this single line kills the takeover loop
   topic_prefix: calypso_frigate
-  client_id: frigate_calypso_client
+  stats_interval: 60
 
 ffmpeg:
   path: /usr/lib/ffmpeg/7.0

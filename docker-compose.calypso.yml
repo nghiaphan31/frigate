@@ -10,6 +10,12 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: all
       PLUS_API_KEY: ${FRIGATE_PLUS_API_KEY}
       FRIGATE_LOG_LEVEL: warning
+      # Run the bind-mounted init script once, before s6-rc starts the
+      # `frigate` service. Replaces the legacy `command:` block below, which
+      # used to end in `exec python3 -u -m frigate` and created a duplicate
+      # Frigate process that fought the s6-supervised one for MQTT and
+      # crashed the container on shutdown.
+      S6_STAGE2_HOOK: /etc/s6-overlay/scripts/frigate-init.sh
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request,json; r=urllib.request.urlopen('http://localhost:5000/api/stats', timeout=3); d=json.loads(r.read()); exit(0 if d.get('cameras', {}).get('allee_sur_le_cote', {}).get('detection_fps', 0) > 0 else 1)\""]
       interval: 30s
@@ -21,12 +27,15 @@ services:
       - ${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}:/media/frigate
       - ./trt-cache:/config/model_cache  # TRT engine cache — persists across recreations (~65s build on first run)
       - ./trt-libs:/trt-libs:ro          # TRT 10.9.0 runtime libs for SM 120 (Blackwell GB206) support
+      - ./frigate-init.sh:/etc/s6-overlay/scripts/frigate-init.sh:ro  # one-shot init (TRT ld cache + ffmpeg symlink) wired via S6_STAGE2_HOOK
       - type: tmpfs
         target: /tmp/cache
         tmpfs:
           size: 2147483648  # 2GB in bytes (original value)
-    command: >
-      sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && ldconfig && ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin && exec python3 -u -m frigate"
+    # NOTE: no `command:` override. The image's default ENTRYPOINT is /init
+    # (s6-overlay v3) and the s6-supervised `frigate` service is the only
+    # process that should run. See frigate-init.sh for the init that used
+    # to live at the end of the old `command:` string.
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl
