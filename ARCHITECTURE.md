@@ -480,6 +480,26 @@ For the init pattern rationale (why a stage-2 hook, not a `command:` override), 
 
 ## 7. Operations: state machine and MQTT telemetry
 
+### State set (canonical reference)
+
+The full set of states the bring-up script can publish to `calypso_frigate/bringup/state`:
+
+| State | Source | Meaning |
+|---|---|---|
+| `STARTING` | main() start | script just started |
+| `PREFLIGHT_OK` | preflight() pass | all 8 host gates passed |
+| `CONTAINER_UP` | docker compose up -d | container recreated / running |
+| `API_UP` | wait_api() | `/api/version` returns 200 |
+| `DETECTION_ACTIVE` | wait_detection() | `allee_sur_le_cote.detection_fps >= 1` |
+| `RECOVERY_TRIGGERED` | wait_detection() timeout | auto-recovery starting |
+| `RECOVERY_INVOKED` | `--recover=STRATEGY` from CLI or `RECOVER_STRATEGY` env var | a recovery strategy has been called (operator or auto) |
+| `RECOVERY_SUCCESS` | wait_detection() post-recovery | detection back to >= 1 fps |
+| `RECOVERY_FAILED` | wait_detection() post-recovery | detection still 0 after recovery |
+| `HEALTHY` / `DEGRADED` / `UNHEALTHY` | status_report() tail | final aggregate of the 14 steps |
+| `FATAL_*` | any preflight / wait fatal | hard failure (pre-flight, container, API, detection) |
+
+Transitions are published to `calypso_frigate/bringup/state` (retained) and the full context as JSON to `calypso_frigate/bringup/detail` (retained). The `RECOVERY_INVOKED` state was added when the `--recover=STRATEGY` self-healing library was added; HA can subscribe to it to know when an operator (or the auto-recovery) is actively applying a strategy.
+
 The bring-up sequence is treated as a proper state machine. Every transition (success, warning, managed recovery, hard failure) emits an MQTT message on the same Mosquitto broker the camera events use. This makes the system observable from Home Assistant (or any MQTT subscriber) regardless of whether the bring-up runs interactively, on boot via systemd, or unattended on a timer.
 
 ### 7.1 State machine
@@ -593,8 +613,10 @@ automation:
 |---|---|---|
 | Interactive `./bring-up.sh` | full pre-flight → start → wait → report | every transition |
 | `./bring-up.sh --status` | skips create, polls API + runs report | `STARTING` (no bring-up transitions) → final state |
+| `./bring-up.sh --snapshot[=...]` | adds JSON snapshot of the 14-step outcome to the run (to stdout, file, or compared against a baseline). Exit code: 0 match, 1 drift, 2 I/O error | the JSON is the canonical machine-readable view of the report |
+| `./bring-up.sh --recover=STRATEGY` | runs a named recovery (one of `restart-container` / `remount-nas` / `flush-zmq` / `rebuild-trt`) after the report, or standalone (implies `--status`). Publishes `RECOVERY_INVOKED` with the strategy name | `RECOVERY_INVOKED` event so HA can see when a manual recovery is in progress |
 | Host boot (systemd) | `frigate-stack.service` calls `bring-up.sh` | all transitions, including the managed `RECOVERY_*` events |
-| Every 5 min (systemd timer) | `frigate-stack-watchdog.service` re-runs `bring-up.sh` | same as interactive; if the system is healthy, transitions are fast (no recovery) |
+| Every 5 min (systemd timer) | `frigate-stack-watchdog.service` re-runs `bring-up.sh` | same as interactive; if the system is healthy, transitions are fast (no recovery). The auto-recovery path in `wait_detection()` honours `RECOVER_STRATEGY` (env var) to pick a different strategy from the default `restart-container`. |
 | `docker compose` restart | manual or `autoheal` reacting to `unhealthy` | new `STARTING` cycle |
 
 ### 7.5 Why the dual layer (Docker healthcheck + MQTT state)?

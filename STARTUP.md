@@ -366,6 +366,7 @@ canonical path is
 | A long bring-up must not pile up with the timer | `OnUnitActiveSec` in the timer avoids overlap |
 | The system is unreachable at boot (camera/NAS down) | `SuccessExitStatus=0 1` lets the service "succeed" with WARN, the watchdog retries 5 min later |
 | The system is unrecoverable | exit codes 2/3/4/5 mark the service failed → visible in `systemctl status` and via MQTT `FATAL_*` events |
+| Override the default auto-recovery strategy | set `RECOVER_STRATEGY=remount-nas\|flush-zmq\|rebuild-trt` in the watchdog's `EnvironmentFile` (default: `restart-container`; see [§ 5.8](#58-failure-mode-catalog-per-check) for when to use which) |
 
 ### Uninstall
 
@@ -390,6 +391,9 @@ These six commands give a complete picture of steady-state operation. Run them i
 | 4 | Detector inference speed | `curl -fsS http://localhost:5000/api/stats \| jq '.detectors.onnx1'` |
 | 5 | MQTT connected | `curl -fsS http://localhost:5000/api/stats \| jq '.mqtt'` |
 | 6 | Last 5 events | `curl -fsS 'http://localhost:5000/api/events?limit=5'` |
+| 7 | **One-shot JSON snapshot** (for archival / drift detection) | `./bring-up.sh --no-mqtt --snapshot-write=/var/lib/frigate/baseline.json` |
+| 8 | **Diff against baseline** (exit 1 on drift, 0 on match) | `./bring-up.sh --no-mqtt --snapshot-compare=/var/lib/frigate/baseline.json` |
+| 9 | **Targeted recovery** (e.g. NAS remount, TRT rebuild) | `./bring-up.sh --recover=remount-nas` (or `restart-container` / `flush-zmq` / `rebuild-trt`; see [§ 5.8](#58-failure-mode-catalog-per-check)) |
 
 **Healthy-state signature**:
 
@@ -422,7 +426,7 @@ The retained `state` topic always reflects the **last completed transition**, so
    -t 'calypso_frigate/bringup/state' -C 1 -W 2)" = "HEALTHY" ] && echo OK || echo NOT_OK
 ```
 
-The full state schema and HA integration snippets are in [ARCHITECTURE.md §7](ARCHITECTURE.md#7-operations-state-machine-and-mqtt-telemetry).
+The full state schema and HA integration snippets are in [ARCHITECTURE.md §7](ARCHITECTURE.md#7-operations-state-machine-and-mqtt-telemetry). The state list is: `STARTING`, `PREFLIGHT_OK`, `CONTAINER_UP`, `API_UP`, `DETECTION_ACTIVE`, `RECOVERY_TRIGGERED`, `RECOVERY_INVOKED` (manual `--recover=` operator action), `RECOVERY_SUCCESS`, `RECOVERY_FAILED`, `HEALTHY` / `DEGRADED` / `UNHEALTHY`, `FATAL_*`.
 
 
 ---
@@ -525,6 +529,13 @@ mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
   still see per-second disconnects after that fix is in place,
   the cause is a different client_id collision (look for
   `session taken over` in the broker log, not the Frigate log).
+
+> The script's `11/14 MQTT publisher` step now prints the exact
+> probe command under the WARN line (`fix: mosquitto_sub -h
+> $MQTT_HOST -p $MQTT_PORT -u mosquitto -P mosquitto -t
+> '$SYS/broker/version' -W 5`). No need to memorise it — read the
+> live report. The full per-step catalog is in
+> [§ 5.8](#58-failure-mode-catalog-per-check).
 
 **Recovery** (no Frigate restart needed — the client auto-reconnects):
 ```bash

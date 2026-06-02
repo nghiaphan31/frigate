@@ -80,6 +80,30 @@ echo "Enabling and starting frigate-stack-watchdog.timer (re-checks every 5 min)
 sudo systemctl enable --now frigate-stack-watchdog.timer
 echo
 
+# If a RECOVER_STRATEGY is set in the environment or in the repo's .env,
+# write it into the watchdog unit's drop-in so the auto-recovery path
+# uses the operator's preferred strategy (default: restart-container).
+# Operators can override per-recovery by passing --recover=STRATEGY on
+# the bring-up.sh command line.
+RECOVER_STRATEGY_DEFAULT="restart-container"
+if [ -f .env ]; then
+    # shellcheck disable=SC1091
+    RECOVER_FROM_ENV="$(grep -E '^RECOVER_STRATEGY=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")"
+    if [ -n "$RECOVER_FROM_ENV" ]; then
+        RECOVER_STRATEGY_DEFAULT="$RECOVER_FROM_ENV"
+    fi
+fi
+if [ "$RECOVER_STRATEGY_DEFAULT" != "restart-container" ]; then
+    echo "Setting RECOVER_STRATEGY=$RECOVER_STRATEGY_DEFAULT in watchdog unit…"
+    sudo mkdir -p /etc/systemd/system/frigate-stack-watchdog.service.d
+    sudo tee /etc/systemd/system/frigate-stack-watchdog.service.d/recover-strategy.conf >/dev/null <<EOF
+[Service]
+Environment="RECOVER_STRATEGY=$RECOVER_STRATEGY_DEFAULT"
+EOF
+    sudo systemctl daemon-reload
+fi
+echo
+
 echo "Starting frigate-stack.service now (so you do not have to reboot)…"
 sudo systemctl start frigate-stack.service
 echo
