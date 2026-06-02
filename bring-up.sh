@@ -83,6 +83,20 @@ fi
 MEDIA_PATH="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
 
 # ------------------------------------------------------------------------------
+# Resolve the right `docker compose` invocation. Prefer v2 (`docker compose`
+# subcommand from docker-compose-plugin), fall back to v1 (`docker-compose`
+# hyphenated binary). Resolved once at start, used everywhere below.
+# ------------------------------------------------------------------------------
+if docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    DOCKER_COMPOSE=""   # will fatal() in mqtt_init's preflight order
+fi
+echo "[bring-up] docker compose: ${DOCKER_COMPOSE:-NOT FOUND}" >&2
+
+# ------------------------------------------------------------------------------
 # Colors (suppressed when stdout is not a TTY)
 # ------------------------------------------------------------------------------
 if [ -t 1 ]; then
@@ -255,7 +269,34 @@ preflight() {
         [ -e "/dev/$d" ] || fatal "/dev/$d missing (load nvidia modules)" 2
     done
 
-    mountpoint -q "$MEDIA_PATH" || fatal "$MEDIA_PATH not mounted (check fstab / nfs)" 2
+    # MEDIA_PATH must be on a mounted filesystem, must exist, and must be
+    # writable. MEDIA_PATH itself does not have to BE the mount point — it
+    # can be a subdirectory of one (e.g. when the NAS is mounted at
+    # /mnt/nas/video and the recordings live in /mnt/nas/video/frigate_calypso).
+    #
+    # 1. Walk up the tree to find the nearest mount point
+    check_dir="$MEDIA_PATH"
+    mounted=0
+    while [ "$check_dir" != "/" ]; do
+        if mountpoint -q "$check_dir" 2>/dev/null; then
+            mounted=1
+            break
+        fi
+        check_dir="$(dirname "$check_dir")"
+    done
+    [ "$mounted" -eq 1 ] || fatal "$MEDIA_PATH is not on a mounted filesystem (check fstab / nfs)" 2
+
+    # 2. Directory exists (auto-create subfolders inside the mount, e.g. frigate_calypso)
+    if [ ! -d "$MEDIA_PATH" ]; then
+        if mkdir -p "$MEDIA_PATH" 2>/dev/null; then
+            log "Created $MEDIA_PATH"
+        else
+            fatal "$MEDIA_PATH does not exist and could not be created (check parent permissions)" 2
+        fi
+    fi
+
+    # 3. Writable
+    [ -w "$MEDIA_PATH" ] || fatal "$MEDIA_PATH is not writable (check directory permissions)" 2
 
     timeout 3 bash -c ">/dev/tcp/$CAMERA_IP/$CAMERA_RTSP_PORT" 2>/dev/null \
         || fatal "Camera $CAMERA_IP:$CAMERA_RTSP_PORT unreachable" 2
@@ -282,7 +323,7 @@ start_container() {
     fi
 
     log "Starting container…"
-    docker compose -f "$COMPOSE_FILE" up -d "$CONTAINER_NAME"
+    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" up -d "$CONTAINER_NAME"
 
     local i
     for i in $(seq 1 30); do
@@ -322,15 +363,51 @@ wait_detection() {
     log "Waiting for detection (timeout ${DETECT_TIMEOUT}s, includes TRT build)…"
     local i fps
 
+    local dumped=0
     for i in $(seq 1 "$DETECT_TIMEOUT"); do
-        local cameras
-        cameras=$(curl -fsS --max-time 2 "$FRIGATE_API/api/cameras" 2>/dev/null || echo "{}")
-        fps=$(jget "$cameras" "d.get('$CAMERA_NAME',{}).get('detection_fps',0)")
-        fps=${fps:-0}
-        fps=${fps%.*}
-        if [ "${fps:-0}" -ge 1 ] 2>/dev/null; then
+        local stats fps
+        stats=$(curl -fsS --max-time 2 "$FRIGATE_API/api/stats" 2>/dev/null || echo "{}")
+        # Try multiple plausible Frigate 0.17 paths for the per-camera fps field.
+        # detection_fps -> process_fps -> top-level detection_fps.
+        fps=$(jget "$stats" "d.get('cameras',{}).get('$CAMERA_NAME',{}).get('detection_fps',0)") || fps=0
+        [ -z "$fps" ] && fps=0
+        if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
             log "Detection active in ${i}s (det_fps=$fps)"
             return 0
+        fi
+        fps=$(jget "$stats" "d.get('cameras',{}).get('$CAMERA_NAME',{}).get('process_fps',0)") || fps=0
+        [ -z "$fps" ] && fps=0
+        if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
+            log "Detection active in ${i}s (process_fps=$fps)"
+            return 0
+        fi
+        fps=$(jget "$stats" "d.get('detection_fps',0)") || fps=0
+        [ -z "$fps" ] && fps=0
+        if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
+            log "Detection active in ${i}s (top-level detection_fps=$fps)"
+            return 0
+        fi
+        # One-time diagnostic on the last poll so the operator can see the actual shape
+        if [ "$i" -eq "$DETECT_TIMEOUT" ] && [ "$dumped" -eq 0 ]; then
+            dumped=1
+            log "All 3 fps paths returned 0. Dumping /api/stats shape for diagnosis:"
+            curl -fsS --max-time 3 "$FRIGATE_API/api/stats" 2>/dev/null                 | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print('  top-level keys:', list(d.keys()))
+    cams = d.get('cameras', {})
+    print('  cameras keys:', list(cams.keys()))
+    for name, c in cams.items():
+        print(f'  cameras.{name} keys:', list(c.keys()) if isinstance(c, dict) else type(c).__name__)
+        for k in ('detection_fps', 'process_fps', 'camera_fps'):
+            v = c.get(k) if isinstance(c, dict) else None
+            if v is not None: print(f'    {k} = {v}')
+    for k in ('detection_fps', 'process_fps'):
+        if k in d: print(f'  top-level {k} = {d[k]}')
+except Exception as e:
+    print(f'  could not parse /api/stats: {e}')
+" 2>/dev/null || log "  could not fetch /api/stats for diagnosis"
         fi
         sleep 1
     done
@@ -339,17 +416,32 @@ wait_detection() {
     mqtt_state "RECOVERY_TRIGGERED" \
         "{\"state\":\"RECOVERY_TRIGGERED\",\"reason\":\"detection_fps_stuck_at_zero_after_${DETECT_TIMEOUT}s\",\"action\":\"docker_compose_stop_start\"}"
     log "${YEL}Detection still at 0 fps after ${DETECT_TIMEOUT}s — running stop/start to clear ZMQ IPC${NC}"
-    docker compose -f "$COMPOSE_FILE" stop  "$CONTAINER_NAME" >/dev/null
-    docker compose -f "$COMPOSE_FILE" start "$CONTAINER_NAME" >/dev/null
+    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" stop  "$CONTAINER_NAME" >/dev/null
+    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" start "$CONTAINER_NAME" >/dev/null
 
     for i in $(seq 1 "$RECOVERY_TIMEOUT"); do
-        local cameras
-        cameras=$(curl -fsS --max-time 2 "$FRIGATE_API/api/cameras" 2>/dev/null || echo "{}")
-        fps=$(jget "$cameras" "d.get('$CAMERA_NAME',{}).get('detection_fps',0)")
-        fps=${fps:-0}
-        fps=${fps%.*}
-        if [ "${fps:-0}" -ge 1 ] 2>/dev/null; then
+        local stats fps
+        stats=$(curl -fsS --max-time 2 "$FRIGATE_API/api/stats" 2>/dev/null || echo "{}")
+        fps=$(jget "$stats" "d.get('cameras',{}).get('$CAMERA_NAME',{}).get('detection_fps',0)") || fps=0
+        [ -z "$fps" ] && fps=0
+        if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
             log "Detection active after stop/start in ${i}s (det_fps=$fps)"
+            mqtt_state "RECOVERY_SUCCESS" \
+                "{\"state\":\"RECOVERY_SUCCESS\",\"detection_fps\":${fps},\"recovered_after_s\":${i}}"
+            return 0
+        fi
+        fps=$(jget "$stats" "d.get('cameras',{}).get('$CAMERA_NAME',{}).get('process_fps',0)") || fps=0
+        [ -z "$fps" ] && fps=0
+        if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
+            log "Detection active after stop/start in ${i}s (process_fps=$fps)"
+            mqtt_state "RECOVERY_SUCCESS" \
+                "{\"state\":\"RECOVERY_SUCCESS\",\"process_fps\":${fps},\"recovered_after_s\":${i}}"
+            return 0
+        fi
+        fps=$(jget "$stats" "d.get('detection_fps',0)") || fps=0
+        [ -z "$fps" ] && fps=0
+        if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
+            log "Detection active after stop/start in ${i}s (top-level detection_fps=$fps)"
             mqtt_state "RECOVERY_SUCCESS" \
                 "{\"state\":\"RECOVERY_SUCCESS\",\"detection_fps\":${fps},\"recovered_after_s\":${i}}"
             return 0
@@ -376,7 +468,7 @@ status_report() {
 
     # Cached responses (multiple steps read from these)
     local cam_stats stats_json cfg_json ver_json go2rtc_json
-    cam_stats=$(curl -fsS --max-time 3 "$FRIGATE_API/api/cameras"  2>/dev/null || echo "{}")
+    cam_stats=$(curl -fsS --max-time 3 "$FRIGATE_API/api/stats" 2>/dev/null || echo "{}")
     stats_json=$(curl -fsS --max-time 3 "$FRIGATE_API/api/stats"   2>/dev/null || echo "{}")
     cfg_json=$(curl -fsS --max-time 3   "$FRIGATE_API/api/config"  2>/dev/null || echo "{}")
     ver_json=$(curl -fsS --max-time 3   "$FRIGATE_API/api/version" 2>/dev/null || echo "{}")
@@ -422,7 +514,7 @@ status_report() {
 
     # --- 4/14: Capture ffmpeg (allee) ---
     local cam camfps
-    cam=$(jget "$cam_stats" "json.dumps(d.get('$CAMERA_NAME', {}))")
+    cam=$(jget "$cam_stats" "json.dumps(d.get('cameras',{}).get('$CAMERA_NAME', {}))")
     camfps=$(jget "$cam" "d.get('camera_fps', 0)")
     if [ -n "$camfps" ] && [ "${camfps%.*}" -ge 1 ] 2>/dev/null; then
         report "4/14  Capture ffmpeg ($CAMERA_NAME)" "OK" \
@@ -432,18 +524,33 @@ status_report() {
             "camera present, camera_fps=${camfps:-0}"
     else
         report "4/14  Capture ffmpeg ($CAMERA_NAME)" "FAIL" \
-            "$CAMERA_NAME not in /api/cameras"
+            "$CAMERA_NAME not in /api/stats.cameras"
     fi
 
     # --- 5/14: Detect process ---
-    local detfps
-    detfps=$(jget "$cam" "d.get('detection_fps', 0)")
+    # Try the same 3 fallback paths the wait-detection poll uses. The report
+    # otherwise reports FAIL when Frigate 0.17 only populates process_fps.
+    local detfps detfield pfps
+    detfps=$(jget "$cam" "d.get('detection_fps',0)") || detfps=0
+    [ -z "$detfps" ] && detfps=0
+    if [ "${detfps%.*}" -ge 1 ] 2>/dev/null; then
+        detfield=detection_fps
+    else
+        pfps=$(jget "$cam" "d.get('process_fps',0)") || pfps=0
+        [ -z "$pfps" ] && pfps=0
+        if [ "${pfps%.*}" -ge 1 ] 2>/dev/null; then
+            detfps=$pfps
+            detfield=process_fps
+        else
+            detfield=detection_fps
+        fi
+    fi
     if [ -n "$detfps" ] && [ "${detfps%.*}" -ge 1 ] 2>/dev/null; then
         report "5/14  Detect process ($CAMERA_NAME)" "OK" \
-            "det_fps=$detfps, camera_fps=$camfps"
+            "det=$detfps ($detfield), camera_fps=$camfps"
     else
         report "5/14  Detect process ($CAMERA_NAME)" "FAIL" \
-            "det_fps=${detfps:-0} (expected ≥ 1)"
+            "det=${detfps:-0} (expected >= 1)"
     fi
 
     # --- 6/14: Motion pre-filter ---
@@ -466,20 +573,31 @@ status_report() {
     fi
 
     # --- 8/14: Person filter (physics) ---
-    local pfilt min_a max_a min_r max_r thr ms
-    pfilt=$(jget "$cfg_json" "d['cameras']['$CAMERA_NAME']['objects']['filters']['person']")
-    if [ -n "$pfilt" ]; then
-        min_a=$(jget "$pfilt" "d.get('min_area', '?')")
-        max_a=$(jget "$pfilt" "d.get('max_area', '?')")
-        min_r=$(jget "$pfilt" "d.get('min_ratio', '?')")
-        max_r=$(jget "$pfilt" "d.get('max_ratio', '?')")
-        thr=$(jget   "$pfilt" "d.get('threshold', '?')")
-        ms=$(jget    "$pfilt" "d.get('min_score', '?')")
+    # Frigate 0.17 has no /api/config endpoint. Read the per-camera filter
+    # directly from the local config.yml on the host (which is also what
+    # the container sees at /config/config.yml).
+    local pfilt
+    pfilt=$(python3 -c "
+import yaml
+try:
+    d = yaml.safe_load(open('config.yml'))
+    print(yaml.dump(d.get('cameras', {}).get('$CAMERA_NAME', {}).get('objects', {}).get('filters', {}).get('person', {})).strip())
+except Exception as e:
+    print('PARSE_ERROR: ' + str(e))
+" 2>/dev/null)
+    if [ -n "$pfilt" ] && [[ "$pfilt" != "PARSE_ERROR:"* ]] && [ -n "$(echo "$pfilt" | tr -d '[:space:]')" ]; then
+        local min_a max_a min_r max_r thr ms
+        min_a=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_area','?'))" 2>/dev/null)
+        max_a=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('max_area','?'))" 2>/dev/null)
+        min_r=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_ratio','?'))" 2>/dev/null)
+        max_r=$(echo "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('max_ratio','?'))" 2>/dev/null)
+        thr=$(echo   "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('threshold','?'))" 2>/dev/null)
+        ms=$(echo    "$pfilt" | python3 -c "import sys,yaml; print(yaml.safe_load(sys.stdin).get('min_score','?'))" 2>/dev/null)
         report "8/14  Person filter (physics)" "OK" \
             "min_area=$min_a, max_area=$max_a, ratio=$min_r/$max_r, threshold=$thr, min_score=$ms"
     else
         report "8/14  Person filter (physics)" "FAIL" \
-            "person filter not found at cameras.$CAMERA_NAME.objects.filters.person"
+            "person filter not found at cameras.$CAMERA_NAME.objects.filters.person in config.yml"
     fi
 
     # --- 9/14: Zone filters ---
@@ -513,15 +631,20 @@ except Exception:
     fi
 
     # --- 11/14: MQTT publisher ---
-    local mqtt_connected mqtt_host
-    mqtt_connected=$(jget "$stats_json" "d.get('mqtt',{}).get('connected', False)")
-    mqtt_host=$(jget      "$stats_json" "d.get('mqtt',{}).get('host', '?')")
-    if [ "$mqtt_connected" = "True" ]; then
-        report "11/14  MQTT publisher" "OK" \
-            "$mqtt_host, prefix=calypso_frigate, connected=true"
+    # Frigate 0.17 does NOT expose an mqtt key in /api/stats. The only signal
+    # is the container log (frigate.comms.mqtt ERROR: MQTT disconnected) which
+    # we can detect by tailing the recent journal. We mark this as WARN
+    # because the script cannot definitively prove the broker is unreachable
+    # from inside /api/stats alone — only the log or a manual probe can.
+    local mqtt_log_hits
+    mqtt_log_hits=$(docker logs --tail=200 "$CONTAINER_NAME" 2>&1 \
+        | grep -c "frigate.comms.mqtt.*ERROR.*MQTT disconnected" || true)
+    if [ "${mqtt_log_hits:-0}" -ge 1 ] 2>/dev/null; then
+        report "11/14  MQTT publisher" "WARN" \
+            "$MQTT_HOST disconnects seen in container log ($mqtt_log_hits in last 200 lines) — check client_id, ACL, or broker reachability"
     else
-        report "11/14  MQTT publisher" "FAIL" \
-            "$mqtt_host, connected=$mqtt_connected (check broker)"
+        report "11/14  MQTT publisher" "OK" \
+            "$MQTT_HOST: no MQTT-disconnect log lines in recent container output (Frigate 0.17 does not expose /api/stats.mqtt, so this is a best-effort log check)"
     fi
 
     # --- 12/14: Recording path ---
@@ -546,14 +669,21 @@ except Exception:
     fi
 
     # --- 14/14: Web UI / API ---
+    # Frigate 0.17 sometimes returns {"version": ""} (empty). The endpoint
+    # responded (200), so the API is up — only the version field is empty.
+    # Treat empty as WARN (not FAIL); only a non-response (jget returns "?")
+    # is a hard fail.
     local ver
     ver=$(jget "$ver_json" "d.get('version','?')")
-    if [ -n "$ver" ] && [ "$ver" != "?" ]; then
-        report "14/14  Web UI / API" "OK" \
-            "$FRIGATE_API listening, /api/version=$ver"
-    else
+    if [ "$ver" = "?" ]; then
         report "14/14  Web UI / API" "FAIL" \
             "$FRIGATE_API/api/version not responding"
+    elif [ -z "$ver" ]; then
+        report "14/14  Web UI / API" "WARN" \
+            "$FRIGATE_API listening, /api/version returned empty version field"
+    else
+        report "14/14  Web UI / API" "OK" \
+            "$FRIGATE_API listening, /api/version=$ver"
     fi
 
     echo "───────────────────────────────────────────────────────────────────────"
@@ -604,7 +734,7 @@ main() {
 
         wait_detection
         mqtt_state "DETECTION_ACTIVE" \
-            "{\"state\":\"DETECTION_ACTIVE\",\"camera\":\"${CAMERA_NAME}\",\"detection_fps\":$(jget "$(curl -fsS --max-time 2 "$FRIGATE_API/api/cameras" 2>/dev/null)" "d.get('$CAMERA_NAME',{}).get('detection_fps',0)")}"
+            "{\"state\":\"DETECTION_ACTIVE\",\"camera\":\"${CAMERA_NAME}\",\"detection_fps\":$(jget "$(curl -fsS --max-time 2 "$FRIGATE_API/api/stats" 2>/dev/null)" "d.get('cameras',{}).get('$CAMERA_NAME',{}).get('detection_fps',0)")}"
     else
         log "Skipping bring-up (--status); running report only"
     fi

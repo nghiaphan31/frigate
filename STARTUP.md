@@ -72,11 +72,15 @@ Frigate timestamps and event lifecycle depend on a sane wall clock.
 
 ### 2.3 NAS mount
 
+`FRIGATE_MEDIA_PATH` (from `.env`) does not have to **be** the mount point — it
+can be a subdirectory inside one. The pre-flight walks up the path until it
+finds a mount point, then verifies the directory exists (auto-creates it if
+needed) and is writable.
+
 ```bash
 cat .env | grep FRIGATE_MEDIA_PATH
-mountpoint -q "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}" \
-    && echo OK || echo "NOT MOUNTED"
 df -h "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}" | tail -1
+[ -w "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}" ] && echo "WRITABLE" || echo "NOT WRITABLE"
 ```
 
 If not mounted (after a host reboot, NFS may not auto-mount), re-mount:
@@ -85,6 +89,10 @@ sudo systemctl restart nfs-client.target   # or systemd-mount, depending on setu
 # or:
 sudo mount -a
 ```
+
+The script will then auto-create the subfolder if missing (e.g. `frigate_calypso`
+inside `/mnt/nas/video`) and refuse to proceed if the resulting directory is
+read-only.
 
 ### 2.4 Camera reachability
 

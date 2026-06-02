@@ -1,5 +1,6 @@
 services:
   frigate:
+    container_name: frigate
     image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
     network_mode: host
     shm_size: "5120m"
@@ -10,12 +11,11 @@ services:
       PLUS_API_KEY: ${FRIGATE_PLUS_API_KEY}
       FRIGATE_LOG_LEVEL: warning
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request,json; r=urllib.request.urlopen('http://localhost:5000/api/cameras', timeout=3); d=json.loads(r.read()); exit(0 if d.get('allee_sur_le_cote', {}).get('detection_fps', 0) > 0 else 1)\""]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,json; r=urllib.request.urlopen('http://localhost:5000/api/stats', timeout=3); d=json.loads(r.read()); exit(0 if d.get('cameras', {}).get('allee_sur_le_cote', {}).get('detection_fps', 0) > 0 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 240s
-      start_interval: 10s
     volumes:
       - ./config.yml:/config/config.yml
       - ${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}:/media/frigate
