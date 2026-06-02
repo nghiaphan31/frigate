@@ -76,38 +76,67 @@ go2rtc:
 
 cameras:
 
-  # =====================================================================
+  # ============================================================================
   # CAMERA: allee_sur_le_cote
-  # ---------------------------------------------------------------------
-  # Model:    Reolink Duo 3 (dual-lens 4K panoramic)
-  # Location: Allée côté — private driveway on the side of the property
-  # IP:       192.168.50.129
-  # Mount:    ~4 m height, looking down the side alley
-  # RTSP:     admin:fG-56lui@192.168.50.129:8554
+  # ============================================================================
+  # HARDWARE
+  #   Model:    Reolink Duo 3 Wi-Fi/ETH (dual-lens 4K panoramic)
+  #   IP:       192.168.50.129
+  #   RTSP:     admin:fG-56lui@192.168.50.129:8554
+  #   Location: Allée côté — driveway side view, covers gate + approach
   #
-  # STREAMS (sub only — main is unused in this config):
+  # MOUNT GEOMETRY
+  #   Height:        3.4 m above ground
+  #   Tilt:          50° downward from horizontal
+  #   H-FOV:         180° (full panoramic) / ~90° per half
+  #   V-FOV:         55°
+  #   Max walkable:  20 m (person at ground level)
+  #   Min walkable:  3 m  (close-range, larger pixels)
+  #
+  # STREAMS (sub only — main is unused in this config)
   #   main: 4096×1152  (rtsp://.../h264Preview_01_main)  [NOT USED]
   #   sub : 1536×432   (rtsp://.../h264Preview_01_sub)   [detect + record + audio]
   #   panoramic aspect ratio: 3.56:1
-  #   sub pixel density: 663,552 px
+  #   sub pixel density: 663,552 px total
   #
-  # GEOMETRY (person 1.8 m tall, 4 m mount height):
-  #   at 17 m ground → slant 17.5 m, pixel_height ≈ 44, area ≈ 530 px² (silhouette)
-  #   at 25 m ground → slant 25.3 m, pixel_height ≈ 31, area ≈ 248 px² (silhouette)
+  # FPS RATIONALE
+  #   fps=5:  at 1.4 m/s walking speed, a person crosses the 3 m near boundary
+  #           in 3/1.4 ≈ 2.14 s → ~10.7 frames captured during the crossing.
+  #           Slow enough for reliable detection, fast enough to track motion.
   #
-  # TUNED DETECTION (iter2 2026-05-25, 72 h soak, 373 events):
-  #   detect: 1536×432 @ 5 fps
-  #   p5_area=17940  p95_area=248140
-  #   p5_ratio=1.724 p95_ratio=4.793
-  #   p10_score=0.590 p5_score=0.545
-  #   applied: min_area=12558  max_area=322582
-  #            min_ratio=1.38  max_ratio=5.75
-  #            threshold=0.56  min_score=0.52
+  # PHYSICS-DERIVED PERSON DETECTION (iter0 — geometry-based, May 2026)
+  #   Target person:  H = 1.6 m tall, shoulder W = 0.5 m, aspect ratio ≈ 2:1
   #
-  # ZONES:
+  #   Slant range at max distance (20 m):
+  #     r = √(d² + h²) = √(20² + 3.4²) ≈ 20.29 m
+  #   Elevation angle from camera to person at ground:
+  #     α = arctan(h/d) = arctan(3.4/20) ≈ 9.65°
+  #   Depression angle from optical axis to person:
+  #     β = tilt − α = 50° − 9.65° = 40.35°
+  #
+  #   Pixel size of person at 20 m on sub 1536×432:
+  #     H_px = H × (V-FOV / H_pixels) × cos(β)
+  #         = 1.6 × (55/432) × cos(40.35°)
+  #         ≈ 31 px  (smallest expected footprint)
+  #     W_px = W × (H-FOV / W_pixels) × cos(β)
+  #         = 0.5 × (180/1536) × cos(40.35°)
+  #         ≈ 8 px
+  #     area = H_px × W_px = 31 × 8 ≈ 248 px²
+  #
+  #   At 3 m near boundary:  area ≈ 15,000 px²  (largest expected footprint)
+  #
+  #   Applied filter values (with safety margins):
+  #     min_area   = 248 × 0.50   = 124     (50% of smallest expected)
+  #     max_area   = 15,000 × 1.50 = 22,500  (150% of largest expected)
+  #     min_ratio  = 2.0 × 0.50   = 1.0     (50% of expected aspect)
+  #     max_ratio  = 2.0 × 2.00   = 4.0     (200% of expected aspect)
+  #     threshold  = 0.55         (model default + 0.10)
+  #     min_score  = 0.45         (model default + 0.05)
+  #
+  # ZONES (zone filters mirror camera-level filter, no per-zone override)
   #   prive  — private driveway, immediate alert on entry
   #   rodage — fence line, alert only after 10 s loitering
-  # =====================================================================
+  # ============================================================================
   allee_sur_le_cote:
     ffmpeg:
       inputs:
@@ -131,12 +160,12 @@ cameras:
       track: [person]
       filters:
         person:
-          min_area: 12558
-          max_area: 322582
-          min_ratio: 1.38
-          max_ratio: 5.75
-          threshold: 0.56
-          min_score: 0.52
+          min_area: 124
+          max_area: 22500
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
     snapshots:
       enabled: true
     zones:
@@ -147,10 +176,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.56
-            min_area: 12558
-            min_ratio: 1.38
-            max_ratio: 5.75
+            threshold: 0.55
+            min_area: 124
+            min_ratio: 1.0
+            max_ratio: 4.0
       rodage:
         coordinates: 0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
         loitering_time: 10
@@ -158,10 +187,10 @@ cameras:
         objects: [person]
         filters:
           person:
-            threshold: 0.56
-            min_area: 12558
-            min_ratio: 1.38
-            max_ratio: 5.75
+            threshold: 0.55
+            min_area: 124
+            min_ratio: 1.0
+            max_ratio: 4.0
     review:
       alerts:
         required_zones: prive
