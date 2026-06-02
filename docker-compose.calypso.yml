@@ -1,75 +1,7 @@
-# =============================================================================
-# DEPLOYMENT PROCEDURE
-# =============================================================================
-# IMPORTANT: shm_size and image changes require container RECREATION (not just
-# restart). A plain `docker-compose restart` will NOT apply them.
-#
-# Standard deploy (config.yml changes only — no recreation needed):
-#   docker-compose -f docker-compose.calypso.yml restart frigate
-#
-# Full recreation deploy (image / shm_size / devices / volumes changed):
-#   Step 1 — recreate container:
-#     docker-compose -f docker-compose.calypso.yml stop frigate
-#     docker-compose -f docker-compose.calypso.yml rm -f frigate
-#     docker-compose -f docker-compose.calypso.yml up -d frigate
-#   Step 2 — fix ZMQ IPC deadlock (REQUIRED after every recreation):
-#     docker-compose -f docker-compose.calypso.yml stop frigate
-#     docker-compose -f docker-compose.calypso.yml start frigate
-#
-# WHY step 2 is required:
-#   `up -d` after `rm -f` recreates the container but leaves ZMQ IPC sockets
-#   in a broken state between the capture and detect processes → det_fps=0 on
-#   all cameras. A stop/start cycle resets the IPC correctly.
-#
-# DO NOT use `--force-recreate` flag — docker-compose v1.29.2 has a bug with
-# newer OCI images (KeyError: 'ContainerConfig'). Use stop+rm+up instead.
-#
-# Verify after deploy:
-#   curl -s http://localhost:5000/api/stats | python3 -m json.tool | grep -E 'inference_speed|det_fps'
-#   df -h /dev/shm
-#
-# TRT ENGINE CACHE (detector device: Tensorrt):
-#   The TRT engine is built on first run (~65s on RTX 5060 Ti) and cached in
-#   ./trt-cache/ on the host (mounted as /config/model_cache inside the container).
-#   During the build: det_fps=0 on all cameras — this is normal.
-#   After build: inference_speed drops from ~122ms (CPU) to ~6-7ms (TRT).
-#   The cache survives container recreation — no rebuild needed on restart.
-#   To force a rebuild: rm -rf ./trt-cache/tensorrt && full recreate.
-#   Fallback: if TRT fails, set device: "CPU" in config.yml and restart
-#   (no recreation needed for config.yml-only changes).
-#
-# TRT RUNTIME LIBS (./trt-libs → /trt-libs in container):
-#   The stable-tensorrt image ships libonnxruntime_providers_tensorrt.so but
-#   NOT the TensorRT runtime libs (libnvinfer.so.10 etc.). These must be
-#   provided externally. ./trt-libs/ contains tensorrt-cu12-libs==10.9.0.34
-#   (pip-extracted) which supports SM 120 (Blackwell GB206, RTX 5060 Ti).
-#   The ldconfig conf is written by the entrypoint (see command: below) so
-#   the dynamic linker finds libnvinfer.so.10 at container start.
-#   TRT 10.6 and earlier do NOT support SM 120 — use 10.7+ only.
-#   To update TRT: pip download tensorrt-cu12-libs==X.Y.Z --no-deps -d /tmp/trt
-#                  pip install --target=./trt-libs /tmp/trt/*.whl
-#                  Then update the version comment here.
-# =============================================================================
-
 services:
   frigate:
-    # stable-tensorrt required for GPU inference (onnxruntime-gpu).
-    # The plain `stable` image ships CPU-only onnxruntime → 146ms inference, CPU 100%.
-    # stable-tensorrt → CUDAExecutionProvider → 11ms inference.
-    # To use TensorrtExecutionProvider instead of CUDA, set detector device: "Tensorrt"
-    # (exact string) — requires TRT engine cache build on first run (~5 min).
     image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
     network_mode: host
-    # shm_size must be large enough for all camera frame buffers.
-    # Formula: sum(width × height × 3 bytes × fps × 0.5s buffer) across all cameras,
-    # multiplied by ~6 for detect + record + live + motion streams per camera.
-    # Calculated for this setup (11 cameras, up to 4K):
-    #   detect streams only: ~374 MB
-    #   × 6 (all stream types): ~2.2 GB
-    #   + headroom for recording cache spikes: → 5120m
-    # History: 512m (corrupted frames) → 2048m (85% full) → 3072m (69% full after 2h) → 5120m
-    # Too small → corrupted/gray frames + "no frames received" in UI.
-    # Changing this value requires full recreation (stop + rm + up + stop + start).
     shm_size: "5120m"
     environment:
       TZ: Europe/Paris
@@ -84,31 +16,8 @@ services:
       - ./trt-libs:/trt-libs:ro          # TRT 10.9.0 runtime libs for SM 120 (Blackwell GB206) support
       - type: tmpfs
         target: /tmp/cache
-        # Phase 5 attempted: 2GB → 4GB did NOT resolve the ZMQ-stuck state
-        # (verified: 4/11 working with both 2GB and 4GB). The /tmp/cache
-        # hypothesis is wrong — the cameras get stuck regardless of cache size.
-        # The real root cause is being investigated via config.yml review.
         tmpfs:
           size: 2147483648  # 2GB in bytes (original value)
-    # Register TRT libs with ldconfig before Frigate starts.
-    # The stable-tensorrt image has libonnxruntime_providers_tensorrt.so but not libnvinfer.so.10.
-    # ./trt-libs (tensorrt-cu12-libs==10.9.0.34) provides libnvinfer.so.10 for SM 120 support.
-    #
-    # FFMPEG SYMLINK FIX (Phase 2.5, operator-approved):
-    #   The stable-tensorrt image ships ffmpeg at /usr/lib/ffmpeg/7.0/bin/ffmpeg
-    #   but Frigate's capture process looks for it at /usr/lib/ffmpeg/bin/ffmpeg
-    #   (note: no version in the path). Without a symlink, every capture process
-    #   crashes with:
-    #     FileNotFoundError: [Errno 2] No such file or directory:
-    #       '/usr/lib/ffmpeg//bin/ffmpeg'
-    #   `ln -sfn` is idempotent: it overwrites any existing symlink but never
-    #   fails if the target already points to the right place. The symlink
-    #   lives inside the container, NOT on a bind-mount, so it is lost on
-    #   every recreate — this shim makes it automatic. See
-    #   plans/startup-reliability-rock-solid-plan.md (Phase 2.5) for context.
-    #   If you need to roll back this change, simply remove the
-    #   `ln -sfn ... && ` segment from the command below — no other lines
-    #   need to change.
     command: >
       sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && ldconfig && ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin && exec python3 -u -m frigate"
     devices:

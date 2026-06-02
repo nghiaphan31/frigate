@@ -1,8 +1,49 @@
-# TRT runtime libs — 4.4GB binary, not committed to git.
-# Reproduced by: pip install --target=./trt-libs tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34
-# See docker-compose.calypso.yml TRT RUNTIME LIBS section for details.
+# ============================================================================
+# TRT RUNTIME LIBS — 4.4 GB binary, not committed to git.
+# ============================================================================
+# Reproduced by:
+#   pip install --target=./trt-libs \
+#       tensorrt-cu12-libs==10.9.0.34 \
+#       tensorrt-cu12-bindings==10.9.0.34
+# See docker-compose.calypso.yml "TRT RUNTIME LIBS" volume for details.
 trt-libs/
 
-# TRT engine cache and model cache — large binary, machine-specific, regenerated on first run.
-# Committed selectively (only small JSON/ONNX metadata files, not engine binaries).
+# ============================================================================
+# TRT ENGINE CACHE — large binary, machine-specific, regenerated on first run.
+# ============================================================================
+# Built by ONNX Runtime + TensorRT Execution Provider on first start (~65 s
+# on RTX 5060 Ti). Subsequent runs load the engine from this path.
+# .gitignore the entire engine cache; it is reproducible from config.yml.
 trt-cache/tensorrt/
+
+# ============================================================================
+# FRIGATE+ MODEL BINARY — 28 MB, downloaded on first run.
+# ============================================================================
+# Sibling .json file is KEPT (documents the model hash for reproducibility).
+trt-cache/6ea1f38db36e21f44a1eb1071d9958ed
+
+# ============================================================================
+# SEMANTIC SEARCH ONNX MODELS — 84 MB vision + 262 MB text, downloaded once.
+# ============================================================================
+# Pulled by Frigate on first start from the Jina CLIP v1 model. Kept small
+# JSON / vocab / tokenizer.json in tokenizer/ — these document the model
+# structure and the tokenizer itself (695 KB).
+trt-cache/jinaai/jina-clip-v1/*.onnx
+
+# ============================================================================
+# HUGGINGFACE HUB ARTIFACTS — ephemeral, redundant with parent dir files.
+# ============================================================================
+# Lock files — 0 bytes, created/removed by huggingface_hub on every access.
+/trt-cache/jinaai/jina-clip-v1/tokenizer/.locks/
+
+# "Not found" placeholders — auto-generated when a referenced file is missing.
+/trt-cache/jinaai/jina-clip-v1/tokenizer/models--jinaai--jina-clip-v1/.no_exist/
+
+# Binary blobs — the actual downloaded tokenizer weights (~1.5 MB).
+# Redundant with the JSON / txt / vocab in the parent tokenizer/ dir, and
+# regenerated on first run by huggingface_hub.
+/trt-cache/jinaai/jina-clip-v1/tokenizer/models--jinaai--jina-clip-v1/blobs/
+
+# Snapshot symlinks — point into blobs/ (now ignored), so they would be
+# broken on the receiver. Redundant with the files in tokenizer/ root.
+/trt-cache/jinaai/jina-clip-v1/tokenizer/models--jinaai--jina-clip-v1/snapshots/

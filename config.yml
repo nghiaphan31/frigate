@@ -1,903 +1,172 @@
-# ============================================================================
-#                           FRIGATE NVR – FULL CONFIGURATION
-# ============================================================================
-#  Host:    Calypso (RTX 5060 Ti 16 GB GPU)
-#  Date:    2026-05-21
-#  Branch:  detection-optimisation
-#
-#  Purpose: Refactored, fully-annotated, self-contained Frigate configuration
-#           * NO YAML anchors – everything is explicit and copy/paste ready
-#           * Heavy inline comments explain WHY each value exists, not just WHAT
-#           * Clear visual separators so you can jump to any section quickly
-#
-# -----------------------------------------------------------------------------
-#  QUICK INDEX
-#    1. GLOBAL SETTINGS
-#         1.1  MQTT         – Home-Assistant event broker
-#         1.2  FFMPEG       – CUDA hardware decoding + record profile
-#         1.3  RECORD       – retention strategy
-#         1.4  SNAPSHOTS    – still-image settings
-#         1.5  OBJECTS      – default detection parameters
-#         1.6  DETECTORS    – NVIDIA GPU via ONNX Runtime + TensorRT
-#         1.7  MODEL        – Frigate+ custom trained model
-#         1.8  MOTION       – global pre-filter (before ML)
-#         1.9  AUDIO        – security-event audio analysis
-#         1.10 GO2RTC       – direct RTSP via Frigate internal go2rtc (NUC retired 2026-06-02)
-#    2. CAMERAS — OUTDOOR (3 Reolink Duo 3, all using sub-stream for detect)
-#         ├─ allee_sur_le_cote        Reolink Duo 3  – 192.168.50.129
-#         ├─ jardin_arriere           Reolink RLC-810A (single-lens) – 192.168.50.207
-#         ├─ vue_entree               Reolink Doorbell POE – 192.168.50.222
-#         ├─ jardin_devant            Reolink Duo 3  – 192.168.50.18
-#         └─ piscine_vue_toit         Reolink Duo 3  – 192.168.50.7
-#    2b. CAMERAS — INDOOR TP-LINK TAPO C210 (3, added 2026-06-02)
-#         ├─ salon                    TP-Link Tapo C210 2K – 192.168.50.17
-#         ├─ buro                     TP-Link Tapo C210 2K – 192.168.50.70
-#         └─ cuisine                  TP-Link Tapo C210 2K – 192.168.50.16
-#    3. ADVANCED FEATURES
-#         3.1 SEMANTIC SEARCH
-# ----------------------------------------------------------------------------
-#
-#  STREAM RESOLUTION REFERENCE
-#  ─────────────────────────────────────────────────────────────────────────
-#  Camera                  │ Main stream   │ Sub stream  │ Detect source
-#  ────────────────────────┼───────────────┼─────────────┼──────────────────
-#  Reolink Duo 3 (×3)      │ 4096×1152     │ 1536×432    │ sub 1536×432
-#  Reolink RLC-810A        │ 3840×2160 4K  │ 640×360     │ main 3840×2160
-#  Reolink Doorbell POE    │ 2560×1920     │ 640×480     │ main 2560×1920
-#  TP-Link Tapo C210 (×3)  │ 2304×1296 2K  │ 640×360     │ main 2304×1296
-#  ─────────────────────────────────────────────────────────────────────────
-#
-#  DETECTION STREAM STRATEGY (no-cropped-streams branch)
-#  ─────────────────────────────────────────────────────────────────────────
-#  • All Reolink Duo 3 cameras use their 1536×432 sub-stream for detection.
-#    The 3.5:1 panoramic aspect ratio of the main stream (4096×1152) is
-#    incompatible with the mobilenet/SSD model input shape, so detection
-#    runs on the already-letterboxed sub-stream. Main stream is reserved
-#    for lossless recording only.
-#  • Single-lens Reolinks (jardin_arriere RLC-810A, vue_entree Doorbell) and
-#    indoor Tapo C210 cams use the main stream directly for detection.
-#  • jardin_arriere (4K) is capped at 5 fps for detection — the model input
-#    is 320×320 regardless, so 10 fps at 4K would waste GPU decode bandwidth.
-#  • All crop cameras (_left/_right) and the CUDA filter-graph crop chain
-#    have been removed in this branch. If you need higher resolution on the
-#    Duo 3s, run the model on a window of the main stream instead.
-#  ─────────────────────────────────────────────────────────────────────────
-#
-#  DETECTION PARAMETER STATUS (iter2 — data-driven tight params 2026-05-25)
-#  ─────────────────────────────────────────────────────────────────────────
-#  Parameters derived from 72h soak (2026-05-22→2026-05-25, 2822 events).
-#  Method: p5/p95 percentiles with safety margins (×0.70 / ×1.30 for area,
-#  ×0.80 / ×1.20 for ratio). max_ratio capped at 10.0 (degenerate boxes).
-#  Low-sample cameras (n<50) flagged — parameters are conservative estimates.
-#  See: plans/detection-optimisation-plan.md § Track A — Soak 3 Full Dump
-#  ─────────────────────────────────────────────────────────────────────────
-
-# ============================================================================
-# 1. GLOBAL SETTINGS – APPLY TO EVERY CAMERA UNLESS OVERRIDDEN
-# ============================================================================
-
-# ---------------------------------------------------------------------------
-# 1.1 MQTT – CONNECTION TO HOME-ASSISTANT MOSQUITTO BROKER
-# ---------------------------------------------------------------------------
 mqtt:
-  host: 192.168.50.125         # Mosquitto broker on Home Assistant
+  host: 192.168.50.125
   user: mosquito
   password: mosquito
   topic_prefix: calypso_frigate
   client_id: frigate_calypso_client
 
-# ---------------------------------------------------------------------------
-# 1.2 FFMPEG – CUDA HARDWARE ACCELERATION & OUTPUT PROFILES
-# ---------------------------------------------------------------------------
 ffmpeg:
-  # Explicit binary directory (added 2026-06-02).
-  # The stable-tensorrt image ships ffmpeg at /usr/lib/ffmpeg/7.0/bin/ffmpeg
-  # but Frigate's default lookup expects /usr/lib/ffmpeg/bin/ffmpeg.
-  # Frigate's `ffmpeg.path` is treated as a DIRECTORY and `/bin/ffmpeg` is
-  # appended automatically, so the directory containing the binary goes here.
-  # The docker-compose.calypso.yml entrypoint creates a symlink to bridge
-  # that gap, but the running container was created BEFORE the symlink shim
-  # was added (commit a49aa6d, 2026-06-01) and lacks it.
-  # Setting path: here bypasses the symlink requirement entirely. Once a
-  # container recreate is performed, this becomes a harmless explicit
-  # override that documents the actual binary location.
   path: /usr/lib/ffmpeg/7.0
-
-  # RTX 5060 Ti 16 GB — CUDA hardware decoding enabled.
-  # -hwaccel_output_format cuda is intentionally omitted globally: it would
-  # leave decoded frames as CUDA surfaces, breaking cameras whose default
-  # -vf fps/scale filter cannot operate on CUDA surfaces.
-  # no-cropped-streams branch: there are no per-camera crop filter chains any
-  # more, so no per-camera hwaccel_args override is needed. Detection runs
-  # on native frame buffers and Frigate's built-in filter graph handles them.
   hwaccel_args:
     - -hwaccel
     - cuda
     - -hwaccel_device
     - '0'
-
   output_args:
-    # preset-record-generic-audio-aac:
-    #   • copies original video stream (no re-encode) — fast and lossless
-    #   • transcodes audio to AAC — required by browsers that reject G.711/PCMU
     record: preset-record-generic-audio-aac
 
-# ---------------------------------------------------------------------------
-# 1.3 RECORD – VIDEO RETENTION POLICY
-# ---------------------------------------------------------------------------
 record:
   enabled: true
   continuous:
-    days: 0                    # No continuous recording — motion-triggered only
+    days: 0
   motion:
-    days: 1                    # Keep motion-triggered clips for 1 day
-                               # Reduced from 3 days: 11 cameras at high resolution
-                               # (up to 4K) fills disk in <1h at 3-day retention.
-                               # Increase back to 3 days once storage is sized correctly.
+    days: 1
 
-# ---------------------------------------------------------------------------
-# 1.4 SNAPSHOTS – STILL-IMAGE SETTINGS
-# ---------------------------------------------------------------------------
 snapshots:
   enabled: true
-  timestamp: true              # Burn date & time onto the image
-  bounding_box: true           # Draw bounding box around detected object
-  clean_copy: true             # Also save an unannotated copy
-  crop: false                  # Keep full frame (not cropped to bounding box)
+  timestamp: true
+  bounding_box: true
+  clean_copy: true
+  crop: false
   retain:
-    default: 0                 # Discard non-person snapshots immediately
+    default: 0
     objects:
-      person: 7                # Keep person snapshots for 7 days
+      person: 7
 
-# ---------------------------------------------------------------------------
-# 1.5 OBJECTS – DEFAULT DETECTION PARAMETERS (overridden per camera below)
-# ---------------------------------------------------------------------------
 objects:
   track:
     - person
   filters:
     person:
-      # Global defaults — cameras that don't override these inherit them.
-      # Sub-stream panoramic cameras (allee_sur_le_cote, jardin_devant,
-      # piscine_vue_toit) now override threshold/min_score/min_area directly.
-      # These global values are the fallback for any camera without overrides.
-      min_area: 300            # Covers person at 17m on 432px sub-stream (≈516px²)
-      min_score: 0.40          # Lowered globally to catch small/distant persons
-      threshold: 0.45          # Lowered globally to catch small/distant persons
-      max_area: 100000         # Discard oversized blobs (e.g. frozen/corrupt frames)
+      min_area: 300
+      min_score: 0.40
+      threshold: 0.45
+      max_area: 100000
 
-# ---------------------------------------------------------------------------
-# 1.6 DETECT – GLOBAL ENABLE (required; Frigate 0.17.1 defaults to false)
-# ---------------------------------------------------------------------------
 detect:
-  enabled: true                # Must be explicitly true — Frigate default is false
+  enabled: true
 
-# ---------------------------------------------------------------------------
-# 1.7 DETECTORS – RTX 5060 Ti 16 GB via ONNX Runtime + TensorRT
-# ---------------------------------------------------------------------------
 detectors:
   onnx1:
-    type: onnx                 # NVIDIA GPU inference via ONNX Runtime
-    # device: "0" (CUDAExecutionProvider) deadlocks on RTX 5060 Ti (Blackwell/GB206)
-    # with ONNX Runtime 1.22.0 — CudaGraphRunner hangs on first run_with_iobinding.
-    # device: "Tensorrt" uses TensorrtExecutionProvider (bypasses CudaGraphRunner entirely).
-    #   Requires TRT 10.7+ for SM 120 (Blackwell GB206) support.
-    #   TRT 10.9.0 installed in container via pip (tensorrt-cu12-libs==10.9.0.34).
-    #   ldconfig entry: /etc/ld.so.conf.d/tensorrt.conf → tensorrt_libs dir.
-    #   First run builds TRT engine cache (~5 min); subsequent runs load from cache at ~2-5ms.
-    #   Cache persisted in ./trt-cache:/config/model_cache/tensorrt/ort/trt-engines/.
-    # Fallback: device: "CPU" — plain CPUExecutionProvider, ~122ms inference, no GPU deadlock.
-    device: "Tensorrt"         # TRT 10.9.0 + SM 120 support — ~2-5ms inference
+    type: onnx
+    device: "Tensorrt"
 
-# ---------------------------------------------------------------------------
-# 1.7 MODEL – Frigate+ custom trained model
-# ---------------------------------------------------------------------------
-# This plus:// model was trained on snapshots from these cameras.
-# It improves detection accuracy for the specific angles, lighting, and
-# environments of this installation compared to the default mobilenet model.
 model:
   path: plus://6ea1f38db36e21f44a1eb1071d9958ed
 
-# ---------------------------------------------------------------------------
-# 1.8 MOTION – GLOBAL PRE-FILTER (runs before ML inference)
-# ---------------------------------------------------------------------------
 motion:
-  threshold: 26                # Higher = less sensitive. 26 catches light changes
-                               # while filtering most micro-movements (leaves, noise).
-  contour_area: 30             # Minimum blob size to consider as motion (px²).
-                               # Rejects isolated leaves and sensor noise.
-  frame_alpha: 0.4             # Temporal smoothing — avoids reacting to single-frame spikes
+  threshold: 26
+  contour_area: 30
+  frame_alpha: 0.4
   delta_alpha: 0.5
-  improve_contrast: true       # Helps night/IR detection without penalising daytime
+  improve_contrast: true
 
-# ---------------------------------------------------------------------------
-# 1.9 AUDIO – SECURITY-EVENT ANALYSIS
-# ---------------------------------------------------------------------------
 audio:
   enabled: true
-  # min_volume thresholds:
-  #   ~200  very sensitive (quiet indoor)
-  #   ~350  typical outdoor background
-  #   ~700+ noisy street-facing camera
   min_volume: 350
 
-  # listen: is commented out — Frigate will log all recognised audio labels.
-  # Once you confirm which labels appear, uncomment and restrict to:
-  #   glass_breaking, gunshot_gunfire, explosion, scream, yell,
-  #   smoke_alarm, fire_alarm, carbon_monoxide_alarm, car_alarm, siren
-
-# ---------------------------------------------------------------------------
-# 1.10 GO2RTC – DIRECT RTSP via Frigate internal go2rtc (NUC retired 2026-06-02)
-# ---------------------------------------------------------------------------
-# Frigate's internal go2rtc instance powers the web UI live view and provides
-# streams to Frigate's ffmpeg inputs. Calypso's go2rtc now pulls RTSP
-# directly from each camera.
-#
-# Architecture (since 2026-06-02):
-#   Camera (RTSP) → Calypso go2rtc (here, 127.0.0.1:8554) → Frigate ffmpeg
-#
-# Previously: Camera → NUC go2rtc (:8556) → Calypso go2rtc → Frigate ffmpeg.
-# The NUC proxy hop was retired so the Calypso go2rtc is the single re-stream
-# point. go2rtc reuses one upstream RTSP connection per camera across all
-# downstream Frigate consumers, so the per-camera load is unchanged.
-#
-# Reliability options (applied to every stream):
-#   • ffmpeg:rtsp_transport=tcp  — TCP transport prevents UDP packet loss
-#   • ffmpeg:cache=30            — 30-packet jitter buffer in go2rtc's ffmpeg
-# These mirror the options that the NUC go2rtc used previously and are
-# required to keep 4K main streams stable.
-#
-# Credentials:
-#   • Outdoor Reolink cams (Duo 3 / RLC-810A / Doorbell POE) use the
-#     built-in 'admin' account: admin:fG-56lui
-#   • Indoor TP-Link Tapo C210 cams use a dedicated 'frigate_nghia' account
-#     (the Tapo app's RTSP user): frigate_nghia:fG-56lui
-#   The Tapo C210 is a different vendor from the outdoor Reolink cams —
-#   it is NOT a Reolink product and is NOT related to ring-mqtt. It is
-#   used as an indoor Ring replacement.
-#
-# Stream inventory (8 cameras, 16 unique physical streams, 16 go2rtc entries):
-#   All 6 vestigial crop streams (_left/_right per Duo 3) have been removed
-#   in the no-cropped-streams branch. Each camera exposes only its native
-#   _main and _sub re-streams now.
-#   Outdoor Reolink (admin:fG-56lui):
-#     allee_sur_le_cote_main/sub     ← 192.168.50.129  Reolink Duo 3
-#     jardin_arriere_main/sub        ← 192.168.50.207  Reolink RLC-810A
-#     vue_entree_main/sub            ← 192.168.50.222  Reolink Doorbell POE
-#     jardin_devant_main/sub         ← 192.168.50.18   Reolink Duo 3
-#     piscine_vue_toit_main/sub      ← 192.168.50.7    Reolink Duo 3
-#   Indoor TP-Link Tapo C210 (frigate_nghia:fG-56lui, port 554):
-#     tapo_c210_salon_main/sub       ← 192.168.50.17   TP-Link Tapo C210 2K
-#     tapo_c210_buro_main/sub        ← 192.168.50.70   TP-Link Tapo C210 2K
-#     tapo_c210_cuisine_main/sub     ← 192.168.50.16   TP-Link Tapo C210 2K
-# ---------------------------------------------------------------------------
 go2rtc:
   webrtc:
-    # WebRTC achieves sub-200ms latency vs MSE.
-    # Port 8555 must be reachable on the Calypso machine.
     candidates:
       - 192.168.50.150:8555
       - stun:8555
-
   streams:
-    # ── Allée sur le côté — Reolink Duo 3 (192.168.50.129) ──────────────────
-    # Main stream:  4096×1152  (full panoramic, used for recording)
-    # Sub stream:   1536×432   (full panoramic, used for live view + detection)
-    allee_sur_le_cote_main:
-      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
     allee_sur_le_cote_sub:
       - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
 
-    # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ──────
-    # Main stream:  3840×2160  (4K UHD, used for detection + recording)
-    # Sub stream:   640×360    (used for live view only)
-    jardin_arriere_main:
-      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_main
-    jardin_arriere_sub:
-      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub
-
-    # ── Vue entrée — Reolink Doorbell POE (192.168.50.222) ──────────────────
-    # Main stream:  2560×1920  (4:3 aspect, used for detection + recording)
-    # Sub stream:   640×480    (4:3 aspect, used for live view only)
-    vue_entree_main:
-      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_main
-    vue_entree_sub:
-      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_sub
-
-    # ── Jardin devant — Reolink Duo 3 (192.168.50.18) ───────────────────────
-    # Main stream:  4096×1152  (full panoramic, used for recording)
-    # Sub stream:   1536×432   (full panoramic, used for live view + detection)
-    jardin_devant_main:
-      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
-    jardin_devant_sub:
-      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
-
-    # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────────
-    # Main stream:  4096×1152  (full panoramic, recording only)
-    # Sub stream:   1536×432   (full panoramic, live view + detection)
-    piscine_vue_toit_main:
-      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
-    piscine_vue_toit_sub:
-      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
-
-    # ── TP-Link Tapo C210 indoor cameras (added 2026-06-02) ────────────────
-    # Indoor TP-Link Tapo C210 2K cams used as Ring replacements.
-    # Different vendor from the outdoor Reolink cams (NOT Reolink, NOT
-    # related to ring-mqtt). Tapo uses standard RTSP on port 554 with
-    # /stream1 (main) and /stream2 (sub) path conventions.
-    # Main: 2304×1296 (2K QHD)  Sub: 640×360
-    tapo_c210_salon_main:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream1
-    tapo_c210_salon_sub:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream2
-    tapo_c210_buro_main:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream1
-    tapo_c210_buro_sub:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream2
-    tapo_c210_cuisine_main:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream1
-    tapo_c210_cuisine_sub:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream2
-
-# ============================================================================
-# 2. CAMERA DEFINITIONS
-# ============================================================================
-
 cameras:
 
-  # ==========================================================================
-  # CAMERA: ALLEE_SUR_LE_COTE
-  # Hardware:  Reolink Duo 3 Wi-Fi/ETH — 192.168.50.129
-  # Height:    4m above ground
-  # Position:  Driveway side view, eye-level, covers gate + approach
-  # Streams:
-  #   detect  → sub 1536×432   (full panoramic sub-stream)
-  #             no-cropped-streams branch: no _left/_right split cameras, so
-  #             detection runs on the full panoramic sub-stream directly.
-  #   record  → main 4096×1152 (full panoramic, lossless copy)
-  #   audio   → main (mic channel embedded in main stream)
-  #   live    → sub 1536×432   (lightweight for UI grid)
-  # ==========================================================================
+  # =====================================================================
+  # CAMERA: allee_sur_le_cote
+  # ---------------------------------------------------------------------
+  # Model:    Reolink Duo 3 (dual-lens 4K panoramic)
+  # Location: Allée côté — private driveway on the side of the property
+  # IP:       192.168.50.129
+  # Mount:    ~4 m height, looking down the side alley
+  # RTSP:     admin:fG-56lui@192.168.50.129:8554
+  #
+  # STREAMS (sub only — main is unused in this config):
+  #   main: 4096×1152  (rtsp://.../h264Preview_01_main)  [NOT USED]
+  #   sub : 1536×432   (rtsp://.../h264Preview_01_sub)   [detect + record + audio]
+  #   panoramic aspect ratio: 3.56:1
+  #   sub pixel density: 663,552 px
+  #
+  # GEOMETRY (person 1.8 m tall, 4 m mount height):
+  #   at 17 m ground → slant 17.5 m, pixel_height ≈ 44, area ≈ 530 px² (silhouette)
+  #   at 25 m ground → slant 25.3 m, pixel_height ≈ 31, area ≈ 248 px² (silhouette)
+  #
+  # TUNED DETECTION (iter2 2026-05-25, 72 h soak, 373 events):
+  #   detect: 1536×432 @ 5 fps
+  #   p5_area=17940  p95_area=248140
+  #   p5_ratio=1.724 p95_ratio=4.793
+  #   p10_score=0.590 p5_score=0.545
+  #   applied: min_area=12558  max_area=322582
+  #            min_ratio=1.38  max_ratio=5.75
+  #            threshold=0.56  min_score=0.52
+  #
+  # ZONES:
+  #   prive  — private driveway, immediate alert on entry
+  #   rodage — fence line, alert only after 10 s loitering
+  # =====================================================================
   allee_sur_le_cote:
-
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_sub
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [record, audio]
-
+          roles: [detect, record, audio]
     live:
       streams:
         Allée côté (panoramique): allee_sur_le_cote_sub
-
     audio:
       enabled: true
-
     mqtt:
       enabled: true
       timestamp: true
       bounding_box: true
       crop: false
-
     detect:
-      # Sub-stream: 1536×432 (full panoramic, 3.56:1 aspect ratio)
-      # Pixel density: 663,552 px total
       width: 1536
       height: 432
       fps: 5
-
     objects:
       track: [person]
       filters:
         person:
-          # GEOMETRY (camera at 4m, sub-stream 1536×432):
-          #   Person 1.8m tall at 17m ground distance → slant range √(17²+4²)=17.5m
-          #   pixel_height = 1.8/17.5 × 432 = 44px  pixel_width ≈ 12px  area ≈ 530px²
-          #   Person 1.8m tall at 25m ground distance → slant range √(25²+4²)=25.3m
-          #   pixel_height = 1.8/25.3 × 432 = 31px  pixel_width ≈ 8px   area ≈ 248px²
-          # iter2 2026-05-25: 373 events, 72h soak, p5_area=17940 p95_area=248140
-          # p5_ratio=1.724 p95_ratio=4.793  p10_score=0.590 p5_score=0.545
-          min_area: 12558        # p5×0.70 (sub 1536×432 = 663552px)
-          max_area: 322582       # p95×1.30
-          min_ratio: 1.38        # p5_ratio×0.80 (panoramic sub: wide boxes expected)
-          max_ratio: 5.75        # p95_ratio×1.20
-          threshold: 0.56        # p10_score×0.95
-          min_score: 0.52        # p5_score×0.95
-
+          min_area: 12558
+          max_area: 322582
+          min_ratio: 1.38
+          max_ratio: 5.75
+          threshold: 0.56
+          min_score: 0.52
     snapshots:
       enabled: true
-
     zones:
       prive:
-        # Private driveway — immediate alert on entry
-        coordinates:
-          0.276,1,0,1,0,0.539,0.064,0.645,0.104,0.361,0.102,0.329,0.092,0.31,0.131,0.248,0.225,0.112,0.323,0,0.478,0,0.65,0,0.693,0.053,0.762,0.129,0.827,0.22,0.887,0.323,0.908,0.362,0.925,0.332,0.95,0.331,0.963,0.395,0.972,0.439,0.989,0.588,1,0.573,0.999,0.996
+        coordinates: 0.276,1,0,1,0,0.539,0.064,0.645,0.104,0.361,0.102,0.329,0.092,0.31,0.131,0.248,0.225,0.112,0.323,0,0.478,0,0.65,0,0.693,0.053,0.762,0.129,0.827,0.22,0.887,0.323,0.908,0.362,0.925,0.332,0.95,0.331,0.963,0.395,0.972,0.439,0.989,0.588,1,0.573,0.999,0.996
         loitering_time: 0
         inertia: 3
         objects: [person]
         filters:
           person:
-            threshold: 0.56   # iter2 2026-05-25
+            threshold: 0.56
             min_area: 12558
             min_ratio: 1.38
             max_ratio: 5.75
-
       rodage:
-        # Fence line — alert only after 10s loitering
         coordinates: 0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
         loitering_time: 10
         inertia: 3
         objects: [person]
         filters:
           person:
-            threshold: 0.56   # iter2 2026-05-25
+            threshold: 0.56
             min_area: 12558
             min_ratio: 1.38
             max_ratio: 5.75
-
     review:
       alerts:
         required_zones: prive
       detections:
         required_zones: rodage
-
-  # ==========================================================================
-  # CAMERA: JARDIN_ARRIERE
-  # Hardware:  Reolink RLC-810A single-lens — 192.168.50.207
-  # Height:    2.2m above ground
-  # Position:  North-facing, covers rear garden, play area, and shed
-  # Streams:
-  #   detect  → main 3840×2160  (4K UHD)
-  #             iter1: migrated from sub 640×360 → 36× more pixels
-  #             fps=5: 4K at 10fps wastes GPU decode; model input is 320×320
-  #   record  → main 3840×2160 (same connection, Frigate deduplicates)
-  #   audio   → main (mic channel embedded)
-  #   live    → sub 640×360 (lightweight for UI grid)
-  # ==========================================================================
-  jardin_arriere:
-
-    ffmpeg:
-      inputs:
-        - path: rtsp://127.0.0.1:8554/jardin_arriere_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/jardin_arriere_main
-          roles: [record, audio]
-
-    live:
-      streams:
-        Jardin arrière: jardin_arriere_sub
-
-    audio:
-      enabled: true
-
-    detect:
-      # Main stream: 3840×2160 (4K UHD, 16:9)
-      # Pixel density: 8,294,400 px total
-      # fps=5: Frigate model input is 320×320 regardless of source resolution;
-      # 4K at 10fps would double GPU decode load with no detection benefit.
-      width: 3840
-      height: 2160
-      fps: 5
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 2026-05-25: 1184 events, 72h soak, p5_area=132492 p95_area=959812
-          # p5_ratio=0.081 p95_ratio=2.025  p10_score=0.618 p5_score=0.576
-          # iter3 (2026-05-26): 47 events seen, 4 above_max_ratio → p95 observed=5.86
-          #   max_ratio too low — panoramic overhead sees very wide boxes.
-          #   Raised to 6.5 to accommodate observed distribution.
-          min_area: 92744          # p5×0.70 (main 3840×2160 = 8294400px)
-          max_area: 1247755        # p95×1.30
-          min_ratio: 0.10          # p5_ratio floored to 0.10 (p5=0.081)
-          max_ratio: 6.50           # iter3: was 2.43, raised (observed p95=5.86)
-          threshold: 0.59          # p10_score×0.95
-          min_score: 0.55          # p5_score×0.95
-
-    snapshots:
-      enabled: true
-
-    motion:
-      mask:
-        - 0.087,0.123,0.065,0.241,0.072,0.32,0.095,0.365,0.155,0.411,0.198,0.384,0.231,0.336,0.245,0.301,0.222,0.262,0.22,0.215,0.208,0.163,0.189,0.131,0.158,0.122,0.13,0.12
-        - 0.429,0.073,0.45,0.078,0.471,0.126,0.47,0.158,0.453,0.188,0.429,0.179,0.412,0.143,0.398,0.115
-        - 0.626,0.271,0.645,0.276,0.645,0.313,0.626,0.312
-        - 0.589,0.265,0.605,0.268,0.604,0.298,0.587,0.293
-        - 0.535,0.258,0.558,0.264,0.555,0.321,0.529,0.314
-        - 0.149,0.017,0.253,0.021,0.253,0.07,0.15,0.063
-        - 0.351,0.061,0.367,0.028,0.392,0.023,0.414,0.036,0.424,0.061,0.392,0.067
-
-    zones:
-      # ---- 'prive' — Play area + shed ------------------------------------
-      prive:
-        coordinates:
-          0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,0.997,0.997
-        loitering_time: 0
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.59          # iter2 2026-05-25
-            min_area: 92744
-            min_ratio: 0.10
-            max_ratio: 6.50          # iter3: was 2.43, raised (observed p95=5.86)
-
-    # ----------------------------- REVIEW RULES -----------------------------
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: prive
-
-  # ========================================================================
-  # CAMERA: VUE_ENTREE — Reolink Doorbell POE
-  # Height:    1.8m above ground
-  # Resolution:
-  #   main  = 2560×1920 (4:3, ~4.9 MP) — detect + record + audio
-  #   sub   = 640×480   (4:3, ~0.3 MP) — live view only
-  # iter1: migrated detect from sub (640×480) → main (2560×1920)
-  # ========================================================================
-  vue_entree:
-
-    ffmpeg:
-      inputs:
-        # main stream → detect (2560×1920) + record + audio
-        - path: rtsp://127.0.0.1:8554/vue_entree_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/vue_entree_main
-          roles: [record, audio]
-
-    live:
-      streams:
-        Vue entrée: vue_entree_sub
-
-    audio:
-      enabled: true
-
-    detect:
-      # Reolink Doorbell POE main stream = 2560×1920 (confirmed)
-      width: 2560
-      height: 1920
-      fps: 10
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (57 events, 72h).
-          # area p5=2366 p95=3332815  ratio p5=0.19 p95=10.00
-          min_area: 2366
-          max_area: 3332815
-          min_ratio: 0.19
-          max_ratio: 10.0
-          threshold: 0.64
-          min_score: 0.58
-
-    snapshots:
-      enabled: true
-
-    motion:
-      mask:
-        - 0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081
-        - 0.975,0.602,0.998,0.604,0.996,0.286,0.962,0.29,0.968,0.342,0.924,0.39,0.906,0.406,0.932,0.452,0.92,0.477,0.921,0.525,0.937,0.548,0.964,0.553
-        - 0.704,0,0.766,0.103,0.799,0.102,0.872,0.082,0.904,0.055,0.877,0.005,0.857,0
-
-    zones:
-      prive:
-        coordinates:
-          0,0.735,0,0.488,0.304,0.523,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0.73,1,0.741,0.953,0.676,0.893,0.515,0.96,0.363,0.975,0.188,0.956,0.036,0.89,0.03,0.744
-        loitering_time: 0
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.64
-            min_area: 2366
-            min_ratio: 0.19
-            max_ratio: 10.0
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: prive
-
-  # ========================================================================
-  # CAMERA: JARDIN_DEVANT — Front garden whole-frame (Reolink Duo 3)
-  # Height:    6.5m above ground
-  # Resolution:
-  #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
-  #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
-  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD.
-  #       no-cropped-streams branch: detection runs on the full panoramic
-  #       sub-stream — no _left/_right split cameras exist any more.
-  # ========================================================================
-  jardin_devant:
-    ffmpeg:
-      inputs:
-        # sub stream → detect (1536×432, full panoramic overview)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_sub
-          roles: [detect]
-        # main stream → record + audio (4096×1152)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [record, audio]
-
-    live:
-      streams:
-        Jardin devant (panoramique): jardin_devant_sub
-
-    audio:
-      enabled: false
-
-    detect:
-      # Reolink Duo 3 sub stream = 1536×432 (full panoramic)
-      width: 1536
-      height: 432
-      fps: 10
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (162 events, 72h).
-          # area p5=1442 p95=132761  ratio p5=0.38 p95=10.00
-          # iter3 (2026-05-26): 17 events seen, 94% above max_area → p95 observed ~1.84M
-          #   max_area catastrophically too low for doorbell close-range detections.
-          #   Raised to 1,500,000 (10× iter2 max_area) to accommodate large close boxes.
-          #   threshold/min_score slightly raised as detection now includes more true persons.
-          min_area: 1442
-          max_area: 1500000     # iter3: was 132,761, raised to 1.5M (observed p95 ~1.84M)
-          min_ratio: 0.38
-          max_ratio: 10.0
-          threshold: 0.52          # iter3: was 0.55
-          min_score: 0.47          # iter3: was 0.49
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates:
-          0,0.533,0.234,0.84,0.249,0.631,0.258,0.541,0.264,0.474,0.266,0.396,0.283,0.253,0.293,0.241,0.321,0.223,0.472,0.241,0.572,0.253,0.637,0.307,0.656,0.217,0.694,0.234,0.727,0.26,0.746,0.274,0.76,0.237,0.779,0.433,0.785,0.479,0.826,0.828,1,0.61,1,0.716,1,0.767,1,0.827,1,1,0,1
-        loitering_time: 0
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.52        # iter3: was 0.55
-            min_area: 1442
-            min_ratio: 0.38
-            max_ratio: 10.0
-      rodage:
-        coordinates:
-          0.303,0,0.346,0,0.433,0,0.528,0,0.602,0,0.635,0,0.666,0.026,0.702,0.093,0.73,0.124,0.748,0.131,0.758,0.236,0.752,0.273,0.744,0.297,0.679,0.243,0.658,0.226,0.64,0.291,0.568,0.254,0.499,0.229,0.438,0.229,0.316,0.231,0.282,0.227,0.233,0.835,0.209,0.809,0.259,0.214,0.272,0.129
-        loitering_time: 10
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.55
-            min_area: 1442
-            min_ratio: 0.38
-            max_ratio: 10.0
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: rodage
-
-    motion:
-      mask: 0.647,0.095,0.64,0.188,0.653,0.229,0.675,0.211,0.682,0.129,0.671,0.077
-
-  # ========================================================================
-  # CAMERA: PISCINE_VUE_TOIT — Pool rooftop whole-frame (Reolink Duo 3)
-  # Height:    6.5m above ground
-  # Resolution:
-  #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
-  #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
-  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD.
-  #       no-cropped-streams branch: detection runs on the full panoramic
-  #       sub-stream — no _left/_right split cameras exist any more.
-  # ========================================================================
-  piscine_vue_toit:
-
-    ffmpeg:
-      inputs:
-        # sub stream → detect (1536×432, full panoramic overview)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_sub
-          roles: [detect]
-        # main stream → record + audio (4096×1152)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [record, audio]
-
-    live:
-      streams:
-        Piscine toit (panoramique): piscine_vue_toit_sub
-
-    audio:
-      enabled: true
-
-    detect:
-      # Reolink Duo 3 sub stream = 1536×432 (full panoramic)
-      width: 1536
-      height: 432
-      fps: 10
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (168 events, 72h).
-          # area p5=1554 p95=60901  ratio p5=0.53 p95=10.00
-          # iter3 (2026-05-26): 4 events seen, 100% above max_area → p95 observed ~233k
-          #   max_area too low for close-range rooftop detections. Raised to p95×5.
-          #   min_ratio lowered to 0.35 to allow very thin (upright) standing persons.
-          #   threshold/min_score lowered slightly (still well above model baseline).
-          min_area: 1554
-          max_area: 302935      # iter3: was 60901, raised to p95×5 (observed ~233k in 10h)
-          min_ratio: 0.35        # iter3: was 0.53, lowered to allow thin upright persons
-          max_ratio: 10.0
-          threshold: 0.61        # iter3: was 0.68, lowered (still above model floor)
-          min_score: 0.59        # iter3: was 0.65, lowered
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates:
-          0.097,1,0.178,0.715,0.249,0.38,0.245,0.3,0.243,0.249,0.233,0.173,0.27,0.084,0.291,0.031,0.301,0,0.316,0,0.37,0,0.374,0.059,0.387,0.059,0.4,0.059,0.405,0.021,0.495,0.021,0.534,0.098,0.587,0.257,0.615,0.338,0.629,0.406,0.642,0.445,0.652,0.454,0.666,0.453,0.681,0.499,0.691,0.576,0.703,0.609,0.713,0.611,0.796,0.006,0.999,0,0.998,0.994
-        loitering_time: 0
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.61        # iter3: was 0.68
-            min_area: 1554
-            min_ratio: 0.35        # iter3: was 0.53
-            max_ratio: 10.0
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: prive
-
-  # ==========================================================================
-  # CAMERA: SALON — TP-Link Tapo C210 2K (indoor, living room)
-  # Position:  Indoor, living room
-  # Streams:
-  #   detect  → main 2304×1296 (2K QHD)
-  #   record  → main 2304×1296 (shared connection, Frigate deduplicates)
-  #   audio   → main (built-in mic)
-  #   live    → sub 640×360   (lightweight for UI grid)
-  # ==========================================================================
-  salon:
-    ffmpeg:
-      inputs:
-        - path: rtsp://127.0.0.1:8554/tapo_c210_salon_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/tapo_c210_salon_main
-          roles: [record, audio]
-
-    live:
-      streams:
-        Salon: tapo_c210_salon_sub
-
-    audio:
-      enabled: true
-
-    mqtt:
-      enabled: true
-      timestamp: true
-      bounding_box: true
-      crop: false
-
-    detect:
-      # TP-Link Tapo C210 2K main stream = 2304×1296 (2K QHD)
-      width: 2304
-      height: 1296
-      fps: 10
-
-    objects:
-      track: [person]
-      # Inherits global filters.person from section 1.5 (no override).
-
-    snapshots:
-      enabled: true
-
-    review:
-      alerts: {}
-      detections: {}
-
-  # ==========================================================================
-  # CAMERA: BURO — TP-Link Tapo C210 2K (indoor, office/study)
-  # ==========================================================================
-  buro:
-    ffmpeg:
-      inputs:
-        - path: rtsp://127.0.0.1:8554/tapo_c210_buro_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/tapo_c210_buro_main
-          roles: [record, audio]
-
-    live:
-      streams:
-        Bureau: tapo_c210_buro_sub
-
-    audio:
-      enabled: true
-
-    mqtt:
-      enabled: true
-      timestamp: true
-      bounding_box: true
-      crop: false
-
-    detect:
-      # TP-Link Tapo C210 2K main stream = 2304×1296 (2K QHD)
-      width: 2304
-      height: 1296
-      fps: 10
-
-    objects:
-      track: [person]
-      # Inherits global filters.person from section 1.5 (no override).
-
-    snapshots:
-      enabled: true
-
-    review:
-      alerts: {}
-      detections: {}
-
-  # ==========================================================================
-  # CAMERA: CUISINE — TP-Link Tapo C210 2K (indoor, kitchen)
-  # ==========================================================================
-  cuisine:
-    ffmpeg:
-      inputs:
-        - path: rtsp://127.0.0.1:8554/tapo_c210_cuisine_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/tapo_c210_cuisine_main
-          roles: [record, audio]
-
-    live:
-      streams:
-        Cuisine: tapo_c210_cuisine_sub
-
-    audio:
-      enabled: true
-
-    mqtt:
-      enabled: true
-      timestamp: true
-      bounding_box: true
-      crop: false
-
-    detect:
-      # TP-Link Tapo C210 2K main stream = 2304×1296 (2K QHD)
-      width: 2304
-      height: 1296
-      fps: 10
-
-    objects:
-      track: [person]
-      # Inherits global filters.person from section 1.5 (no override).
-
-    snapshots:
-      enabled: true
-
-    review:
-      alerts: {}
-      detections: {}
-
-# ===========================================================================
-# GLOBAL FOOTER
-# ===========================================================================
 
 version: 0.17-0
 
