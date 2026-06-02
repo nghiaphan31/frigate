@@ -13,6 +13,7 @@ Manual, robust procedure to bring up the Frigate NVR from a host reboot to fully
 4. [Health checks](#4-health-checks) — 6 transparent monitoring commands
 4.5. [MQTT state subscription](#45-mqtt-state-subscription) — live `calypso_frigate/bringup/#` feed
 5. [Failure recovery](#5-failure-recovery) — per failure mode
+5.8. [Failure mode catalog](#58-failure-mode-catalog-per-check) — machine-greppable per-step table
 6. [Logging locations](#6-logging-locations)
 
 ---
@@ -565,6 +566,52 @@ mountpoint -q "$FRIGATE_MEDIA_PATH" && echo OK || {
 ```
 
 Detection continues during the NAS outage (Frigate buffers in memory briefly, then drops new segments with a `failed to write segment` log line).
+
+### 5.8 Failure mode catalog (per check)
+
+This table is the machine-greppable counterpart to the inline `fix:` hints
+in the [`bring-up.sh`](bring-up.sh) report. **Same strings, same
+recommendations** — the inline hint shows on the live report, this
+section is the in-depth view. Use it for documentation, for cross-references
+in your runbook, and as the source of truth for what to expect when
+`./bring-up.sh --recover=STRATEGY` is the right action.
+
+The 8 pre-flight gates (run first, before any container interaction)
+are listed first; the 14 status-report checks follow.
+
+| Check | Likely causes | First action | Recovery strategy |
+|---|---|---|---|
+| **Pre-flight 1/8** `nvidia-smi OK` | Driver not loaded; module not modprobed | `sudo modprobe nvidia nvidia-uvm nvidia-modeset nvidia-uvm-tools` | — |
+| **Pre-flight 2/8** `/dev/nvidia*` present | Modules loaded but devices missing | `ls -l /dev/nvidia*` (re-modprobe) | — |
+| **Pre-flight 3/8** `$MEDIA_PATH` mounted | NFS dropped; fstab not loaded; auto-mount not enabled | `mountpoint -q "$MEDIA_PATH" && echo OK`; if not: `sudo mount -a` | (if NFS) `--recover=remount-nas` |
+| **Pre-flight 4/8** Camera reachable | Switch down; Reolink offline; firewall block | `timeout 3 bash -c '>/dev/tcp/192.168.50.129/8554'` | — |
+| **Pre-flight 5/8** Docker daemon | `dockerd` stopped; socket missing | `systemctl status docker` | — |
+| **Pre-flight 6/8** nvidia runtime | Runtime not registered with Docker | `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker` | — |
+| **Pre-flight 7/8** `$COMPOSE_FILE` present | Wrong cwd; file deleted | `ls -la docker-compose.calypso.yml` | — |
+| **Pre-flight 8/8** `trt-libs/libnvinfer.so.10` | TRT 10.9.0 not installed; wrong pip target | `pip install --target=./trt-libs --no-deps tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34` | — |
+| **1/14** `NVIDIA GPU` | nvidia-smi returns no data (driver loaded but no GPU) | `sudo modprobe nvidia nvidia-uvm nvidia-modeset nvidia-uvm-tools` | — |
+| **2/14** `Camera RTSP reachability` | Camera offline; switch down; VLAN misconfig | `timeout 3 bash -c '>/dev/tcp/192.168.50.129/8554'` (LAN / camera / firewall) | — |
+| **3/14** `go2rtc internal` | go2rtc process dead; port 8554 not bound | `docker logs --tail=100 frigate \| grep -E 'go2rtc\|listen'` | `--recover=restart-container` |
+| **4/14** `Capture ffmpeg` | camera entry not in `/api/stats.cameras`; ffmpeg process died | `docker logs --tail=100 frigate \| grep -E 'capture\|ffmpeg\|allee_sur_le_cote'` | `--recover=restart-container` |
+| **5/14** `Detect process` | `detection_fps=0` despite camera_fps>0. Either (a) TRT engine build failed, (b) ZMQ deadlock, (c) scene is quiet (throw a sheet at the camera to test) | `docker logs --tail=100 frigate \| grep -E 'TRT\|engine\|motion'` | `--recover=flush-zmq` (ZMQ) or `--recover=rebuild-trt` (engine) |
+| **6/14** `Motion pre-filter` | Config check only; should not FAIL | inspect `motion.threshold` and `motion.contour_area` in config.yml | — |
+| **7/14** `Object detection (TRT)` | `inference_speed=?` (TRT still building) | `docker logs --tail=50 frigate \| grep -E 'TRT\|tensorrt'` (first-run build is ~65s) | `--recover=rebuild-trt` |
+| **8/14** `Person filter (physics)` | Config check only; FAIL means `filters.person` block is missing | `see config.yml cameras.allee_sur_le_cote.objects.filters.person` | — |
+| **9/14** `Zone filters` | No zones configured for the camera | add zones under `cameras.<name>.zones` in config.yml | — |
+| **10/14** `Event lifecycle` | `/api/events` could not be queried (Frigate still starting, or DB locked) | `curl -fsS 'http://localhost:5000/api/events?limit=5'` | — |
+| **11/14** `MQTT publisher` | `frigate.comms.mqtt ERROR: MQTT disconnected` in container log. Causes: client_id collision, broker ACL, broker unreachable | `mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto -t '$SYS/broker/version' -W 5` (verify broker); check `client_id: frigate_calypso` is unique | — |
+| **12/14** `Recording path` | `$MEDIA_PATH` not mounted or not writable | `mountpoint -q "$MEDIA_PATH"` (if not: `sudo mount -a`) | `--recover=remount-nas` |
+| **13/14** `Semantic search` | jina-clip model not loaded yet (lazy on first event) | `docker logs --tail=50 frigate \| grep -E 'semantic\|embedding\|jina'` | — |
+| **14/14** `Web UI / API` | `/api/version` returns empty `version` field (Frigate 0.17 known cosmetic bug) | `curl -v http://localhost:5000/api/version` | — |
+
+#### Self-healing strategies (cross-reference)
+
+| Strategy | When to use | Command |
+|---|---|---|
+| `restart-container` | First try for any transient failure (generic 'try restarting') | `./bring-up.sh --recover=restart-container` |
+| `remount-nas` | NFS dropped; step 12/14 (Recording path) FAILs with 'not mounted' | `./bring-up.sh --recover=remount-nas` |
+| `flush-zmq` | Step 5/14 (Detect process) FAILs with TRT logs but no build error (ZMQ deadlock) | `./bring-up.sh --recover=flush-zmq` |
+| `rebuild-trt` | Step 7/14 (Object detection) reports engine build failures; TRT detector wedged | `./bring-up.sh --recover=rebuild-trt` |
 
 ---
 

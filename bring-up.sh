@@ -36,9 +36,16 @@
 #   5 = detection never started (even after down/up recovery)
 #
 # Usage:
-#   ./bring-up.sh                       # bring up + status report + MQTT
-#   ./bring-up.sh --status              # skip bring-up, go straight to report
-#   ./bring-up.sh --no-mqtt             # disable MQTT telemetry
+#   ./bring-up.sh                              # bring up + status report + MQTT
+#   ./bring-up.sh --status                     # skip bring-up, go straight to report
+#   ./bring-up.sh --no-mqtt                    # disable MQTT telemetry
+#   ./bring-up.sh --snapshot                   # append JSON snapshot to stdout
+#   ./bring-up.sh --snapshot-write=PATH       # write JSON snapshot to file
+#   ./bring-up.sh --snapshot-compare=BASELINE # diff vs baseline; exit 1 on drift
+#   ./bring-up.sh --recover=STRATEGY          # run a recovery strategy
+#       STRATEGY in: restart-container | remount-nas | flush-zmq | rebuild-trt
+#       (--recover= implies --status; set RECOVER_STRATEGY env var for full
+#        bring-up + auto-recovery override)
 #
 # MQTT topics published:
 #   calypso_frigate/bringup/state   (retained)  current state name
