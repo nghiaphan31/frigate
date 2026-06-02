@@ -1,3 +1,42 @@
+# ============================================================================
+# Frigate NVR — global config (allee_sur_le_cote, single-camera scope)
+# ============================================================================
+# Frigate 0.17 schema. Single camera in this file (allee_sur_le_cote).
+# Global sections below are cluster-wide; per-camera overrides are
+# under the `cameras:` block at the bottom of this file.
+#
+# Doc references (this repo):
+#   - ARCHITECTURE.md §4   — per-stage pipeline details
+#   - ARCHITECTURE.md §6.1 — config keys touched (by section)
+#   - STARTUP.md §2.6     — Frigate+ API key prerequisite
+#   - STARTUP.md §5.8     — failure-mode catalog (which check
+#                              corresponds to which section, and
+#                              which --recover=STRATEGY helps)
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# mqtt — broker connection (used by Frigate's mqtt publisher thread for
+#        event publication; see ARCHITECTURE.md §4.11)
+# ----------------------------------------------------------------------------
+# host/port: Home Assistant Mosquitto addon (HA on ha. local). Reachable
+#            from Calypso at 192.168.50.125.
+# user/pass: addon-managed creds (mirrored from HA's Mosquitto
+#            configuration; "mosquitto" is a development credential,
+#            change for production).
+# client_id: MUST be unique per Frigate instance. Old configs that
+#            omitted this caused the broker to evict the previous
+#            session on every reconnect, producing "session taken
+#            over" log lines and a 1-Hz disconnect loop. See
+#            ARCHITECTURE.md §2.3 for the original bug history.
+# topic_prefix: all Frigate MQTT events are published under
+#            calypso_frigate/*. HA automations subscribe to
+#            calypso_frigate/events and the bring-up script
+#            publishes state telemetry to calypso_frigate/bringup/*.
+# stats_interval: how often Frigate publishes its own status to MQTT
+#            (in addition to events). 60s keeps broker traffic low
+#            (the bring-up script reads /api/stats directly, so this
+#            is mostly for HA dashboards and external observers).
+# ----------------------------------------------------------------------------
 mqtt:
   host: 192.168.50.125
   port: 1883
@@ -7,6 +46,24 @@ mqtt:
   topic_prefix: calypso_frigate
   stats_interval: 60
 
+# ----------------------------------------------------------------------------
+# ffmpeg — global ffmpeg invocation settings (see ARCHITECTURE.md §4.3)
+# ----------------------------------------------------------------------------
+# path: version-pinned location of the ffmpeg binary. The
+#       /usr/lib/ffmpeg/7.0/bin/ffmpeg symlink is created by
+#       frigate-init.sh (the s6-overlay stage-2 hook in
+#       docker-compose.calypso.yml) so Frigate can resolve
+#       "ffmpeg.bin" without the versioned path. /usr/lib/ffmpeg
+#       is the directory Frigate appends "/bin/ffmpeg" to.
+# hwaccel_args: CUDA device selection for NVDEC. "-hwaccel cuda"
+#       enables NVDEC; "-hwaccel_device 0" pins it to GPU 0
+#       (the only GPU on Calypso — RTX 5060 Ti).
+# output_args.record: the record-preset used when Frigate writes
+#       segments to the NAS. preset-record-generic-audio-aac
+#       transcodes to H.264 + AAC at the source-quality resolution;
+#       for the sub stream (1536x432) this is cheap and keeps the
+#       recordings browser-playable without re-encoding.
+# ----------------------------------------------------------------------------
 ffmpeg:
   path: /usr/lib/ffmpeg/7.0
   hwaccel_args:
@@ -17,6 +74,18 @@ ffmpeg:
   output_args:
     record: preset-record-generic-audio-aac
 
+# ----------------------------------------------------------------------------
+# record — continuous and motion-triggered recording retention
+# ----------------------------------------------------------------------------
+# enabled: master switch. When false, no segments are written at
+#          all (Frigate runs detection + MQTT but the NAS is untouched).
+# continuous.days: 0 = disabled. The single camera in this config
+#          is motion-only — continuous recording of a 4K stream
+#          would eat ~50 GB/day on the NAS for marginal value.
+# motion.days: 1 = keep motion-triggered segments for 24 h after
+#          the last motion event in them. Tuned for the 1-day
+#          notification / review window common to home NVRs.
+# ----------------------------------------------------------------------------
 record:
   enabled: true
   continuous:
@@ -24,6 +93,27 @@ record:
   motion:
     days: 1
 
+# ----------------------------------------------------------------------------
+# snapshots — still-frame captures from events
+# ----------------------------------------------------------------------------
+# enabled: master switch.
+# timestamp: burn a timestamp in the top-left of each snapshot.
+# bounding_box: burn the detection's bounding box on the snapshot.
+# clean_copy: also write a separate copy WITHOUT the bounding
+#          box / timestamp burned in. Useful for publishing
+#          un-incriminating images to public dashboards or
+#          sharing snapshots without exposing the camera geometry.
+# crop: false = full-frame snapshots (the camera-level override
+#          re-affirms this). The bounding box is painted on the
+#          full frame, so the operator sees the wider context.
+# retain.default: 0 = delete snapshots immediately when their
+#          event is closed, unless a per-object override applies.
+#          (We have one such override: person: 7 days.)
+# retain.objects.person: 7 = keep person-event snapshots for a
+#          week. This is the only category worth keeping for
+#          the "allee" camera; everything else (car, animal, etc.)
+#          is transient.
+# ----------------------------------------------------------------------------
 snapshots:
   enabled: true
   timestamp: true
@@ -35,6 +125,21 @@ snapshots:
     objects:
       person: 7
 
+# ----------------------------------------------------------------------------
+# objects — global object tracking and filter defaults
+# ----------------------------------------------------------------------------
+# track: only `person` is tracked globally. The camera block
+#        re-asserts this so the per-camera config is self-contained.
+# filters.person: a LOOSE default filter applied to any camera
+#        that doesn't override it. min_area=300 is conservative
+#        (the per-camera allee filter is tighter, 124-22500 px²,
+#        derived from the camera's geometry — see the cameras
+#        block below). max_area=100000 catches the rare false
+#        positive where a 4K-zoomed-in blob fills the frame.
+#        min_score=0.40 + threshold=0.45 are the model defaults
+#        +0.05 above the model's pre-trained cutoffs, suppressing
+#        the lowest-confidence detections.
+# ----------------------------------------------------------------------------
 objects:
   track:
     - person
@@ -45,17 +150,77 @@ objects:
       threshold: 0.45
       max_area: 100000
 
+# ----------------------------------------------------------------------------
+# detect — global enable flag for detection (camera-level can override)
+# ----------------------------------------------------------------------------
+# enabled: true here sets the default; allee_sur_le_cote in the
+#          cameras block does not override, so it inherits this.
+#          (Camera-level `detect.enabled` is omitted intentionally —
+#          if we ever add a second camera that needs to opt out of
+#          detection, that override would go there.)
+# ----------------------------------------------------------------------------
 detect:
   enabled: true
 
+# ----------------------------------------------------------------------------
+# detectors — ONNX runtime + TensorRT execution provider
+# ----------------------------------------------------------------------------
+# onnx1: the single detector. `type: onnx` selects the ONNX
+#        Runtime as the inference engine (with TensorRT as the
+#        EP via `device: "Tensorrt"`). The TRT engine is built
+#        on first start (~65 s on the RTX 5060 Ti) and cached at
+#        /config/model_cache/tensorrt/ort/trt-engines/. If the
+#        engine is corrupt, see STARTUP.md §5.3 for the rebuild
+#        recipe (or use --recover=rebuild-trt).
+# ----------------------------------------------------------------------------
 detectors:
   onnx1:
     type: onnx
     device: "Tensorrt"
 
+# ----------------------------------------------------------------------------
+# model — Frigate+ custom detection model
+# ----------------------------------------------------------------------------
+# path: plus://<hash> pulls a Frigate+-trained model (custom to
+#       this camera's geometry, see the cameras block). The 28 MB
+#       model binary is downloaded once into trt-cache/ (gitignored,
+#       see .gitignore). Without a valid FRIGATE_PLUS_API_KEY in .env,
+#       Frigate falls back to the generic SSD model — which works
+#       but has a higher false-positive rate on this Reolink's
+#       panoramic sub stream.
+# ----------------------------------------------------------------------------
 model:
   path: plus://6ea1f38db36e21f44a1eb1071d9958ed
 
+# ----------------------------------------------------------------------------
+# motion — pre-filter thresholds (see ARCHITECTURE.md §4.6)
+# ----------------------------------------------------------------------------
+# Frigate runs this lightweight filter on every frame BEFORE the
+# expensive ONNX/TensorRT detector. If the filter says "no motion
+# here", the detector is skipped. The thresholds below are tuned
+# to be aggressive enough to catch a person walking 20 m away in
+# the allee_sur_le_cote camera; false positives are cheap to reject
+# downstream (the person filter).
+#
+# threshold: pixel-difference threshold (0-255). 26 = subtle motion
+#           (e.g. a person at the far end of the alley, ~3% pixel
+#           delta). 20 was too sensitive (clouds moving triggered
+#           it); 30 was too lax (slow walkers missed at 20 m).
+# contour_area: minimum bounding-box area (in pixels²) for a
+#           detected motion blob. 30 filters out sensor noise
+#           and compression artefacts.
+# frame_alpha: EMA factor for the running frame average. 0.4 =
+#           40% weight on the previous average, 60% on the new
+#           frame. Higher = more stable baseline (slower to adapt
+#           to lighting changes), lower = faster adaptation but
+#           more noise.
+# delta_alpha: same as frame_alpha but for the per-pixel delta
+#           history. 0.5 = balanced.
+# improve_contrast: 0.4× stretch the frame's histogram before
+#           differencing. Crucial for the allee camera which has
+#           strong backlight contrast (the camera faces west; sun
+#           is in the FOV for half the day).
+# ----------------------------------------------------------------------------
 motion:
   threshold: 26
   contour_area: 30
@@ -63,10 +228,47 @@ motion:
   delta_alpha: 0.5
   improve_contrast: true
 
+# ----------------------------------------------------------------------------
+# audio — audio-event detection (see ARCHITECTURE.md §4.16)
+# ----------------------------------------------------------------------------
+# enabled: enable audio detection on the sub stream's audio track.
+# min_volume: 0-32768 raw PCM threshold. 350 is just above the
+#           sub stream's noise floor (camera's built-in mic, some
+#           mains hum from the gate motor at ~340). Lower than 300
+#           triggers on the fridge compressor in the kitchen
+#           (out of FOV but the mic picks it up). Higher than 400
+#           misses quiet speech at 20 m.
+# ----------------------------------------------------------------------------
 audio:
   enabled: true
   min_volume: 350
 
+# ----------------------------------------------------------------------------
+# go2rtc — internal re-streamer (see ARCHITECTURE.md §4.2)
+# ----------------------------------------------------------------------------
+# webrtc.candidates: the WebRTC ICE candidates go2rtc advertises
+#   to the browser. The Tailscale IP (192.168.50.150) is the
+#   primary, so browser live-view works from any Tailscale node
+#   without STUN/TURN. "stun:8555" is a fallback for off-Tailscale
+#   browsers.
+# streams.allee_sur_le_cote_sub: the RTSP URL the allee camera's
+#   ffmpeg inputs (in the cameras block below) read from. The
+#   Frigate container itself connects to 127.0.0.1:8554 (the
+#   go2rtc-internal endpoint), NOT directly to the Reolink. This
+#   gives us:
+#     - shared stream between detect, record, and audio roles
+#       (one RTSP session, three roles)
+#     - low-latency re-streaming for the WebRTC live view in
+#       the Frigate web UI
+#     - central place to add cameras later (one more entry here,
+#       one more cameras block below)
+#   Credentials are baked into the URL here, NOT in the env.
+#   See .gitignore (trt-libs/, etc.) for what is and isn't
+#   committed; the RTSP creds are deliberately tracked in git
+#   because this is a private LAN, the camera is in a tamper-
+#   resistant enclosure, and rotating them requires re-deploying
+#   every host that references the URL.
+# ----------------------------------------------------------------------------
 go2rtc:
   webrtc:
     candidates:
@@ -201,6 +403,20 @@ cameras:
 
 version: 0.17-0
 
+# ----------------------------------------------------------------------------
+# semantic_search — embedding-based event search (see ARCHITECTURE.md §4.14)
+# ----------------------------------------------------------------------------
+# enabled: turn the Jina CLIP v1 model on. Embeddings are computed for
+#           every event's best frame + thumbnail, enabling
+#           "find events that look like X" queries in the Frigate UI.
+# reindex: false = don't recompute embeddings for existing events on
+#           startup (saves time; the Jina model is downloaded once
+#           and cached at trt-cache/jinaai/jina-clip-v1/, see
+#           .gitignore). Set true once if the model changed.
+# model_size: small = vision_model_quantized.onnx + text_model_fp16.onnx
+#           (~84 MB total, runs on the same RTX 5060 Ti alongside
+#           the object detector; ~50 ms per embedding).
+# ----------------------------------------------------------------------------
 semantic_search:
   enabled: true
   reindex: false
