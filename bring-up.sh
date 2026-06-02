@@ -33,7 +33,7 @@
 #   2 = pre-flight failed (host prerequisite missing)
 #   3 = container failed to start
 #   4 = Frigate API never came up
-#   5 = detection never started (even after stop/start recovery)
+#   5 = detection never started (even after down/up recovery)
 #
 # Usage:
 #   ./bring-up.sh                       # bring up + status report + MQTT
@@ -412,12 +412,21 @@ except Exception as e:
         sleep 1
     done
 
-    # ----- Deadlock auto-recovery: stop/start clears stale ZMQ IPC -----
+    # ----- Deadlock auto-recovery: down/up for a clean slate -----
+    # We use down + up (not stop + start) so that:
+    #   - the container's writable layer is fully discarded (no lingering PIDs)
+    #   - s6-overlay re-runs S6_STAGE2_HOOK and re-initialises its service tree
+    #   - the /tmp/cache and /dev/shm tmpfses are recreated (ZMQ IPC cleared)
+    # Trade-off: ~10s slower than stop/start, materially more reliable.
+    # Bind-mounted volumes (recordings, trt-cache, config) are preserved
+    # because down without -v never touches them.
     mqtt_state "RECOVERY_TRIGGERED" \
-        "{\"state\":\"RECOVERY_TRIGGERED\",\"reason\":\"detection_fps_stuck_at_zero_after_${DETECT_TIMEOUT}s\",\"action\":\"docker_compose_stop_start\"}"
-    log "${YEL}Detection still at 0 fps after ${DETECT_TIMEOUT}s — running stop/start to clear ZMQ IPC${NC}"
-    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" stop  "$CONTAINER_NAME" >/dev/null
-    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" start "$CONTAINER_NAME" >/dev/null
+        "{\"state\":\"RECOVERY_TRIGGERED\",\"reason\":\"detection_fps_stuck_at_zero_after_${DETECT_TIMEOUT}s\",\"action\":\"docker_compose_down_up\"}"
+    log "${YEL}Detection still at 0 fps after ${DETECT_TIMEOUT}s — running down/up to clear ZMQ IPC and re-init s6-overlay${NC}"
+    # `|| true` on down: a half-stopped container may make `down` fail
+    # non-fatally (e.g. already-removed container); we always want `up` to run.
+    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" down "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" up -d "$CONTAINER_NAME" >/dev/null
 
     for i in $(seq 1 "$RECOVERY_TIMEOUT"); do
         local stats fps
@@ -425,7 +434,7 @@ except Exception as e:
         fps=$(jget "$stats" "d.get('cameras',{}).get('$CAMERA_NAME',{}).get('detection_fps',0)") || fps=0
         [ -z "$fps" ] && fps=0
         if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
-            log "Detection active after stop/start in ${i}s (det_fps=$fps)"
+            log "Detection active after down/up in ${i}s (det_fps=$fps)"
             mqtt_state "RECOVERY_SUCCESS" \
                 "{\"state\":\"RECOVERY_SUCCESS\",\"detection_fps\":${fps},\"recovered_after_s\":${i}}"
             return 0
@@ -433,7 +442,7 @@ except Exception as e:
         fps=$(jget "$stats" "d.get('cameras',{}).get('$CAMERA_NAME',{}).get('process_fps',0)") || fps=0
         [ -z "$fps" ] && fps=0
         if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
-            log "Detection active after stop/start in ${i}s (process_fps=$fps)"
+            log "Detection active after down/up in ${i}s (process_fps=$fps)"
             mqtt_state "RECOVERY_SUCCESS" \
                 "{\"state\":\"RECOVERY_SUCCESS\",\"process_fps\":${fps},\"recovered_after_s\":${i}}"
             return 0
@@ -441,7 +450,7 @@ except Exception as e:
         fps=$(jget "$stats" "d.get('detection_fps',0)") || fps=0
         [ -z "$fps" ] && fps=0
         if [ "${fps%.*}" -ge 1 ] 2>/dev/null; then
-            log "Detection active after stop/start in ${i}s (top-level detection_fps=$fps)"
+            log "Detection active after down/up in ${i}s (top-level detection_fps=$fps)"
             mqtt_state "RECOVERY_SUCCESS" \
                 "{\"state\":\"RECOVERY_SUCCESS\",\"detection_fps\":${fps},\"recovered_after_s\":${i}}"
             return 0
@@ -450,10 +459,10 @@ except Exception as e:
     done
 
     mqtt_state "RECOVERY_FAILED" \
-        "{\"state\":\"RECOVERY_FAILED\",\"reason\":\"no_detection_after_stop_start\"}"
+        "{\"state\":\"RECOVERY_FAILED\",\"reason\":\"no_detection_after_down_up\"}"
     log "Last 80 log lines:"
     docker logs --tail=80 "$CONTAINER_NAME" 2>&1 || true
-    fatal "detection did not start after stop/start recovery" 5
+    fatal "detection did not start after down/up recovery" 5
 }
 
 # ------------------------------------------------------------------------------
