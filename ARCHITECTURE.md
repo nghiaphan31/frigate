@@ -398,3 +398,131 @@ For the manual bring-up steps with explicit pre-flight, see [STARTUP.md](STARTUP
 | `:8555` | host | host | go2rtc WebRTC |
 | `:1984` | host | host | go2rtc API/UI |
 | `.env` | env vars | `./.env` | `FRIGATE_PLUS_API_KEY`, `FRIGATE_MEDIA_PATH` |
+
+---
+
+## 7. Operations: state machine and MQTT telemetry
+
+The bring-up sequence is treated as a proper state machine. Every transition (success, warning, managed recovery, hard failure) emits an MQTT message on the same Mosquitto broker the camera events use. This makes the system observable from Home Assistant (or any MQTT subscriber) regardless of whether the bring-up runs interactively, on boot via systemd, or unattended on a timer.
+
+### 7.1 State machine
+
+```mermaid
+stateDiagram-v2
+  [*] --> STARTING
+  STARTING --> PREFLIGHT_OK : all 8 host gates pass
+  STARTING --> FATAL_no_gpu : nvidia-smi fails
+  STARTING --> FATAL_nvidia_device : /dev/nvidia* missing
+  STARTING --> FATAL_nas_unmounted : mountpoint check fails
+  STARTING --> FATAL_no_camera : TCP probe 192.168.50.129:8554 fails
+  STARTING --> FATAL_no_docker : docker info fails
+  STARTING --> FATAL_no_nvidia_runtime : nvidia runtime not registered
+  STARTING --> FATAL_no_compose : docker-compose.calypso.yml missing
+  STARTING --> FATAL_no_trt_libs : trt-libs/libnvinfer.so.10 missing
+  PREFLIGHT_OK --> CONTAINER_UP : docker compose up -d
+  CONTAINER_UP --> API_UP : /api/version 200
+  CONTAINER_UP --> FATAL_no_container : container not running in 30 s
+  API_UP --> DETECTION_ACTIVE : allee.detection_fps >= 1
+  API_UP --> FATAL_no_api : /api/version never 200
+  DETECTION_ACTIVE --> HEALTHY : all 14 steps OK
+  DETECTION_ACTIVE --> DEGRADED : some WARN steps, no FAIL
+  DETECTION_ACTIVE --> UNHEALTHY : some FAIL steps
+  DETECTION_ACTIVE --> RECOVERY_TRIGGERED : det_fps = 0 after 240 s
+  RECOVERY_TRIGGERED --> RECOVERY_SUCCESS : det_fps >= 1 after stop/start
+  RECOVERY_TRIGGERED --> RECOVERY_FAILED : det_fps still 0 after stop/start
+  RECOVERY_FAILED --> FATAL_no_detection
+  HEALTHY --> [*]
+  DEGRADED --> [*]
+  UNHEALTHY --> [*]
+  FATAL_* --> [*]
+```
+
+### 7.2 MQTT topic schema
+
+Published by [`bring-up.sh`](bring-up.sh) via `mosquitto_pub` (or python `paho-mqtt` fallback) to the broker at `192.168.50.125:1883`.
+
+| Topic | Retained | Payload | Purpose |
+|---|---|---|---|
+| `calypso_frigate/bringup/state` | yes | state name (string) | current state — subscribe and watch for transitions |
+| `calypso_frigate/bringup/detail` | yes | JSON | full context: host, pid, elapsed_s, step counts, detection_fps, ... |
+| `calypso_frigate/bringup/log` | no | `state — detail` (string) | transient log of every transition |
+
+**Detail JSON** (example, `HEALTHY`):
+```json
+{
+  "state": "HEALTHY",
+  "host": "Calypso",
+  "pid": 12345,
+  "elapsed_s": 87,
+  "step_ok": 14,
+  "step_warn": 0,
+  "step_fail": 0,
+  "camera": "allee_sur_le_cote",
+  "detection_fps": 5.0,
+  "camera_fps": 5.0,
+  "frigate_version": "0.17.0",
+  "inference_ms": 6.8
+}
+```
+
+**Subscribe from any host** to watch the live state:
+```bash
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+              -t 'calypso_frigate/bringup/#' -v
+```
+
+### 7.3 Home Assistant integration
+
+The state machine is designed so HA can drive a single `binary_sensor` or a richer `template` sensor from one MQTT subscription:
+
+```yaml
+# configuration.yaml
+mqtt:
+  sensor:
+    - name: "Frigate bring-up state"
+      state_topic: "calypso_frigate/bringup/state"
+      icon: mdi:server
+    - name: "Frigate detection fps"
+      state_topic: "calypso_frigate/bringup/detail"
+      value_template: "{{ value_json.detection_fps | default(0) }}"
+      unit_of_measurement: "fps"
+    - name: "Frigate last bring-up result"
+      state_topic: "calypso_frigate/bringup/state"
+      value_template: >
+        {% if value.startswith('FATAL') %}FAILED
+        {% elif value in ('HEALTHY',) %}OK
+        {% elif value in ('DEGRADED',) %}WARN
+        {% else %}IN_PROGRESS{% endif %}
+
+automation:
+  - alias: "Notify on Frigate recovery or FATAL"
+    trigger:
+      - platform: mqtt
+        topic: "calypso_frigate/bringup/state"
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.payload in ['RECOVERY_TRIGGERED', 'RECOVERY_FAILED'] or trigger.payload.startswith('FATAL') }}
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Frigate NVR"
+          message: "State: {{ trigger.payload }}"
+```
+
+### 7.4 Bring-up script behaviour summary
+
+| Trigger | What runs | What publishes to MQTT |
+|---|---|---|
+| Interactive `./bring-up.sh` | full pre-flight → start → wait → report | every transition |
+| `./bring-up.sh --status` | skips create, polls API + runs report | `STARTING` (no bring-up transitions) → final state |
+| Host boot (systemd) | `frigate-stack.service` calls `bring-up.sh` | all transitions, including the managed `RECOVERY_*` events |
+| Every 5 min (systemd timer) | `frigate-stack-watchdog.service` re-runs `bring-up.sh` | same as interactive; if the system is healthy, transitions are fast (no recovery) |
+| `docker compose` restart | manual or `autoheal` reacting to `unhealthy` | new `STARTING` cycle |
+
+### 7.5 Why the dual layer (Docker healthcheck + MQTT state)?
+
+- **Docker `healthcheck:`** is the OS-level signal — flips the container to `unhealthy` when `detection_fps == 0`, which `autoheal` or systemd can react to without parsing logs.
+- **MQTT bring-up state** is the **application-level** signal — knows the difference between a managed `RECOVERY_TRIGGERED` (ZMQ IPC, expected occasionally) and a hard `FATAL_no_camera` (camera offline, needs human).
+
+A managed recovery is **expected** behaviour, not an alert; a FATAL is. Splitting the two layers prevents the alerting system from firing on every ZMQ cycle.

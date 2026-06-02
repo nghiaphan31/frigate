@@ -1,0 +1,18 @@
+[Unit]
+Description=Frigate NVR — periodic health check + auto-recover
+Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/STARTUP.md
+# Always wait for the docker stack service so we do not fight a concurrent bring-up.
+After=docker.service frigate-stack.service
+Wants=frigate-stack.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
+ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/frigate/bring-up.sh
+EnvironmentFile=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/.env
+StandardOutput=journal
+StandardError=journal
+# Same exit-code policy as frigate-stack.service.
+SuccessExitStatus=0 1
+# Cap each run well below the timer interval to avoid pile-up.
+TimeoutStartSec=420

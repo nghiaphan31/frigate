@@ -1,9 +1,31 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # bring-up.sh — automated bring-up + per-pipeline-step status report
+#                + MQTT telemetry of the state machine
 # ==============================================================================
 # Idempotent: if the container is already running, skips creation and goes
 # straight to the status report. Safe to re-run as a "status" command.
+#
+# State machine (each transition publishes to MQTT — see mqtt_state() below):
+#
+#   STARTING
+#     │
+#     ▼
+#   PREFLIGHT_OK ──(fail)──► FATAL_<REASON>
+#     │
+#     ▼
+#   CONTAINER_UP
+#     │
+#     ▼
+#   API_UP
+#     │
+#     ▼
+#   DETECTION_ACTIVE ──(stuck)──► RECOVERY_TRIGGERED
+#     │                              │
+#     │                              ├─► RECOVERY_SUCCESS
+#     │                              └─► RECOVERY_FAILED ──► FATAL_NO_DETECTION
+#     ▼
+#   HEALTHY  |  DEGRADED  |  UNHEALTHY
 #
 # Exit codes:
 #   0 = all 14 pipeline steps OK (warnings allowed)
@@ -14,9 +36,14 @@
 #   5 = detection never started (even after stop/start recovery)
 #
 # Usage:
-#   ./bring-up.sh                       # bring up + status report
+#   ./bring-up.sh                       # bring up + status report + MQTT
 #   ./bring-up.sh --status              # skip bring-up, go straight to report
-#   FRIGATE_MEDIA_PATH=/mnt/... ./bring-up.sh
+#   ./bring-up.sh --no-mqtt             # disable MQTT telemetry
+#
+# MQTT topics published:
+#   calypso_frigate/bringup/state   (retained)  current state name
+#   calypso_frigate/bringup/detail  (retained)  JSON with full context
+#   calypso_frigate/bringup/log     (transient) each transition log line
 #
 # See STARTUP.md for the manual sequence and recovery procedures.
 # ==============================================================================
@@ -33,11 +60,18 @@ CAMERA_IP="${CAMERA_IP:-192.168.50.129}"
 CAMERA_RTSP_PORT="${CAMERA_RTSP_PORT:-8554}"
 MQTT_HOST="${MQTT_HOST:-192.168.50.125}"
 MQTT_PORT="${MQTT_PORT:-1883}"
+MQTT_USER="${MQTT_USER:-mosquito}"
+MQTT_PASS="${MQTT_PASS:-mosquito}"
+MQTT_STATE_TOPIC="${MQTT_STATE_TOPIC:-calypso_frigate/bringup/state}"
+MQTT_DETAIL_TOPIC="${MQTT_DETAIL_TOPIC:-calypso_frigate/bringup/detail}"
+MQTT_LOG_TOPIC="${MQTT_LOG_TOPIC:-calypso_frigate/bringup/log}"
 CAMERA_NAME="${CAMERA_NAME:-allee_sur_le_cote}"
 CONTAINER_NAME="${CONTAINER_NAME:-frigate}"
 API_TIMEOUT="${API_TIMEOUT:-60}"
 DETECT_TIMEOUT="${DETECT_TIMEOUT:-240}"
 RECOVERY_TIMEOUT="${RECOVERY_TIMEOUT:-60}"
+SCRIPT_PID=$$
+SCRIPT_START=$(date +%s)
 
 # Load .env if present (so FRIGATE_MEDIA_PATH and FRIGATE_PLUS_API_KEY are set)
 if [ -f .env ]; then
@@ -59,22 +93,25 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Counters
+# Counters and flags
 # ------------------------------------------------------------------------------
 STEP_OK=0
 STEP_WARN=0
 STEP_FAIL=0
 TOTAL_STEPS=14
 SKIP_BRINGUP=0
+MQTT_ENABLED=1
+FINAL_STATE=""
 
 # ------------------------------------------------------------------------------
 # Parse args
 # ------------------------------------------------------------------------------
 for arg in "$@"; do
     case "$arg" in
-        --status)  SKIP_BRINGUP=1 ;;
+        --status)    SKIP_BRINGUP=1 ;;
+        --no-mqtt)   MQTT_ENABLED=0 ;;
         --help|-h)
-            sed -n '2,25p' "$0"
+            sed -n '2,40p' "$0"
             exit 0
             ;;
         *)
@@ -85,10 +122,19 @@ for arg in "$@"; do
 done
 
 # ------------------------------------------------------------------------------
-# Helpers
+# Logging helpers
 # ------------------------------------------------------------------------------
 log()   { echo "${CYN}[bring-up]${NC} $*" >&2; }
-fatal() { echo "${RED}FATAL:${NC} $*" >&2; exit "${2:-1}"; }
+
+fatal() {
+    local reason="$1" code="${2:-1}"
+    # Best-effort fatal publish (don't fatal-loop if MQTT is down)
+    if [ "$MQTT_ENABLED" -eq 1 ]; then
+        _mqtt_publish "FATAL_${reason}" "{\"state\":\"FATAL_${reason}\",\"reason\":\"${reason}\",\"host\":\"$(hostname)\",\"pid\":${SCRIPT_PID}}" >/dev/null 2>&1 || true
+    fi
+    echo "${RED}FATAL:${NC} $reason" >&2
+    exit "$code"
+}
 
 # JSON value extractor:  jget <json> <python-expr-on-d>
 # Returns "" on any error.
@@ -117,36 +163,111 @@ report() {
 }
 
 # ------------------------------------------------------------------------------
+# MQTT telemetry
+# ------------------------------------------------------------------------------
+MQTT_PUB_BIN=""
+
+mqtt_init() {
+    [ "$MQTT_ENABLED" -eq 1 ] || { log "MQTT telemetry disabled (--no-mqtt)"; return; }
+    if command -v mosquitto_pub >/dev/null 2>&1; then
+        MQTT_PUB_BIN="mosquitto_pub"
+        log "MQTT publisher: mosquitto_pub → ${MQTT_HOST}:${MQTT_PORT}"
+    elif python3 -c 'import paho.mqtt.client' 2>/dev/null; then
+        MQTT_PUB_BIN="paho"
+        log "MQTT publisher: paho-mqtt (python) → ${MQTT_HOST}:${MQTT_PORT}"
+    else
+        MQTT_ENABLED=0
+        log "${YEL}WARN:${NC} no mosquitto_pub or paho-mqtt — MQTT telemetry disabled"
+        log "      install: sudo apt install -y mosquitto-clients"
+        log "      or:      pip3 install --user paho-mqtt"
+    fi
+}
+
+# Internal: do the actual publish. Args: topic payload retain(bool)
+_mqtt_publish() {
+    local topic="$1" payload="$2" retain="${3:-true}"
+    [ "$MQTT_ENABLED" -eq 1 ] || return 0
+    [ -n "$MQTT_PUB_BIN" ] || return 0
+
+    local rflag="false"
+    [ "$retain" = "true" ] && rflag="true"
+
+    case "$MQTT_PUB_BIN" in
+        mosquitto_pub)
+            local r
+            [ "$retain" = "true" ] && r="-r" || r="-n"
+            timeout 5 mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" \
+                -u "$MQTT_USER" -P "$MQTT_PASS" \
+                -t "$topic" -m "$payload" $r \
+                >/dev/null 2>&1 || true
+            ;;
+        paho)
+            timeout 5 python3 - "$topic" "$payload" "$rflag" <<'PY' >/dev/null 2>&1 || true
+import sys, paho.mqtt.client as mqtt
+topic, payload, retain = sys.argv[1], sys.argv[2], sys.argv[3] == "true"
+c = mqtt.Client()
+c.username_pw_set("""$MQTT_USER""", """$MQTT_PASS""")
+c.connect("""$MQTT_HOST""", $MQTT_PORT, 5)
+c.publish(topic, payload, retain=retain)
+c.disconnect()
+PY
+            ;;
+    esac
+}
+
+# Public: publish a state transition.  Args: state detail_json
+mqtt_state() {
+    local state="$1" detail="${2:-}"
+    FINAL_STATE="$state"
+
+    # Always log to stderr
+    log "state: ${state}${detail:+ — $detail}"
+
+    # Build a clean detail JSON if caller didn't provide one
+    if [ -z "$detail" ]; then
+        detail=$(cat <<JSON
+{"state":"${state}","host":"$(hostname)","pid":${SCRIPT_PID},"elapsed_s":$(( $(date +%s) - SCRIPT_START ))}
+JSON
+)
+    fi
+
+    # 3 publishes: retained state name, retained detail, transient log line
+    _mqtt_publish "$MQTT_STATE_TOPIC"  "$state"   true
+    _mqtt_publish "$MQTT_DETAIL_TOPIC" "$detail" true
+    _mqtt_publish "$MQTT_LOG_TOPIC"     "${state} — ${detail}" false
+}
+
+# ------------------------------------------------------------------------------
 # 1. Pre-flight (hard gates; non-zero exit on any failure)
 # ------------------------------------------------------------------------------
 preflight() {
     log "Pre-flight checks…"
 
-    command -v nvidia-smi  >/dev/null 2>&1 || fatal "nvidia-smi not in PATH"
-    command -v python3     >/dev/null 2>&1 || fatal "python3 not in PATH"
-    command -v docker      >/dev/null 2>&1 || fatal "docker not in PATH"
-    command -v timeout      >/dev/null 2>&1 || fatal "timeout not in PATH"
-    command -v mountpoint   >/dev/null 2>&1 || fatal "mountpoint not in PATH"
+    command -v nvidia-smi  >/dev/null 2>&1 || fatal "nvidia-smi not in PATH" 2
+    command -v python3     >/dev/null 2>&1 || fatal "python3 not in PATH" 2
+    command -v docker      >/dev/null 2>&1 || fatal "docker not in PATH" 2
+    command -v timeout      >/dev/null 2>&1 || fatal "timeout not in PATH" 2
+    command -v mountpoint   >/dev/null 2>&1 || fatal "mountpoint not in PATH" 2
 
-    nvidia-smi >/dev/null 2>&1 || fatal "nvidia-smi failed (driver not loaded?)"
+    nvidia-smi >/dev/null 2>&1 || fatal "nvidia-smi failed (driver not loaded?)" 2
 
     for d in nvidia0 nvidiactl nvidia-modeset nvidia-uvm nvidia-uvm-tools; do
-        [ -e "/dev/$d" ] || fatal "/dev/$d missing (load nvidia modules)"
+        [ -e "/dev/$d" ] || fatal "/dev/$d missing (load nvidia modules)" 2
     done
 
-    mountpoint -q "$MEDIA_PATH" || fatal "$MEDIA_PATH not mounted (check fstab / nfs)"
+    mountpoint -q "$MEDIA_PATH" || fatal "$MEDIA_PATH not mounted (check fstab / nfs)" 2
 
     timeout 3 bash -c ">/dev/tcp/$CAMERA_IP/$CAMERA_RTSP_PORT" 2>/dev/null \
-        || fatal "Camera $CAMERA_IP:$CAMERA_RTSP_PORT unreachable"
+        || fatal "Camera $CAMERA_IP:$CAMERA_RTSP_PORT unreachable" 2
 
-    docker info >/dev/null 2>&1 || fatal "Docker daemon not running"
+    docker info >/dev/null 2>&1 || fatal "Docker daemon not running" 2
     docker info 2>/dev/null | grep -q 'nvidia' \
-        || fatal "nvidia runtime not registered (run nvidia-ctk runtime configure)"
+        || fatal "nvidia runtime not registered (run nvidia-ctk runtime configure)" 2
 
-    [ -f "$COMPOSE_FILE" ] || fatal "$COMPOSE_FILE not found in $(pwd)"
+    [ -f "$COMPOSE_FILE" ] || fatal "$COMPOSE_FILE not found in $(pwd)" 2
 
     [ -f trt-libs/libnvinfer.so.10 ] \
-        || fatal "trt-libs/libnvinfer.so.10 missing — install with: pip install --target=./trt-libs --no-deps tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34"
+        || fatal "trt-libs/libnvinfer.so.10 missing — install with: pip install --target=./trt-libs --no-deps tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34" 2
 
     log "Pre-flight ${GRN}OK${NC}"
 }
@@ -172,7 +293,7 @@ start_container() {
         sleep 1
     done
 
-    fatal "Container did not reach 'running' state in 30s" 3
+    fatal "container did not reach 'running' state in 30s" 3
 }
 
 # ------------------------------------------------------------------------------
@@ -215,7 +336,9 @@ wait_detection() {
     done
 
     # ----- Deadlock auto-recovery: stop/start clears stale ZMQ IPC -----
-    log "Detection still at 0 fps after ${DETECT_TIMEOUT}s — running stop/start to clear ZMQ IPC"
+    mqtt_state "RECOVERY_TRIGGERED" \
+        "{\"state\":\"RECOVERY_TRIGGERED\",\"reason\":\"detection_fps_stuck_at_zero_after_${DETECT_TIMEOUT}s\",\"action\":\"docker_compose_stop_start\"}"
+    log "${YEL}Detection still at 0 fps after ${DETECT_TIMEOUT}s — running stop/start to clear ZMQ IPC${NC}"
     docker compose -f "$COMPOSE_FILE" stop  "$CONTAINER_NAME" >/dev/null
     docker compose -f "$COMPOSE_FILE" start "$CONTAINER_NAME" >/dev/null
 
@@ -227,14 +350,18 @@ wait_detection() {
         fps=${fps%.*}
         if [ "${fps:-0}" -ge 1 ] 2>/dev/null; then
             log "Detection active after stop/start in ${i}s (det_fps=$fps)"
+            mqtt_state "RECOVERY_SUCCESS" \
+                "{\"state\":\"RECOVERY_SUCCESS\",\"detection_fps\":${fps},\"recovered_after_s\":${i}}"
             return 0
         fi
         sleep 1
     done
 
+    mqtt_state "RECOVERY_FAILED" \
+        "{\"state\":\"RECOVERY_FAILED\",\"reason\":\"no_detection_after_stop_start\"}"
     log "Last 80 log lines:"
     docker logs --tail=80 "$CONTAINER_NAME" 2>&1 || true
-    fatal "Detection did not start after stop/start recovery" 5
+    fatal "detection did not start after stop/start recovery" 5
 }
 
 # ------------------------------------------------------------------------------
@@ -430,16 +557,26 @@ except Exception:
     fi
 
     echo "───────────────────────────────────────────────────────────────────────"
+    local final_state
     if [ "$STEP_FAIL" -eq 0 ] && [ "$STEP_WARN" -eq 0 ]; then
         printf "  %bSUMMARY: %d/%d OK%b\n" "$GRN" "$STEP_OK" "$TOTAL_STEPS" "$NC"
+        final_state="HEALTHY"
     elif [ "$STEP_FAIL" -eq 0 ]; then
         printf "  %bSUMMARY: %d OK, %d WARN, 0 FAIL%b\n" \
             "$YEL" "$STEP_OK" "$STEP_WARN" "$NC"
+        final_state="DEGRADED"
     else
         printf "  %bSUMMARY: %d OK, %d WARN, %d FAIL%b\n" \
             "$RED" "$STEP_OK" "$STEP_WARN" "$STEP_FAIL" "$NC"
+        final_state="UNHEALTHY"
     fi
     echo "═══════════════════════════════════════════════════════════════════════"
+
+    # Final MQTT state with full pipeline summary
+    mqtt_state "$final_state" "$(cat <<JSON
+{"state":"${final_state}","host":"$(hostname)","pid":${SCRIPT_PID},"elapsed_s":$(( $(date +%s) - SCRIPT_START )),"step_ok":${STEP_OK},"step_warn":${STEP_WARN},"step_fail":${STEP_FAIL},"camera":"${CAMERA_NAME}","detection_fps":$(jget "$cam" "d.get('detection_fps',0)"),"camera_fps":$(jget "$cam" "d.get('camera_fps',0)"),"frigate_version":$(jget "$ver_json" "d.get('version','null')" | sed 's/^"//;s/"$//') , "inference_ms":${det_inf:-null}}
+JSON
+)"
 
     [ "$STEP_FAIL" -eq 0 ]
 }
@@ -448,14 +585,30 @@ except Exception:
 # Main
 # ------------------------------------------------------------------------------
 main() {
+    mqtt_init
+    mqtt_state "STARTING" \
+        "{\"state\":\"STARTING\",\"host\":\"$(hostname)\",\"pid\":${SCRIPT_PID},\"compose\":\"${COMPOSE_FILE}\",\"camera\":\"${CAMERA_NAME}\"}"
+
     preflight
+    mqtt_state "PREFLIGHT_OK" \
+        "{\"state\":\"PREFLIGHT_OK\",\"preflight\":\"all_8_gates_passed\"}"
+
     if [ "$SKIP_BRINGUP" -eq 0 ]; then
         start_container
+        mqtt_state "CONTAINER_UP" \
+            "{\"state\":\"CONTAINER_UP\",\"container\":\"${CONTAINER_NAME}\"}"
+
         wait_api
+        mqtt_state "API_UP" \
+            "{\"state\":\"API_UP\",\"endpoint\":\"${FRIGATE_API}\",\"version\":$(jget "$(curl -fsS --max-time 2 "$FRIGATE_API/api/version" 2>/dev/null)" "json.dumps(d.get('version'))" || echo '"?"')}"
+
         wait_detection
+        mqtt_state "DETECTION_ACTIVE" \
+            "{\"state\":\"DETECTION_ACTIVE\",\"camera\":\"${CAMERA_NAME}\",\"detection_fps\":$(jget "$(curl -fsS --max-time 2 "$FRIGATE_API/api/cameras" 2>/dev/null)" "d.get('$CAMERA_NAME',{}).get('detection_fps',0)")}"
     else
         log "Skipping bring-up (--status); running report only"
     fi
+
     status_report
 }
 

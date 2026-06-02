@@ -1,0 +1,14 @@
+[Unit]
+Description=Frigate NVR — run bring-up watchdog every 5 min
+Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/STARTUP.md
+
+[Timer]
+# 5 min after boot, then 5 min after the previous run completes.
+# OnUnitActiveSec avoids overlap if a bring-up takes longer than expected.
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=10s
+Unit=frigate-stack-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,27 @@
+[Unit]
+Description=Frigate NVR — bring up the container and validate the pipeline
+Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/STARTUP.md
+After=docker.service network-online.target nvidia-persistenced.service local-fs.target
+Requires=docker.service
+Wants=network-online.target nvidia-persistenced.service
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
+ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/bring-up.sh
+EnvironmentFile=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/.env
+StandardOutput=journal
+StandardError=journal
+# Exit 0 (all OK) and 1 (steps FAIL but not fatal) are success — the container
+# is up and the API is responding, even if some pipeline steps WARN/FAIL.
+# Exits 2/3/4/5 from bring-up.sh are pre-flight / container / API / detection
+# hard failures and will mark the service as failed; the watchdog can react.
+SuccessExitStatus=0 1
+TimeoutStartSec=420
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

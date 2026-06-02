@@ -9,7 +9,9 @@ Manual, robust procedure to bring up the Frigate NVR from a host reboot to fully
 1. [Overview](#1-overview)
 2. [Pre-flight checklist](#2-pre-flight-checklist) — host prerequisites
 3. [Manual startup sequence](#3-manual-startup-sequence) — 8 ordered steps
+3.5. [Boot automation (systemd)](#35-boot-automation-systemd) — frigate-stack.service + watchdog timer
 4. [Health checks](#4-health-checks) — 6 transparent monitoring commands
+4.5. [MQTT state subscription](#45-mqtt-state-subscription) — live `calypso_frigate/bringup/#` feed
 5. [Failure recovery](#5-failure-recovery) — per failure mode
 6. [Logging locations](#6-logging-locations)
 
@@ -241,6 +243,90 @@ curl -fsS http://localhost:5000/api/cameras | python3 -m json.tool
 
 ---
 
+---
+
+## 3.5 Boot automation (systemd)
+
+Two systemd units wrap [`bring-up.sh`](bring-up.sh) so the system comes up automatically on host reboot and stays up indefinitely.
+
+### Files
+
+| File | Role |
+|---|---|
+| [`frigate-stack.service`](frigate-stack.service) | oneshot, runs `bring-up.sh` once on boot |
+| [`frigate-stack-watchdog.service`](frigate-stack-watchdog.service) | oneshot, runs `bring-up.sh` (idempotent) on each timer tick |
+| [`frigate-stack-watchdog.timer`](frigate-stack-watchdog.timer) | triggers the watchdog every 5 min (after the previous run completes) |
+
+### Install (one-time, on the host)
+
+**Recommended** — run the install script. It copies the units, reloads systemd,
+enables them, starts the stack now, and tails the journal:
+
+```bash
+./install-systemd.sh
+```
+
+Equivalent manual steps (kept here for reference / when the script is not
+appropriate, e.g. in a container or read-only environment):
+
+```bash
+# 1. Copy the units to /etc/systemd/system
+sudo cp frigate-stack.service              /etc/systemd/system/
+sudo cp frigate-stack-watchdog.service     /etc/systemd/system/
+sudo cp frigate-stack-watchdog.timer       /etc/systemd/system/
+
+# 2. Reload systemd and enable both
+sudo systemctl daemon-reload
+sudo systemctl enable frigate-stack.service
+sudo systemctl enable --now frigate-stack-watchdog.timer
+
+# 3. Start the stack now without rebooting
+sudo systemctl start frigate-stack.service
+```
+
+To uninstall later:
+
+```bash
+./install-systemd.sh --uninstall
+```
+
+### Inspect
+
+```bash
+# Last bring-up result
+systemctl status frigate-stack.service
+journalctl -u frigate-stack.service -n 50 --no-pager
+
+# Watchdog schedule + last runs
+systemctl list-timers frigate-stack-watchdog.timer
+journalctl -u frigate-stack-watchdog.service -n 50 --no-pager
+
+# Live follow during a bring-up
+journalctl -u frigate-stack.service -f
+```
+
+### Why the dual-unit design
+
+| Concern | Handled by |
+|---|---|
+| Host reboot must bring the system up | `frigate-stack.service` (oneshot, `RemainAfterExit=yes`) |
+| Container may die hours after boot | `frigate-stack-watchdog.timer` triggers re-run every 5 min |
+| Bring-up may take up to 4 min (TRT build) | `TimeoutStartSec=420` on both units |
+| A long bring-up must not pile up with the timer | `OnUnitActiveSec` in the timer avoids overlap |
+| The system is unreachable at boot (camera/NAS down) | `SuccessExitStatus=0 1` lets the service "succeed" with WARN, the watchdog retries 5 min later |
+| The system is unrecoverable | exit codes 2/3/4/5 mark the service failed → visible in `systemctl status` and via MQTT `FATAL_*` events |
+
+### Uninstall
+
+```bash
+sudo systemctl disable --now frigate-stack.service
+sudo systemctl disable --now frigate-stack-watchdog.timer
+sudo rm /etc/systemd/system/frigate-stack{,-watchdog.service,-watchdog.timer}
+sudo systemctl daemon-reload
+```
+
+---
+
 ## 4. Health checks
 
 These six commands give a complete picture of steady-state operation. Run them in any order; the responses are non-mutating.
@@ -266,6 +352,27 @@ These six commands give a complete picture of steady-state operation. Run them i
 | Events | non-empty list when activity present |
 
 For a per-pipeline-step breakdown, run [`bring-up.sh`](bring-up.sh) (idempotent — see its tail-end 14-step report).
+
+### 4.5 MQTT state subscription
+
+If MQTT telemetry is enabled (default), every state transition is published to `calypso_frigate/bringup/state` (retained) and `calypso_frigate/bringup/detail` (retained JSON). Subscribe from any host with `mosquitto_sub` (already required for the Mosquitto broker):
+
+```bash
+# Tail every bring-up transition in real time
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+              -t 'calypso_frigate/bringup/#' -v
+```
+
+The retained `state` topic always reflects the **last completed transition**, so a fresh subscriber immediately sees the current state without waiting for the next one. Use this for HA dashboards, mobile notifications on `FATAL_*` or `RECOVERY_*`, or simple bash checks:
+
+```bash
+# Is the system healthy right now?
+[ "$(mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+   -t 'calypso_frigate/bringup/state' -C 1 -W 2)" = "HEALTHY" ] && echo OK || echo NOT_OK
+```
+
+The full state schema and HA integration snippets are in [ARCHITECTURE.md §7](ARCHITECTURE.md#7-operations-state-machine-and-mqtt-telemetry).
+
 
 ---
 
