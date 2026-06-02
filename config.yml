@@ -23,18 +23,12 @@
 #         1.8  MOTION       – global pre-filter (before ML)
 #         1.9  AUDIO        – security-event audio analysis
 #         1.10 GO2RTC       – direct RTSP via Frigate internal go2rtc (NUC retired 2026-06-02)
-#    2. CAMERAS — OUTDOOR (5)
+#    2. CAMERAS — OUTDOOR (3 Reolink Duo 3, all using sub-stream for detect)
 #         ├─ allee_sur_le_cote        Reolink Duo 3  – 192.168.50.129
-#         │    ├─ allee_sur_le_cote_left   (left half)
-#         │    └─ allee_sur_le_cote_right  (right half)
 #         ├─ jardin_arriere           Reolink RLC-810A (single-lens) – 192.168.50.207
 #         ├─ vue_entree               Reolink Doorbell POE – 192.168.50.222
 #         ├─ jardin_devant            Reolink Duo 3  – 192.168.50.18
-#         │    ├─ jardin_devant_left       (left half)
-#         │    └─ jardin_devant_right      (right half)
 #         └─ piscine_vue_toit         Reolink Duo 3  – 192.168.50.7
-#              ├─ piscine_vue_toit_left    (left half)
-#              └─ piscine_vue_toit_right   (right half)
 #    2b. CAMERAS — INDOOR TP-LINK TAPO C210 (3, added 2026-06-02)
 #         ├─ salon                    TP-Link Tapo C210 2K – 192.168.50.17
 #         ├─ buro                     TP-Link Tapo C210 2K – 192.168.50.70
@@ -45,23 +39,28 @@
 #
 #  STREAM RESOLUTION REFERENCE
 #  ─────────────────────────────────────────────────────────────────────────
-#  Camera                  │ Main stream   │ Sub stream  │ Detect crop
+#  Camera                  │ Main stream   │ Sub stream  │ Detect source
 #  ────────────────────────┼───────────────┼─────────────┼──────────────────
-#  Reolink Duo 3 (×3)      │ 4096×1152     │ 1536×432    │ 2048×1152 (L or R)
-#  Reolink RLC-810A        │ 3840×2160 4K  │ 640×360     │ —
-#  Reolink Doorbell POE    │ 2560×1920     │ 640×480     │ —
-#  TP-Link Tapo C210 (×3)  │ 2304×1296 2K  │ 640×360     │ —
+#  Reolink Duo 3 (×3)      │ 4096×1152     │ 1536×432    │ sub 1536×432
+#  Reolink RLC-810A        │ 3840×2160 4K  │ 640×360     │ main 3840×2160
+#  Reolink Doorbell POE    │ 2560×1920     │ 640×480     │ main 2560×1920
+#  TP-Link Tapo C210 (×3)  │ 2304×1296 2K  │ 640×360     │ main 2304×1296
 #  ─────────────────────────────────────────────────────────────────────────
 #
-#  DETECTION STREAM STRATEGY
+#  DETECTION STREAM STRATEGY (no-cropped-streams branch)
 #  ─────────────────────────────────────────────────────────────────────────
-#  • Duo 3 whole-panoramic (4096×1152) is NOT used for detection — the 3.5:1
-#    aspect ratio is incompatible with the mobilenet/SSD model input shape.
-#    Instead, Frigate's own ffmpeg crops each Duo 3 main stream into two
-#    2048×1152 halves using -vf crop= in output_args.detect per camera.
-#  • All cameras use main-stream for detection to maximise pixel density.
+#  • All Reolink Duo 3 cameras use their 1536×432 sub-stream for detection.
+#    The 3.5:1 panoramic aspect ratio of the main stream (4096×1152) is
+#    incompatible with the mobilenet/SSD model input shape, so detection
+#    runs on the already-letterboxed sub-stream. Main stream is reserved
+#    for lossless recording only.
+#  • Single-lens Reolinks (jardin_arriere RLC-810A, vue_entree Doorbell) and
+#    indoor Tapo C210 cams use the main stream directly for detection.
 #  • jardin_arriere (4K) is capped at 5 fps for detection — the model input
 #    is 320×320 regardless, so 10 fps at 4K would waste GPU decode bandwidth.
+#  • All crop cameras (_left/_right) and the CUDA filter-graph crop chain
+#    have been removed in this branch. If you need higher resolution on the
+#    Duo 3s, run the model on a window of the main stream instead.
 #  ─────────────────────────────────────────────────────────────────────────
 #
 #  DETECTION PARAMETER STATUS (iter2 — data-driven tight params 2026-05-25)
@@ -106,10 +105,11 @@ ffmpeg:
 
   # RTX 5060 Ti 16 GB — CUDA hardware decoding enabled.
   # -hwaccel_output_format cuda is intentionally omitted globally: it would
-  # leave decoded frames as CUDA surfaces, breaking non-crop cameras whose
-  # default -vf fps/scale filter cannot operate on CUDA surfaces.
-  # Crop cameras override hwaccel_args per-camera to add hwaccel_output_format
-  # cuda, enabling the hwdownload,format=nv12,format=yuv420p,crop= filter chain.
+  # leave decoded frames as CUDA surfaces, breaking cameras whose default
+  # -vf fps/scale filter cannot operate on CUDA surfaces.
+  # no-cropped-streams branch: there are no per-camera crop filter chains any
+  # more, so no per-camera hwaccel_args override is needed. Detection runs
+  # on native frame buffers and Frigate's built-in filter graph handles them.
   hwaccel_args:
     - -hwaccel
     - cuda
@@ -247,17 +247,6 @@ audio:
 # These mirror the options that the NUC go2rtc used previously and are
 # required to keep 4K main streams stable.
 #
-# IMPORTANT – CROP STRATEGY:
-#   go2rtc 1.9.10 cannot apply crop filters on its RTSP output. The
-#   `#video=ffmpeg:` modifier is consumer-side only (WebRTC/MSE) and does NOT
-#   affect the RTSP stream served to Frigate's ffmpeg. Therefore:
-#   • The _left/_right go2rtc stream entries below are VESTIGIAL (registered
-#     but NOT used by Frigate's ffmpeg inputs).
-#   • Actual cropping is done by Frigate's own ffmpeg via
-#     `ffmpeg.output_args.detect: [-vf, crop=W:H:X:Y]` per crop camera.
-#   • Crop camera ffmpeg.inputs.path points to the full main stream
-#     (rtsp://127.0.0.1:8554/<camera>_main), and Frigate crops before detect.
-#
 # Credentials:
 #   • Outdoor Reolink cams (Duo 3 / RLC-810A / Doorbell POE) use the
 #     built-in 'admin' account: admin:fG-56lui
@@ -267,7 +256,10 @@ audio:
 #   it is NOT a Reolink product and is NOT related to ring-mqtt. It is
 #   used as an indoor Ring replacement.
 #
-# Stream inventory (8 cameras, 16 unique physical streams, 22 entries):
+# Stream inventory (8 cameras, 16 unique physical streams, 16 go2rtc entries):
+#   All 6 vestigial crop streams (_left/_right per Duo 3) have been removed
+#   in the no-cropped-streams branch. Each camera exposes only its native
+#   _main and _sub re-streams now.
 #   Outdoor Reolink (admin:fG-56lui):
 #     allee_sur_le_cote_main/sub     ← 192.168.50.129  Reolink Duo 3
 #     jardin_arriere_main/sub        ← 192.168.50.207  Reolink RLC-810A
@@ -290,21 +282,11 @@ go2rtc:
   streams:
     # ── Allée sur le côté — Reolink Duo 3 (192.168.50.129) ──────────────────
     # Main stream:  4096×1152  (full panoramic, used for recording)
-    # Sub stream:   1536×432   (full panoramic, used for live view)
-    # Half-crops:   2048×1152  each (cropped by Frigate ffmpeg output_args.detect)
+    # Sub stream:   1536×432   (full panoramic, used for live view + detection)
     allee_sur_le_cote_main:
       - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
     allee_sur_le_cote_sub:
       - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
-    allee_sur_le_cote_left:
-      # VESTIGIAL – go2rtc 1.9.10 cannot crop RTSP output; crop is applied by
-      # Frigate's ffmpeg via output_args.detect instead. Kept for potential
-      # future use (e.g. WebRTC live view of cropped half) and for external
-      # RTSP consumers (HA, browser) that may reference the logical name.
-      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
-    allee_sur_le_cote_right:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
 
     # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ──────
     # Main stream:  3840×2160  (4K UHD, used for detection + recording)
@@ -324,33 +306,19 @@ go2rtc:
 
     # ── Jardin devant — Reolink Duo 3 (192.168.50.18) ───────────────────────
     # Main stream:  4096×1152  (full panoramic, used for recording)
-    # Sub stream:   1536×432   (full panoramic, used for live view)
-    # Half-crops:   2048×1152  each (cropped by Frigate ffmpeg output_args.detect)
+    # Sub stream:   1536×432   (full panoramic, used for live view + detection)
     jardin_devant_main:
       - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
     jardin_devant_sub:
       - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
-    jardin_devant_main_left:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
-    jardin_devant_main_right:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
 
     # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────────
-    # Main stream:  4096×1152  (full panoramic)
-    # Sub stream:   1536×432   (full panoramic, live view only)
-    # Half-crops:   2048×1152  each (cropped by Frigate ffmpeg output_args.detect)
+    # Main stream:  4096×1152  (full panoramic, recording only)
+    # Sub stream:   1536×432   (full panoramic, live view + detection)
     piscine_vue_toit_main:
       - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
     piscine_vue_toit_sub:
       - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
-    piscine_vue_toit_left:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
-    piscine_vue_toit_right:
-      # VESTIGIAL – see allee_sur_le_cote_left note above.
-      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
 
     # ── TP-Link Tapo C210 indoor cameras (added 2026-06-02) ────────────────
     # Indoor TP-Link Tapo C210 2K cams used as Ring replacements.
@@ -384,9 +352,8 @@ cameras:
   # Position:  Driveway side view, eye-level, covers gate + approach
   # Streams:
   #   detect  → sub 1536×432   (full panoramic sub-stream)
-  #             NOTE: full panoramic used here for zone coverage across the
-  #             entire driveway width. Left/right split cameras handle
-  #             high-res detection for each half.
+  #             no-cropped-streams branch: no _left/_right split cameras, so
+  #             detection runs on the full panoramic sub-stream directly.
   #   record  → main 4096×1152 (full panoramic, lossless copy)
   #   audio   → main (mic channel embedded in main stream)
   #   live    → sub 1536×432   (lightweight for UI grid)
@@ -474,216 +441,6 @@ cameras:
         required_zones: prive
       detections:
         required_zones: rodage
-
-  # ==========================================================================
-  # CAMERA: ALLEE_SUR_LE_COTE_LEFT
-  # Hardware:  Reolink Duo 3 — left lens half (same physical camera as above)
-  # Height:    4m above ground
-  # Position:  Left half of driveway — covers gate and street approach
-  # Streams:
-  #   detect  → main 4096×1152 pulled from go2rtc, cropped to left 2048×1152
-  #             crop applied via CUDA filter graph (hwaccel_output_format cuda +
-  #             crop,hwdownload,format=yuv420p) — GPU crop, CPU never sees full frame
-  #   record  → main 4096×1152 (shared connection, Frigate deduplicates)
-  #   audio   → main (shared)
-  #   live    → sub 1536×432 (full panoramic sub for UI context)
-  # ==========================================================================
-  allee_sur_le_cote_left:
-
-    ffmpeg:
-      hwaccel_args:
-        - -hwaccel
-        - cuda
-        - -hwaccel_device
-        - '0'
-        - -hwaccel_output_format
-        - cuda
-      output_args:
-        detect:
-          - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
-          - -f
-          - rawvideo
-          - -pix_fmt
-          - yuv420p
-      inputs:
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [record, audio]
-
-    live:
-      streams: {}  # Live view disabled — detection/recording/snapshots still active
-                   # Half-crop cameras cause MSE rendering issues in the UI; the
-                   # full panoramic (allee_sur_le_cote) is the primary live view.
-
-    audio:
-      enabled: true
-
-    mqtt:
-      enabled: true
-      timestamp: true
-      bounding_box: true
-      crop: false
-
-    detect:
-      # main_left half-crop: 2048×1152 (16:9, left half of Duo 3 main)
-      # Pixel density: 2,359,296 px total — 7× more than sub_left (768×432)
-      width: 2048
-      height: 1152
-      fps: 10
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 2026-05-25: 38 events (LOW_N), 72h soak, p5_area=11661 p95_area=606924
-          # p5_ratio=0.046 p95_ratio=4.312  p10_score=0.718 p5_score=0.634
-          # iter3 (2026-05-26): 3 events seen, 33% below_min_ratio → p5_ratio observed at boundary
-          #   min_ratio lowered to 0.05 to capture ultra-thin (standing) detections.
-          #   threshold/min_score lowered — scores observed below current threshold.
-          min_area: 8162           # p5×0.70 (main_left 2048×1152 = 2359296px)
-          max_area: 789001         # p95×1.30
-          min_ratio: 0.05           # iter3: was 0.10, lowered for ultra-thin standing persons
-          max_ratio: 5.17          # p95_ratio×1.20
-          threshold: 0.61           # iter3: was 0.68, lowered (scores below 0.68 observed)
-          min_score: 0.55           # iter3: was 0.60, lowered
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates:
-          1,1,1,0.002,0.703,0.002,0.506,0.112,0.496,0.124,0.486,0.12,0.464,0.138,0.322,0.239,0.254,0.296,0.244,0.32,0.234,0.329,0.226,0.336,0.247,0.363,0.155,0.694,0,0.568,0,1
-        loitering_time: 0
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.61          # iter3: was 0.68
-            min_area: 8162
-            min_ratio: 0.05          # iter3: was 0.10
-            max_ratio: 5.17
-      rodage:
-        coordinates: 0.231,0.382,0.198,0.348,0.111,0.635,0.151,0.665
-        loitering_time: 10
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.61          # iter3: was 0.68
-            min_area: 8162
-            min_ratio: 0.05          # iter3: was 0.10
-            max_ratio: 5.17
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: rodage
-
-    motion:
-      mask:
-        0.587,0.002,0,0,0,0.533,0.107,0.629,0.194,0.345,0.199,0.315,0.207,0.292,0.308,0.2,0.398,0.127,0.41,0.117,0.422,0.097
-
-  # ==========================================================================
-  # CAMERA: ALLEE_SUR_LE_COTE_RIGHT
-  # Hardware:  Reolink Duo 3 — right lens half (same physical camera as above)
-  # Height:    4m above ground
-  # Position:  Right half of driveway — covers garden side and rear approach
-  # Streams:
-  #   detect  → main 4096×1152 pulled from go2rtc, cropped to right 2048×1152
-  #             crop applied via CUDA filter graph (hwaccel_output_format cuda +
-  #             crop,hwdownload,format=yuv420p) — GPU crop, CPU never sees full frame
-  #   record  → main 4096×1152 (shared connection, no second audio needed)
-  #   live    → sub 1536×432 (full panoramic sub for UI context)
-  # ==========================================================================
-  allee_sur_le_cote_right:
-
-    ffmpeg:
-      hwaccel_args:
-        - -hwaccel
-        - cuda
-        - -hwaccel_device
-        - '0'
-        - -hwaccel_output_format
-        - cuda
-      output_args:
-        detect:
-          - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
-          - -f
-          - rawvideo
-          - -pix_fmt
-          - yuv420p
-      inputs:
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
-          roles: [record]
-
-    live:
-      streams: {}  # Live view disabled — detection/recording/snapshots still active
-                   # Half-crop cameras cause MSE rendering issues in the UI; the
-                   # full panoramic (allee_sur_le_cote) is the primary live view.
-
-    audio:
-      enabled: false             # Audio already captured by allee_sur_le_cote_left
-
-    mqtt:
-      enabled: true
-      timestamp: true
-      bounding_box: true
-      crop: false
-
-    detect:
-      # main_right half-crop: 2048×1152 (16:9, right half of Duo 3 main)
-      # Pixel density: 2,359,296 px total — 7× more than sub_right (768×432)
-      width: 2048
-      height: 1152
-      fps: 10
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 2026-05-25: 267 events, 72h soak, p5_area=15351 p95_area=873425
-          # p5_ratio=0.484 p95_ratio=2.618  p10_score=0.621 p5_score=0.548
-          # iter3 (2026-05-26): 2 events seen, 50% above max_ratio → p95 observed=5.33
-          #   max_ratio too low for panoramic right half. Raised to 7.0.
-          min_area: 10745        # p5×0.70 (main_right 2048×1152 = 2359296px)
-          max_area: 1135452      # p95×1.30
-          min_ratio: 0.39        # p5_ratio×0.80
-          max_ratio: 7.00         # iter3: was 3.14, raised for wide panoramic detections
-          threshold: 0.59        # p10_score×0.95
-          min_score: 0.52        # p5_score×0.95
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates:
-          1,1,0,1,0,0,0.299,0,0.498,0.097,0.63,0.177,0.748,0.274,0.823,0.349,0.849,0.338,0.877,0.322,0.907,0.299,0.926,0.288,0.939,0.327,0.946,0.359,0.951,0.393,0.975,0.376,1,0.521,1,0.582,1,0.605
-        loitering_time: 0
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.40          # Further lowered for far-range misses (was 0.45)
-            min_area: 10745          # iter2 2026-05-25
-            min_ratio: 0.39
-            max_ratio: 7.00           # iter3: was 3.14 (zone mirrors camera-level filter)
-
-    review:
-      alerts:
-        required_zones: prive
-
-    motion:
-      mask:
-        - 0.464,0.011,0.499,0,0.587,0,1,0.004,1,0.51,0.971,0.301,0.948,0.188,0.952,0.104,0.913,0.027,0.765,0.028,0.83,0.173,0.85,0.223,0.868,0.258,0.832,0.294,0.694,0.17,0.665,0.145,0.623,0.113
-        - 0.932,0.116,0.971,0.064,0.984,0.183,0.999,0.204,0.998,0.469,0.989,0.469,0.979,0.394,0.965,0.247
 
   # ==========================================================================
   # CAMERA: JARDIN_ARRIERE
@@ -853,8 +610,9 @@ cameras:
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
-  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD;
-  #       this camera provides a wide overview only — use _left/_right for accuracy.
+  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD.
+  #       no-cropped-streams branch: detection runs on the full panoramic
+  #       sub-stream — no _left/_right split cameras exist any more.
   # ========================================================================
   jardin_devant:
     ffmpeg:
@@ -935,234 +693,14 @@ cameras:
       mask: 0.647,0.095,0.64,0.188,0.653,0.229,0.675,0.211,0.682,0.129,0.671,0.077
 
   # ========================================================================
-  # CAMERA: JARDIN_DEVANT_LEFT — Left half of front garden (Reolink Duo 3)
-  # Height:    6.5m above ground
-  # Resolution:
-  #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
-  #   detect     = main cropped to left 2048×1152 via CUDA filter graph
-  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
-  #                GPU crop — CPU never sees full 4096×1152 frame
-  #   sub        = 1536×432  — live view only
-  # ========================================================================
-  jardin_devant_left:
-    ffmpeg:
-      hwaccel_args:
-        - -hwaccel
-        - cuda
-        - -hwaccel_device
-        - '0'
-        - -hwaccel_output_format
-        - cuda
-      output_args:
-        detect:
-          - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
-          - -f
-          - rawvideo
-          - -pix_fmt
-          - yuv420p
-      inputs:
-        # main stream → detect with CUDA crop (left half 2048×1152)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [detect]
-        # main stream → record (4096×1152, shared with jardin_devant_right)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [record]
-
-    live:
-      streams: {}  # Live view disabled — detection/recording/snapshots still active
-                   # Half-crop cameras cause MSE rendering issues in the UI; the
-                   # full panoramic (jardin_devant) is the primary live view.
-
-    audio:
-      enabled: false
-
-    detect:
-      # go2rtc crops left half of Duo 3 main → 2048×1152 (16:9)
-      width: 2048
-      height: 1152
-      fps: 10
-      max_disappeared: 100
-
-    motion:
-      contour_area: 100
-      threshold: 25
-      delta_alpha: 0.2
-      improve_contrast: true
-      # TEMP iter1: motion masks removed for soak period to capture all pedestrian data.
-      # Original masks covered 76.5% of frame (street + sky), blocking most detections.
-      # Will be re-evaluated and re-added in iter2 based on false-positive analysis.
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (56 events, 72h).
-          # area p5=4256 p95=1228500  ratio p5=0.20 p95=10.00
-          # iter3 (2026-05-26): 5 events, 60% violations:
-          #   1 below_min_area (very small), 2 above_max_ratio → p95 ratio=293.67
-          #   max_ratio far too low for panoramic half-crop view.
-          min_area: 3500           # iter3: was 4256, lowered (observed below 4256)
-          max_area: 1228500       # p95 within range — no change
-          min_ratio: 0.10           # iter3: was 0.20, lowered (extremely wide panoramic boxes)
-          max_ratio: 300.0          # iter3: was 10.0, raised dramatically (observed p95=293.7)
-          threshold: 0.50           # iter3: was 0.56, lowered
-          min_score: 0.48           # iter3: was 0.52, lowered
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates: 0,1,1,1,1,0.285,0.65,0.296,0.576,0.204,0.47,0.865,0,0.561
-        loitering_time: 0
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.50           # iter3: was 0.56
-            min_area: 3500           # iter3: was 4256
-            min_ratio: 0.10           # iter3: was 0.20
-            max_ratio: 300.0          # iter3: was 10.0
-      rodage:
-        coordinates:
-          1,0.034,0.998,0.28,0.65,0.297,0.575,0.191,0.469,0.858,0.416,0.821,0.539,0.136,0.582,0.092,0.793,0.046
-        loitering_time: 10
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.56
-            min_area: 4256
-            min_ratio: 0.20
-            max_ratio: 10.0
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: rodage
-
-  # ========================================================================
-  # CAMERA: JARDIN_DEVANT_RIGHT — Right half of front garden (Reolink Duo 3)
-  # Height:    6.5m above ground
-  # Resolution:
-  #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
-  #   detect     = main cropped to right 2048×1152 via CUDA filter graph
-  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
-  #                GPU crop — CPU never sees full 4096×1152 frame
-  #   sub        = 1536×432  — live view only
-  # ========================================================================
-  jardin_devant_right:
-    ffmpeg:
-      hwaccel_args:
-        - -hwaccel
-        - cuda
-        - -hwaccel_device
-        - '0'
-        - -hwaccel_output_format
-        - cuda
-      output_args:
-        detect:
-          - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
-          - -f
-          - rawvideo
-          - -pix_fmt
-          - yuv420p
-      inputs:
-        # main stream → detect with CUDA crop (right half 2048×1152)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [detect]
-        # main stream → record (4096×1152, shared with jardin_devant_left)
-        - path: rtsp://127.0.0.1:8554/jardin_devant_main
-          roles: [record]
-
-    live:
-      streams: {}  # Live view disabled — detection/recording/snapshots still active
-                   # Half-crop cameras cause MSE rendering issues in the UI; the
-                   # full panoramic (jardin_devant) is the primary live view.
-
-    audio:
-      enabled: false
-
-    detect:
-      # go2rtc crops right half of Duo 3 main → 2048×1152 (16:9)
-      width: 2048
-      height: 1152
-      fps: 10
-      max_disappeared: 100
-
-    motion:
-      threshold: 24
-      contour_area: 40
-      frame_alpha: 0.4
-      delta_alpha: 0.5
-      # TEMP iter1: motion masks removed for soak period to capture all pedestrian data.
-      # Original masks covered 66.9% of frame (street + sky), blocking most detections.
-      # Will be re-evaluated and re-added in iter2 based on false-positive analysis.
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (152 events, 72h).
-          # area p5=2296 p95=211100  ratio p5=0.16 p95=10.00
-          # iter3 (2026-05-26): 26 events, 65% violations — mixed pattern:
-          #   2 below_min_area (some very small persons below 2296px²)
-          #   8 above_max_area → p95 observed 668k (3× above config max)
-          #   1 below_min_ratio (very narrow), 6 above_max_ratio → p95 ratio=39.6
-          #   Both area bounds and both ratio bounds need expansion.
-          min_area: 1800           # iter3: was 2296, lowered slightly for tiny persons
-          max_area: 750000         # iter3: was 211,100, raised to cover observed p95~668k
-          min_ratio: 0.05          # iter3: was 0.16, lowered (very upright close persons)
-          max_ratio: 40.0          # iter3: was 10.0, raised (overhead wide panoramic boxes)
-          threshold: 0.57           # iter3: was 0.65, lowered (scores observed below 0.65)
-          min_score: 0.52          # iter3: was 0.56, lowered
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates:
-          0,1,0,0.267,0.297,0.288,0.327,0.214,0.495,0.271,0.526,0.269,0.646,0.827,0.65,0.832,1,0.602,1,0.991,1,1
-        loitering_time: 2
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.57          # iter3: was 0.65
-            min_area: 1800           # iter3: was 2296
-            min_ratio: 0.05          # iter3: was 0.16
-            max_ratio: 40.0          # iter3: was 10.0
-      rodage:
-        coordinates:
-          0,0.255,0,0,0.229,0,0.359,0.058,0.379,0.103,0.497,0.153,0.508,0.241,0.54,0.239,0.667,0.819,0.65,0.837,0.529,0.283,0.523,0.273,0.501,0.273,0.337,0.214,0.3,0.287,0.182,0.28
-        loitering_time: 10
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.65
-            min_area: 2296
-            min_ratio: 0.16
-            max_ratio: 10.0
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: prive
-
-  # ========================================================================
   # CAMERA: PISCINE_VUE_TOIT — Pool rooftop whole-frame (Reolink Duo 3)
   # Height:    6.5m above ground
   # Resolution:
   #   main  = 4096×1152 (panoramic, 3.5:1) — record + audio only
   #   sub   = 1536×432  (panoramic, 3.5:1) — detect (full panoramic overview)
-  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD;
-  #       this camera provides a wide overview only — use _left/_right for accuracy.
+  # Note: panoramic 3.5:1 aspect ratio is incompatible with mobilenet/SSD.
+  #       no-cropped-streams branch: detection runs on the full panoramic
+  #       sub-stream — no _left/_right split cameras exist any more.
   # ========================================================================
   piscine_vue_toit:
 
@@ -1227,209 +765,6 @@ cameras:
         required_zones: prive
       detections:
         required_zones: prive
-
-  # ========================================================================
-  # CAMERA: PISCINE_VUE_TOIT_LEFT — Left half of pool rooftop (Reolink Duo 3)
-  # Height:    6.5m above ground
-  # Resolution:
-  #   main       = 4096×1152 (panoramic, 3.5:1) — record + audio (shared connection)
-  #   main_left  = 2048×1152 (16:9 crop, left half) — detect via CUDA filter graph
-  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
-  #                GPU crop — CPU never sees full 4096×1152 frame
-  #   sub        = 1536×432  — live view only
-  # iter1: migrated from sub_left (768×432) → main_left (2048×1152)
-  #        7× more pixels → significantly better ML accuracy
-  # ========================================================================
-  piscine_vue_toit_left:
-
-    ffmpeg:
-      hwaccel_args:
-        - -hwaccel
-        - cuda
-        - -hwaccel_device
-        - '0'
-        - -hwaccel_output_format
-        - cuda
-      output_args:
-        detect:
-          - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:0:0
-          - -f
-          - rawvideo
-          - -pix_fmt
-          - yuv420p
-      inputs:
-        # main stream → detect with CUDA crop (left half 2048×1152)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [detect]
-        # main stream → record + audio (4096×1152, shared with piscine_vue_toit_right)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [record, audio]
-
-    live:
-      streams: {}  # Live view disabled — detection/recording/snapshots still active
-                   # Half-crop cameras cause MSE rendering issues in the UI; the
-                   # full panoramic (piscine_vue_toit) is the primary live view.
-
-    audio:
-      enabled: true
-
-    detect:
-      # go2rtc crops left half of Duo 3 main → 2048×1152 (16:9)
-      width: 2048
-      height: 1152
-      fps: 10
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (349 events, 72h).
-          # area p5=19178 p95=684684  ratio p5=0.94 p95=10.00
-          min_area: 19178
-          max_area: 684684
-          min_ratio: 0.94
-          max_ratio: 10.0
-          threshold: 0.65
-          min_score: 0.59
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates:
-          0.197,1,0.303,0.821,0.366,0.697,0.506,0.358,0.495,0.283,0.473,0.154,0.609,0,0.643,0,0.739,0,0.748,0.059,0.981,0.039,0.999,0.062,1,0.993,1,1
-        loitering_time: 0
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.65
-            min_area: 19178
-            min_ratio: 0.94
-            max_ratio: 10.0
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: prive
-
-    motion:
-      mask:
-        - 0.157,0.996,0,1,0,0,0.592,0.007,0.323,0.303,0.32,0.352,0.41,0.324,0.471,0.304,0.481,0.347,0.382,0.586,0.343,0.673,0.292,0.768,0.242,0.862
-        - 0.855,0.003,1,0,0.998,0.055,0.984,0.035,0.845,0.049
-        - 0.625,0,0.776,0.003,0.772,0.04,0.749,0.045,0.747,0.014,0.621,0.049,0.618,0.03,0.569,0.043,0.6,0.003
-
-  # ========================================================================
-  # CAMERA: PISCINE_VUE_TOIT_RIGHT — Right half of pool rooftop (Reolink Duo 3)
-  # Height:    6.5m above ground
-  # Resolution:
-  #   main       = 4096×1152 (panoramic, 3.5:1) — record only (shared connection)
-  #   main_right = 2048×1152 (16:9 crop, right half) — detect via CUDA filter graph
-  #                (hwaccel_output_format cuda + crop,hwdownload,format=yuv420p)
-  #                GPU crop — CPU never sees full 4096×1152 frame
-  #   sub        = 1536×432  — live view only
-  # iter1: migrated from sub_right (768×432) → main_right (2048×1152)
-  #        iter0-fix also applied: min_area was 10000 (too high for distant person ≈ 6000 px²)
-  # ========================================================================
-  piscine_vue_toit_right:
-
-    ffmpeg:
-      hwaccel_args:
-        - -hwaccel
-        - cuda
-        - -hwaccel_device
-        - '0'
-        - -hwaccel_output_format
-        - cuda
-      output_args:
-        detect:
-          - -vf
-          - hwdownload,format=nv12,format=yuv420p,crop=2048:1152:2048:0
-          - -f
-          - rawvideo
-          - -pix_fmt
-          - yuv420p
-      inputs:
-        # main stream → detect with CUDA crop (right half 2048×1152)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [detect]
-        # main stream → record (4096×1152, shared with piscine_vue_toit_left)
-        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
-          roles: [record]
-
-    live:
-      streams: {}  # Live view disabled — detection/recording/snapshots still active
-                   # Half-crop cameras cause MSE rendering issues in the UI; the
-                   # full panoramic (piscine_vue_toit) is the primary live view.
-
-    audio:
-      enabled: false
-
-    detect:
-      # go2rtc crops right half of Duo 3 main → 2048×1152 (16:9)
-      width: 2048
-      height: 1152
-      fps: 10
-
-    objects:
-      track: [person]
-      filters:
-        person:
-          # iter2 (2026-05-25): p5/p95 from soak3 dump (16 events, 72h).
-          # area p5=503 p95=422832  ratio p5=0.24 p95=10.00
-          # iter3 (2026-05-26): 6 events seen, 1 above max_area → marginal, sample too small
-          #   to act definitively. Keeping max_area at 450,000 as a slight safety raise.
-          #   threshold/min_score lowered — all 6 events had scores below current threshold.
-          min_area: 503
-          max_area: 450000          # iter3: was 422,832, raised to 450k (observed p95~369k)
-          min_ratio: 0.24
-          max_ratio: 10.0
-          threshold: 0.52           # iter3: was 0.58, lowered
-          min_score: 0.48           # iter3: was 0.53, lowered
-
-    snapshots:
-      enabled: true
-
-    zones:
-      prive:
-        coordinates:
-          0,1,1,1,0.998,0.004,0.604,0,0.454,0.591,0.417,0.6,0.33,0.446,0.292,0.448,0.154,0.207,0.079,0.119,0,0.039
-        loitering_time: 0
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.52           # iter3: was 0.58
-            min_area: 503
-            min_ratio: 0.24
-            max_ratio: 10.0
-
-    review:
-      alerts:
-        required_zones: prive
-      detections:
-        required_zones: prive
-
-    motion:
-      mask:
-        0,0,0.571,0,0.485,0.288,0.439,0.524,0.435,0.568,0.413,0.565,0.347,0.444,0.299,0.45,0.263,0.424,0.235,0.425,0.225,0.402,0.208,0.349,0.195,0.348,0.111,0.361,0.074,0.314,0.039,0.276,0.018,0.236,0.037,0.138,0.078,0.117,0.029,0.055
-
-  # ==========================================================================
-  # INDOOR REOLINK C210 CAMERAS (added 2026-06-02)
-  # TP-Link Tapo C210 2K indoor cams used as Ring replacements inside the house.
-  # These use a dedicated 'frigate_nghia' account with limited permissions
-  # (view-only, no PTZ). NOT related to ring-mqtt.
-  # All three use DEFAULT detection parameters — track: [person] and inherit
-  # global objects.filters.person from section 1.5
-  # (min_area: 300, min_score: 0.40, threshold: 0.45, max_area: 100000).
-  # Indoor scenes are simple and subjects are close (~3-5m), so global
-  # defaults are appropriate. Per-cam overrides can be added if false
-  # positives/negatives are observed.
-  # Resolution: main 2304×1296 (2K QHD), sub 640×360.
-  # ==========================================================================
 
   # ==========================================================================
   # CAMERA: SALON — TP-Link Tapo C210 2K (indoor, living room)
