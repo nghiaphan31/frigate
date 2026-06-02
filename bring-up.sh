@@ -135,6 +135,30 @@ SNAPSHOT_MODE=0
 SNAPSHOT_WRITE_PATH=""
 SNAPSHOT_BASELINE=""
 
+# Recovery strategy (commit 3: feature E). Each strategy is a function
+# named strategy_<name> that returns 0 on success, 1 on failure.
+#   --recover=restart-container   down + up the container (default;
+#                                 safe, fast ~10s)
+#   --recover=remount-nas         sudo mount -a (NFS), then restart
+#                                 (use when the recording-path check FAILs
+#                                 with 'not mounted' on a known-good host)
+#   --recover=flush-zmq           down + up (clears container-local /dev/shm
+#                                 tmpfs; equivalent to restart-container
+#                                 but explicit about intent)
+#   --recover=rebuild-trt         delete trt-cache/tensorrt/ort/trt-engines/*
+#                                 then restart (use when the engine cache
+#                                 is corrupt; rebuild is ~65s on RTX 5060 Ti)
+# REPOVER_STRATEGY is also honoured as an env-var override (e.g. for
+# the systemd watchdog) and is the default used by the auto-recovery
+# path in wait_detection() if no env var / flag is set.
+RECOVER_STRATEGY="${RECOVER_STRATEGY:-restart-container}"
+ALLOWED_RECOVER_STRATEGIES="restart-container remount-nas flush-zmq rebuild-trt"
+# Set by --recover=STRATEGY on the command line; distinguishes \"operator
+# asked explicitly\" (flag) from \"the auto-recovery path inherited a
+# strategy from RECOVER_STRATEGY env\" (no flag). main() uses this to
+# decide whether to run the recovery after status_report().
+_RECOVER_FROM_FLAG="${_RECOVER_FROM_FLAG:-0}"
+
 for arg in "$@"; do
     case "$arg" in
         --status)             SKIP_BRINGUP=1 ;;
@@ -142,6 +166,15 @@ for arg in "$@"; do
         --snapshot)           SNAPSHOT_MODE=1 ;;
         --snapshot-write=*)   SNAPSHOT_MODE=1; SNAPSHOT_WRITE_PATH="${arg#*=}" ;;
         --snapshot-compare=*) SNAPSHOT_MODE=1; SNAPSHOT_BASELINE="${arg#*=}" ;;
+        --recover=*)          RECOVER_STRATEGY="${arg#*=}"
+                              _RECOVER_FROM_FLAG=1
+                              # --recover=STRATEGY alone implies --status:
+                              # the operator wants to see the current report
+                              # and then apply the recovery, not wait 4 min
+                              # for a full bring-up. To force a full bring-up
+                              # + recover, set RECOVER_STRATEGY in the env
+                              # without the --recover flag.
+                              SKIP_BRINGUP=1 ;;
         --help|-h)
             sed -n '2,40p' "$0"
             exit 0
@@ -223,6 +256,83 @@ report_skip() {
         "$name" "$DIM" "SKIP" "$NC" "$reason"
     STEP_SKIP=$((STEP_SKIP+1))
     REPORT_RESULTS+=("SKIP|$name|$reason|")
+}
+
+# ------------------------------------------------------------------------------
+# Self-healing recovery strategies (commit 3: feature E)
+# ------------------------------------------------------------------------------
+# Each strategy is a function returning 0 on success, 1 on failure.
+# The dispatcher (run_recovery) validates the name against
+# ALLOWED_RECOVER_STRATEGIES and resolves it to the function.
+
+# restart-container: the safe default. Down + up; bind-mounted volumes
+# preserved; s6-overlay re-runs S6_STAGE2_HOOK. ~10s.
+strategy_restart_container() {
+    log "[recover:restart-container] docker compose down $CONTAINER_NAME"
+    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" down "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    log "[recover:restart-container] docker compose up -d $CONTAINER_NAME"
+    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" up -d "$CONTAINER_NAME" >/dev/null
+}
+
+# remount-nas: re-run mount -a (NFS), then restart. Use when the
+# recording-path check FAILs with 'not mounted' on a known-good host
+# (NFS dropped after a network blip, etc.). Requires sudo.
+strategy_remount_nas() {
+    log "[recover:remount-nas] sudo mount -a  (re-mount NFS)"
+    sudo mount -a
+    strategy_restart_container
+}
+
+# flush-zmq: down + up to clear the container-local /dev/shm tmpfs
+# (where Frigate's ZMQ IPC and capture frames live). Functionally
+# equivalent to restart-container, but named for intent.
+strategy_flush_zmq() {
+    log "[recover:flush-zmq] down + up to clear /dev/shm (ZMQ IPC)"
+    strategy_restart_container
+}
+
+# rebuild-trt: delete the TRT engine cache then restart. The engine
+# will rebuild on next start (~65s on RTX 5060 Ti). Use when step
+# 7/14 reports engine build failures, or step 14/14 reports the
+# /api/version endpoint is wedged. The plus:// model and Jina
+# embeddings are NOT in this path; only the TRT engine cache is.
+strategy_rebuild_trt() {
+    local cache_dir="trt-cache/tensorrt/ort/trt-engines"
+    log "[recover:rebuild-trt] rm -rf $cache_dir/*  (TRT engine cache)"
+    rm -rf "$cache_dir"/* 2>/dev/null
+    strategy_restart_container
+}
+
+# Dispatcher: validate strategy name, log invocation, call the function.
+# Returns 0 if the recovery was logged and the function was called,
+# 1 if the strategy name is not in ALLOWED_RECOVER_STRATEGIES.
+run_recovery() {
+    local strategy="$1"
+    local label="[recover:${strategy}]"
+    case " $ALLOWED_RECOVER_STRATEGIES " in
+        *" $strategy "*)
+            log "$label invoking strategy"
+            mqtt_state "RECOVERY_INVOKED" \
+                "{\"state\":\"RECOVERY_INVOKED\",\"strategy\":\"${strategy}\"}"
+            case "$strategy" in
+                restart-container) strategy_restart_container ;;
+                remount-nas)        strategy_remount_nas ;;
+                flush-zmq)          strategy_flush_zmq ;;
+                rebuild-trt)        strategy_rebuild_trt ;;
+            esac
+            local rc=$?
+            if [ "$rc" -eq 0 ]; then
+                log "$label completed OK"
+            else
+                log "${RED}$label FAILED (rc=$rc)${NC}"
+            fi
+            return "$rc"
+            ;;
+        *)
+            log "${RED}$label unknown strategy. Valid: $ALLOWED_RECOVER_STRATEGIES${NC}" >&2
+            return 1
+            ;;
+    esac
 }
 
 # ------------------------------------------------------------------------------
@@ -472,10 +582,15 @@ except Exception as e:
     mqtt_state "RECOVERY_TRIGGERED" \
         "{\"state\":\"RECOVERY_TRIGGERED\",\"reason\":\"detection_fps_stuck_at_zero_after_${DETECT_TIMEOUT}s\",\"action\":\"docker_compose_down_up\"}"
     log "${YEL}Detection still at 0 fps after ${DETECT_TIMEOUT}s — running down/up to clear ZMQ IPC and re-init s6-overlay${NC}"
-    # `|| true` on down: a half-stopped container may make `down` fail
-    # non-fatally (e.g. already-removed container); we always want `up` to run.
-    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" down "$CONTAINER_NAME" >/dev/null 2>&1 || true
-    ${DOCKER_COMPOSE} -f "$COMPOSE_FILE" up -d "$CONTAINER_NAME" >/dev/null
+    # Dispatch through the strategy library (commit 3: feature E).
+    # Default is 'restart-container' (down + up). Operators can override
+    # for the auto-recovery path by setting RECOVER_STRATEGY in the
+    # systemd unit's EnvironmentFile. 'restart-container' remains the
+    # safe default — the other strategies (remount-nas, rebuild-trt)
+    # are more aggressive and better chosen by a human via --recover.
+    if ! run_recovery "$RECOVER_STRATEGY"; then
+        log "${RED}Recovery strategy '$RECOVER_STRATEGY' failed${NC}"
+    fi
 
     for i in $(seq 1 "$RECOVERY_TIMEOUT"); do
         local stats fps
@@ -878,6 +993,17 @@ main() {
     fi
 
     status_report
+
+    # ---- Self-healing recovery (commit 3: feature E) ----
+    # If --recover=STRATEGY was passed, run the requested strategy now
+    # (after the operator has seen what's wrong in the report above).
+    # Returns 1 on unknown strategy name.
+    if [ -n "$RECOVER_STRATEGY" ] && [ "${_RECOVER_FROM_FLAG:-0}" -eq 1 ]; then
+        if ! run_recovery "$RECOVER_STRATEGY"; then
+            log "${RED}--recover=$RECOVER_STRATEGY failed${NC}" >&2
+            exit 1
+        fi
+    fi
 
     # ---- Snapshot / baseline (commit 2: feature C) ----
     # Emit a JSON snapshot of the 14-step outcome, optionally writing to
