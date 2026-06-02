@@ -6,8 +6,8 @@ set -uo pipefail
 
 MQTT_HOST="${MQTT_HOST:-192.168.50.125}"
 MQTT_PORT="${MQTT_PORT:-1883}"
-MQTT_USER="${MQTT_USER:-mosquito}"
-MQTT_PASS="${MQTT_PASS:-mosquito}"
+MQTT_USER="${MQTT_USER:-mosquitto}"
+MQTT_PASS="${MQTT_PASS:-mosquitto}"
 CONTAINER="${CONTAINER:-frigate}"
 
 echo "═══════════════════════════════════════════════════════════════════════"

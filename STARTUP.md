@@ -9,7 +9,7 @@ Manual, robust procedure to bring up the Frigate NVR from a host reboot to fully
 1. [Overview](#1-overview)
 2. [Pre-flight checklist](#2-pre-flight-checklist) — host prerequisites
 3. [Manual startup sequence](#3-manual-startup-sequence) — 8 ordered steps
-3.5. [Boot automation (systemd)](#35-boot-automation-systemd) — frigate-stack.service + watchdog timer
+3.5. [Boot automation (systemd)](#35-boot-automation-systemd) — frigate-stack.service + watchdog timer (incl. path-maintenance note)
 4. [Health checks](#4-health-checks) — 6 transparent monitoring commands
 4.5. [MQTT state subscription](#45-mqtt-state-subscription) — live `calypso_frigate/bringup/#` feed
 5. [Failure recovery](#5-failure-recovery) — per failure mode
@@ -139,6 +139,8 @@ pip install --target=./trt-libs --no-deps \
     tensorrt-cu12-bindings==10.9.0.34
 ```
 
+These libs are bind-mounted into the container as `/trt-libs:ro` and registered with the dynamic linker by [`frigate-init.sh`](frigate-init.sh), invoked as the s6-overlay stage-2 hook (`$S6_STAGE2_HOOK`) before the s6-supervised Frigate starts — see [ARCHITECTURE.md §2.3](ARCHITECTURE.md#23-container-init--s6-overlay-v3--stage-2-hook). Earlier compose versions did this in a `command:` block, but that also spawned a duplicate Frigate process (same `client_id` → MQTT takeover loop). The hook pattern fixes both problems.
+
 ### 2.8 Disk space
 
 ```bash
@@ -164,6 +166,13 @@ docker compose -f docker-compose.calypso.yml up -d frigate
 ```
 
 **Exit criteria**: `docker compose ps` shows `frigate` in `running` state within 30 s.
+
+The compose file does **not** override the image's default `command:`. The image's
+`ENTRYPOINT` is `/init` (s6-overlay v3) and its `CMD` is `null`, so by design only
+the s6-supervised `frigate` service runs. Init that used to be tacked on at the
+end of an old `command:` block now lives in [`frigate-init.sh`](frigate-init.sh)
+and runs once as the `$S6_STAGE2_HOOK` before s6-rc brings the services up.
+If the container exits immediately, see [§ 5.1](#51-container-exits-immediately-after-up).
 
 If the container exits immediately, see [§ 5.1](#51-container-exits-immediately-after-up).
 
@@ -225,7 +234,7 @@ If MQTT is disconnected, the most common cause is the Mosquitto broker not being
 Trigger a person in the `prive` zone (e.g. walk to the gate):
 
 ```bash
-mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
               -t 'calypso_frigate/events' -v -W 30
 ```
 
@@ -313,6 +322,39 @@ journalctl -u frigate-stack-watchdog.service -n 50 --no-pager
 journalctl -u frigate-stack.service -f
 ```
 
+### Path maintenance
+
+The systemd units in this repo hard-code the absolute path to
+the repo. If the repo is ever moved (renamed parent directory,
+checked out under a different path, etc.), the units installed
+at `/etc/systemd/system/` will silently fail with
+`status=203/EXEC` ("could not exec") and the journal will be
+dominated by that one repeating error every 5 min — the bring-up
+script itself never runs.
+
+**Symptom check**:
+```bash
+journalctl -u frigate-stack-watchdog.service -n 20 --no-pager
+# if every line ends in "code=exited, status=203/EXEC", the path drifted
+```
+
+**Fix** (pick one):
+```bash
+# Cleanest — reinstall the units from the new location
+./install-systemd.sh
+
+# Surgical — just refresh the watchdog unit
+sudo cp -v frigate-stack-watchdog.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl reset-failed frigate-stack-watchdog.service
+sudo systemctl start frigate-stack-watchdog.service
+```
+
+The repo-side unit files have a `NOTE:` comment in `[Service]`
+reminding future maintainers of the same constraint. The
+canonical path is
+`/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate`.
+
 ### Why the dual-unit design
 
 | Concern | Handled by |
@@ -367,7 +409,7 @@ If MQTT telemetry is enabled (default), every state transition is published to `
 
 ```bash
 # Tail every bring-up transition in real time
-mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
               -t 'calypso_frigate/bringup/#' -v
 ```
 
@@ -375,7 +417,7 @@ The retained `state` topic always reflects the **last completed transition**, so
 
 ```bash
 # Is the system healthy right now?
-[ "$(mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+[ "$(mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
    -t 'calypso_frigate/bringup/state' -C 1 -W 2)" = "HEALTHY" ] && echo OK || echo NOT_OK
 ```
 
@@ -444,14 +486,14 @@ docker compose -f docker-compose.calypso.yml start frigate
 **Diagnose**:
 ```bash
 # Subscribe to all topics, watch for 60 s
-mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
               -t 'calypso_frigate/#' -v -W 60
 ```
 
 **Common causes**:
 - Person not in `prive` or `rodage` zone → check [config.yml](config.yml) `review:` block; the person must be in the zone for an event.
 - Detection score below `threshold: 0.55` → lower the threshold in [config.yml](config.yml) for testing.
-- MQTT broker auth rejected → verify `mqtt.user: mosquito` / `mqtt.password: mosquito` matches the broker.
+- MQTT broker auth rejected → verify `mqtt.user: mosquitto` / `mqtt.password: mosquitto` matches the broker.
 
 ### 5.5 MQTT disconnected
 
@@ -463,7 +505,7 @@ mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
 timeout 3 bash -c ">/dev/tcp/192.168.50.125/1883" && echo OK
 
 # Auth (if mosquitto_sub is available)
-mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
               -t '$SYS/broker/version' -W 5 -v
 ```
 
@@ -471,6 +513,17 @@ mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
 - Mosquitto down on the Home Assistant host → restart it there.
 - Auth changed on the broker → update `mqtt.user` / `mqtt.password` in [config.yml](config.yml) and restart.
 - Network partition → check switch / VLAN.
+- **Historical** (now resolved): the compose file used to override
+  `command:` with `exec python3 -u -m frigate`, which spawned a
+  second Frigate process that shared the same `client_id` with
+  the s6-supervised one. They kicked each other off the broker
+  every ~1 s ("session taken over" — 174 disconnects in the last
+  200 log lines at peak). The fix is in
+  [ARCHITECTURE.md §2.3](ARCHITECTURE.md#23-container-init--s6-overlay-v3--stage-2-hook)
+  (init moved to `S6_STAGE2_HOOK`, `command:` removed). If you
+  still see per-second disconnects after that fix is in place,
+  the cause is a different client_id collision (look for
+  `session taken over` in the broker log, not the Frigate log).
 
 **Recovery** (no Frigate restart needed — the client auto-reconnects):
 ```bash

@@ -62,18 +62,37 @@ The single `frigate` container, configured by [`docker-compose.calypso.yml`](doc
 
 ### 2.1 Process tree (logical)
 
+The container is an **s6-overlay v3** image. PID 1 is the s6 supervisor, not Frigate; Frigate is one of several s6-managed services.
+
 ```
-python3 -u -m frigate                     (PID 1 inside container)
-├── go2rtc                                 (subprocess)
-├── capture process                        (per camera, ffmpeg + ZMQ)
-│   └── ffmpeg (CUDA hwaccel)
-├── detect process                         (per camera, ffmpeg + ZMQ)
-│   ├── ffmpeg (reads from /tmp/cache shm)
-│   └── onnxruntime + TensorRT EP
-├── mqtt publisher                         (thread)
-├── recorder                               (thread)
-├── web server (uvicorn)                   (thread)
-└── semantic search worker                 (thread)
+s6-svscan                                    (PID 1, from /init)
+├── s6-supervise frigate
+│   └── python3 -u -m frigate                 (the canonical Frigate process)
+│       ├── go2rtc                            (subprocess)
+│       ├── capture process                   (per camera, ffmpeg + ZMQ)
+│       │   └── ffmpeg (CUDA hwaccel)
+│       ├── detect process                    (per camera, ffmpeg + ZMQ)
+│       │   ├── ffmpeg (reads from /tmp/cache shm)
+│       │   └── onnxruntime + TensorRT EP
+│       ├── mqtt publisher                    (thread)
+│       ├── recorder                          (thread)
+│       ├── web server (uvicorn)              (thread)
+│       └── semantic search worker            (thread)
+├── s6-supervise frigate-log
+│   └── s6-log → /dev/shm/logs/frigate
+├── s6-supervise go2rtc   (and go2rtc-log, go2rtc-healthcheck)
+├── s6-supervise nginx    (and nginx-log)
+└── s6-supervise certsync (and certsync-log)
+```
+
+A one-shot init script runs **once before s6-rc brings the services up** (see [§2.3](#23-container-init--s6-overlay-v3--stage-2-hook)):
+
+```
+s6-overlay stage 2 init (/run/s6/basedir/scripts/rc.init)
+└── $S6_STAGE2_HOOK → /etc/s6-overlay/scripts/frigate-init.sh
+    ├── echo /trt-libs > /etc/ld.so.conf.d/tensorrt.conf
+    ├── ldconfig
+    └── ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin
 ```
 
 Capture and detect processes communicate via **ZMQ IPC sockets** bound to the container's shared-memory filesystem.
@@ -86,25 +105,71 @@ Capture and detect processes communicate via **ZMQ IPC sockets** bound to the co
 | Network | host (no NAT) | `network_mode: host` |
 | shm (`/dev/shm`) | 5 GB | `shm_size: "5120m"` |
 | tmpfs `/tmp/cache` | 2 GB | `tmpfs:` block |
-| Volumes | 5 (config, media, trt-cache, trt-libs ro, tmpfs) | `volumes:` block |
+| Volumes | 6 (config, media, trt-cache, trt-libs ro, **frigate-init.sh ro**, tmpfs) | `volumes:` block |
 | Devices | 5 nvidia devices | `devices:` block |
 | Runtime | `nvidia` | `runtime: nvidia` |
-| Env vars | 5 (TZ, NVIDIA×2, PLUS_API_KEY, FRIGATE_LOG_LEVEL) | `environment:` block |
+| Env vars | 6 (TZ, NVIDIA×2, PLUS_API_KEY, FRIGATE_LOG_LEVEL, **S6_STAGE2_HOOK**) | `environment:` block |
 
-### 2.3 Container entrypoint (3-stage command)
+### 2.3 Container init — s6-overlay v3 + stage-2 hook
+
+The Frigate image is an **s6-overlay v3** image. The image's
+`ENTRYPOINT` is `/init` (s6-overlay's own PID-1) and its `CMD` is
+`null`. The container is therefore started by s6, which:
+
+1. runs s6-overlay's stage 2 init script
+   (`/run/s6/basedir/scripts/rc.init`) to bring up the compiled
+   s6-rc service tree, **and**
+2. executes the stage-2 hook (`$S6_STAGE2_HOOK`) **once**,
+   **before** `s6-rc change` brings up any service.
+
+After services are up, no CMD is run, so the container stays
+alive as long as s6 does. The services the s6-rc tree manages
+are defined in `/etc/s6-overlay/s6-rc.d/` inside the image and
+include `frigate` (s6-supervised), `go2rtc`, `nginx`,
+`certsync`, and their `*-log` logger halves. The `frigate`
+service is the canonical Frigate process — a single
+`python3 -u -m frigate` spawned and supervised by s6, restarted
+by s6 if it ever exits.
+
+Container init does one extra thing before the services start:
+it must register the host-provided TensorRT 10.9.0 runtime
+libraries and the ffmpeg 7.0 symlink. We do that via the
+s6-overlay stage-2 hook, **not** via a `command:` override:
 
 ```sh
-sh -c "echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf && \
-       ldconfig && \
-       ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin && \
-       exec python3 -u -m frigate"
+# frigate-init.sh — bind-mounted into the container at
+# /etc/s6-overlay/scripts/frigate-init.sh:ro (see §6.2)
+# Invoked by rc.init as $S6_STAGE2_HOOK, once, before s6-rc change.
+
+echo '/trt-libs' > /etc/ld.so.conf.d/tensorrt.conf
+ldconfig
+ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin
 ```
 
-| Stage | Purpose | Why |
+| Step | What runs | Why |
 |---|---|---|
-| `echo /trt-libs > /etc/ld.so.conf.d/tensorrt.conf && ldconfig` | Registers the host-provided TensorRT 10.9.0 runtime libraries with the dynamic linker | The `stable-tensorrt` image ships `libonnxruntime_providers_tensorrt.so` but **not** `libnvinfer.so.10`. The host provides them via the `./trt-libs:/trt-libs:ro` mount. |
-| `ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin` | Creates a symlink so Frigate's ffmpeg path resolution finds the binary | The image ships ffmpeg at `…/7.0/bin/ffmpeg`; Frigate's `ffmpeg.path` is treated as a directory and `/bin/ffmpeg` is appended automatically. The symlink bridges the version-suffixed path. |
-| `exec python3 -u -m frigate` | Replaces the shell with the Frigate process (PID 1) | `-u` for unbuffered stdout/stderr; `exec` so the shell PID becomes Frigate's PID (clean signal handling). |
+| Container start | `/init` (s6-overlay v3) | PID 1 — supervises everything below |
+| Stage 1 (s6-overlay) | read env, chmod `/run/s6/container_environment` | standard s6-overlay setup |
+| **Stage 2 hook** | `frigate-init.sh` via `$S6_STAGE2_HOOK` | registers `/trt-libs` in `ld.so.conf.d` (so the s6-supervised Frigate finds host-provided `libnvinfer.so.10`) and symlinks `/usr/lib/ffmpeg/bin` → `7.0/bin` (so Frigate's `ffmpeg.path` resolution finds the binary). The `stable-tensorrt` image ships `libonnxruntime_providers_tensorrt.so` but **not** `libnvinfer.so.10`; the host provides them via the `./trt-libs:/trt-libs:ro` mount. The ffmpeg image ships ffmpeg at `…/7.0/bin/ffmpeg`; Frigate treats `ffmpeg.path` as a directory and appends `/bin/ffmpeg` automatically, so the symlink bridges the version-suffixed path. |
+| Stage 2 (s6-overlay) | `s6-rc-compile` then `s6-rc change` | brings up the `frigate`, `go2rtc`, `nginx`, `certsync` services |
+| Steady state | `s6-supervise frigate` runs `python3 -u -m frigate` | single Frigate process, s6-managed |
+
+> **Why not a `command:` override?** Earlier versions of this
+> compose file passed
+> `sh -c "... && exec python3 -u -m frigate"` as the container
+> CMD. s6-overlay v3 runs the CMD **in addition to** the s6
+> services, so the CMD's `exec python3 -u -m frigate` spawned a
+> *second* Frigate alongside the s6-supervised one. Both loaded
+> the same `config.yml` and connected to MQTT with the same
+> `client_id`, kicking each other off the broker every ~1 s
+> ("session taken over" — see §5.5 troubleshooting for the
+> historical symptom). Killing the duplicate also killed the
+> container, because s6-overlay v3's `rc.init` halts the
+> container when the CMD exits. The `S6_STAGE2_HOOK` pattern
+> avoids both problems: there is no CMD, so there can be no
+> duplicate, and the init runs before s6-rc brings up services
+> so the s6-supervised Frigate inherits the right `ld.so.conf`
+> and ffmpeg symlink.
 
 ### 2.4 Ports (network_mode: host)
 
@@ -262,7 +327,7 @@ flowchart TD
 | | |
 |---|---|
 | **Who** | Frigate's `mqtt` client thread |
-| **Where** | Container, connects to `192.168.50.125:1883` (Home Assistant Mosquitto) with user `mosquito` / pass `mosquito` |
+| **Where** | Container, connects to `192.168.50.125:1883` (Home Assistant Mosquitto) with user `mosquitto` / pass `mosquitto` |
 | **When** | On every event lifecycle transition (`start`, `update`, `end`) and for snapshots |
 | **What** | Publishes JSON payloads to: |
 | | • `calypso_frigate/events` (event lifecycle) |
@@ -330,8 +395,11 @@ flowchart TD
 sequenceDiagram
   participant H as Host
   participant D as Docker
-  participant F as Frigate
-  participant G as go2rtc
+  participant S as s6-overlay (PID 1)
+  participant K as S6_STAGE2_HOOK
+  participant I as frigate-init.sh
+  participant F as Frigate (s6 service)
+  participant G as go2rtc (s6 service)
   participant C as Camera
   participant M as MQTT broker
 
@@ -339,26 +407,34 @@ sequenceDiagram
   H->>H: mount $FRIGATE_MEDIA_PATH OK
   H->>H: docker daemon + nvidia runtime OK
   H->>D: docker compose up -d
-  D->>F: container start
-  F->>F: entrypoint stage 1 — ldconfig for /trt-libs
-  F->>F: entrypoint stage 2 — ffmpeg symlink
-  F->>F: entrypoint stage 3 — exec python3 -m frigate
+  D->>S: container start
+  S->>S: s6-overlay stage 1 — read env, prep /run/s6/container_environment
+  S->>K: run $S6_STAGE2_HOOK
+  K->>I: exec /etc/s6-overlay/scripts/frigate-init.sh
+  I->>I: echo /trt-libs > /etc/ld.so.conf.d/tensorrt.conf
+  I->>I: ldconfig
+  I->>I: ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin
+  I-->>K: exit 0
+  S->>S: s6-rc-compile from /etc/s6-overlay/s6-rc.d
+  S->>S: s6-rc change — bring up services
+  Note over S,F: s6-supervise frigate starts python3 -u -m frigate
   F->>F: load config.yml
   F->>F: init SQLite DB at /config/db
   F->>F: init detector (download plus:// model if absent, build TRT engine if no cache)
-  F->>G: spawn go2rtc
+  F->>G: spawn go2rtc (s6 service)
   G->>C: TCP RTSP connect to 192.168.50.129:8554
   C-->>G: 200 OK + SPS/PPS
   G-->>F: stream ready
   F->>F: spawn capture ffmpeg (CUDA hwaccel)
   F->>F: spawn detect ffmpeg + detector
-  F->>M: MQTT connect (192.168.50.125:1883)
+  F->>M: MQTT connect (192.168.50.125:1883, client_id=frigate_calypso)
   M-->>F: CONNACK
   F->>F: start web server on :5000
-  Note over F,M: Steady state — frames flow, events publish
+  Note over F,M: Steady state — single Frigate process, frames flow, events publish
 ```
 
 For the manual bring-up steps with explicit pre-flight, see [STARTUP.md](STARTUP.md). For automation, see [bring-up.sh](bring-up.sh).
+For the init pattern rationale (why a stage-2 hook, not a `command:` override), see [§2.3](#23-container-init--s6-overlay-v3--stage-2-hook).
 
 ---
 
@@ -391,6 +467,7 @@ For the manual bring-up steps with explicit pre-flight, see [STARTUP.md](STARTUP
 | `/media/frigate` | rw | `$FRIGATE_MEDIA_PATH` | Recordings + snapshots + debug |
 | `/config/model_cache` | rw | `./trt-cache` | TRT engine + plus model + Jina model |
 | `/trt-libs` | ro | `./trt-libs` | TRT 10.9.0 runtime libs |
+| `/etc/s6-overlay/scripts/frigate-init.sh` | ro | `./frigate-init.sh` | one-shot init wired via `S6_STAGE2_HOOK` (ldconfig + ffmpeg symlink) |
 | `/tmp/cache` | tmpfs 2 GB | n/a | capture→detect shm |
 | `/dev/shm` | 5 GB | n/a | Python ZMQ IPC |
 | `:5000` | host | host | Frigate API + UI |
@@ -467,7 +544,7 @@ Published by [`bring-up.sh`](bring-up.sh) via `mosquitto_pub` (or python `paho-m
 
 **Subscribe from any host** to watch the live state:
 ```bash
-mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquito -P mosquito \
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
               -t 'calypso_frigate/bringup/#' -v
 ```
 
