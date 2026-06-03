@@ -282,17 +282,17 @@ go2rtc:
     # Main stream:  3840×2160  (4K UHD, used for detection + recording)
     # Sub stream:   640×360    (used for live view only)
     jardin_arriere_main:
-      - rtsp://admin:VQpzN8wK@192.168.50.207:554/h264Preview_01_main
+      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_main
     jardin_arriere_sub:
-      - rtsp://admin:VQpzN8wK@192.168.50.207:554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub
 
     # ── Vue entrée — Reolink Doorbell POE (192.168.50.222) ─────────────
     # Main stream:  2560×1920  (4:3, used for detection + recording)
     # Sub stream:   640×480    (4:3, used for live view only)
     vue_entree_main:
-      - rtsp://admin:YKXC7P9B@192.168.50.222:554/h264Preview_01_main
+      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_main
     vue_entree_sub:
-      - rtsp://admin:YKXC7P9B@192.168.50.222:554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_sub
 
     # ── Jardin devant — Reolink Duo 3 (192.168.50.18) ─────────────────
     # Main stream:  4096×1152  (panoramic, 3.5:1) — used for recording
@@ -300,9 +300,9 @@ go2rtc:
     # (panoramic sub for full overview; _left/_right half-crop cameras
     # are a separate concern and are NOT added in this branch)
     jardin_devant_main:
-      - rtsp://admin:6bn8D2xa@192.168.50.18:554/h264Preview_01_main
+      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
     jardin_devant_sub:
-      - rtsp://admin:6bn8D2xa@192.168.50.18:554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
 
     # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────
     # Main stream:  4096×1152  (panoramic, 3.5:1) — record + audio only
@@ -310,9 +310,9 @@ go2rtc:
     # (panoramic sub for full overview; _left/_right half-crop cameras
     # are a separate concern and are NOT added in this branch)
     piscine_vue_toit_main:
-      - rtsp://admin:3xtK9Pmw@192.168.50.7:554/h264Preview_01_main
+      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
     piscine_vue_toit_sub:
-      - rtsp://admin:3xtK9Pmw@192.168.50.7:554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
 
 cameras:
 
@@ -443,7 +443,7 @@ cameras:
   # HARDWARE
   #   Model:    Reolink RLC-810A (4.0 mm fixed lens, single-sensor 4K bullet)
   #   IP:       192.168.50.207
-  #   RTSP:     admin:VQpzN8wK@192.168.50.207:554
+  #   RTSP:     admin:fG-56lui@192.168.50.207:8554
   #   Location: Jardin arrière — rear garden, north-facing, covers play
   #             area + shed
   #
@@ -571,7 +571,7 @@ cameras:
   # HARDWARE
   #   Model:    Reolink Doorbell POE (1/2.7" CMOS, 5 MP, 4:3 aspect)
   #   IP:       192.168.50.222
-  #   RTSP:     admin:YKXC7P9B@192.168.50.222:554
+  #   RTSP:     admin:fG-56lui@192.168.50.222:8554
   #   Location: Front door / entry walkway — eye-level view of visitors
   #
   # MOUNT GEOMETRY
@@ -697,7 +697,7 @@ cameras:
   # HARDWARE
   #   Model:    Reolink Duo 3 Wi-Fi/ETH (dual-lens 4K panoramic)
   #   IP:       192.168.50.18
-  #   RTSP:     admin:6bn8D2xa@192.168.50.18:554
+  #   RTSP:     admin:fG-56lui@192.168.50.18:8554
   #   Location: Jardin devant — front garden, full panoramic overview
   #
   # MOUNT GEOMETRY
@@ -835,7 +835,7 @@ cameras:
   # HARDWARE
   #   Model:    Reolink Duo 3 Wi-Fi/ETH (dual-lens 4K panoramic)
   #   IP:       192.168.50.7
-  #   RTSP:     admin:3xtK9Pmw@192.168.50.7:554
+  #   RTSP:     admin:fG-56lui@192.168.50.7:8554
   #   Location: Piscine vue toit — pool rooftop, looking south over
   #             the pool and rear garden
   #
