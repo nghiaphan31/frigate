@@ -102,45 +102,68 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg jq netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# --- 1b. Build gst-plugins-bad with the nvv4l2 subproject (HEAVY) ----------
-# This is the NVIDIA GPU plugin set: nvv4l2decoder (NVDEC), nvvidconv
-# (VIC / CUDA crop + format conversion), nvv4l2h264enc (NVENC), etc.
-# We use the upstream gstreamer monorepo at the 1.20.3 tag (matches
-# Ubuntu 22.04's libgstreamer1.0-0 = 1.20.3 exactly; using a newer
-# tag would force a libgstreamer ABI mismatch at load time).
+# --- 1b. Build gst-plugins-bad with the nvcodec subproject (HEAVY) ----------
+# This is the NVIDIA GPU plugin set: nvv4l2decoder (NVDEC), cudaconvert
+# / nvvidconv (VIC / CUDA crop + format conversion), nvv4l2h264enc
+# (NVENC), nvv4l2h265enc, nvv4l2vp8dec, nvv4l2vp9dec, etc.
 #
-# Build: ~3 min on a 4-core x86_64 host with warm cache; ~8 min cold.
-# Output: /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvv4l2*.so
-#         /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvvidconv.so
-#         /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvvideo4linux2.so
-#         /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvvideocuda.so
+# In GStreamer 1.20.3 (the tag matching Ubuntu 22.04's libgstreamer1.0-0
+# = 1.20.3), the NVIDIA plugin set is in:
+#   subprojects/gst-plugins-bad/sys/nvcodec/   (NOT nvv4l2/; that was
+#   the pre-1.20 location; renamed in the 1.20 monorepo restructure)
+# and the meson feature option is `nvcodec` (singular, not plural).
+# The plugin registers as `nvcodec` and provides the nvv4l2* elements
+# via the standard gst-plugins-bad build.
+#
+# Build: ~2 min on a 4-core x86_64 host with warm cache; ~5 min cold
+# (much faster than building all of gst-plugins-bad because all the
+# 100+ non-NVIDIA subprojects are explicitly disabled with
+# -Dauto_features=disabled, so meson only configures the nvcodec one).
+#
+# Output: /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvcodec.so
+#   providing: nvv4l2decoder (NVDEC), nvv4l2h264enc (NVENC),
+#             nvv4l2h265enc, nvv4l2vp8dec, nvv4l2vp9dec, cudaconvert
+#             (the new name for nvvidconv in 1.20+), cudascale,
+#             cudafilter, cudaupload, cudadownload
 #
 # The plugins are NOT in the default Ubuntu 22.04 repos (they require
 # NVIDIA headers, which the cudnn-devel base provides). We disable
-# every other gst-plugins-bad subproject and enable only the nvv4l2
-# one — saves ~5 min of build time.
+# every other gst-plugins-bad subproject and enable only the nvcodec
+# one — saves ~10 min of build time.
+#
+# This nvcodec subproject has the same dependency as the original
+# `nvv4l2` path: libdrm, CUDA toolkit, libnvv4l2 (vendored in
+# gst-plugins-bad since 1.18), libnvidia-encode (for NVENC), and
+# libnvcuvid (for NVDEC). The cudnn-devel base image provides the
+# CUDA + cuDNN headers; nvidia-encode + nvcuvid are part of the
+# libnvidia-compute-XX package which is in the cudnn-devel base's
+# standard apt sources.
 RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libnvidia-compute-535 \
+        libnvidia-encode-535 libnvidia-decode-535 \
+    && rm -rf /var/lib/apt/lists/* && \
     git clone --depth 1 --branch 1.20.3 \
         https://gitlab.freedesktop.org/gstreamer/gstreamer.git /tmp/gst && \
-    cd /tmp/gst/subprojects/gst-plugins-bad/sys/nvv4l2 && \
+    cd /tmp/gst/subprojects/gst-plugins-bad && \
     meson setup build \
         --prefix=/usr \
         --libdir=lib/x86_64-linux-gnu \
         --buildtype=release \
         -Dauto_features=disabled \
-        -Dnvv4l2dec=enabled \
-        -Dnvv4l2enc=enabled \
-        -Dnvv4l2video4linux2=enabled \
-        -Dnvvideocuda=enabled \
-        -Dnvv4l2camerasrc=disabled \
+        -Dnvcodec=enabled \
         -Ddoc=disabled -Dtests=disabled -Dexamples=disabled \
     && ninja -C build install && \
     ldconfig && \
     cd /tmp && rm -rf /tmp/gst && \
-    echo "[splitter] NVIDIA GStreamer plugins built from source" && \
+    echo "[splitter] NVIDIA GStreamer plugins built from source (libgstnvcodec.so)" && \
     gst-inspect-1.0 --version && \
+    gst-inspect-1.0 nvcodec 2>&1 | head -8 && \
+    echo "--- nvv4l2decoder ---" && \
     gst-inspect-1.0 nvv4l2decoder | head -3 && \
-    gst-inspect-1.0 nvvidconv     | head -3 && \
+    echo "--- cudaconvert (renamed from nvvidconv in 1.20+) ---" && \
+    gst-inspect-1.0 cudaconvert  | head -3 && \
+    echo "--- nvv4l2h264enc ---" && \
     gst-inspect-1.0 nvv4l2h264enc | head -3
 
 # --- 2. Python deps (gi bindings are pulled from apt above) ------------------
