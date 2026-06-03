@@ -15,11 +15,14 @@ ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/fri
 EnvironmentFile=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/.env
 StandardOutput=journal
 StandardError=journal
-# Exit 0 (all OK) and 1 (steps FAIL but not fatal) are success — the container
-# is up and the API is responding, even if some pipeline steps WARN/FAIL.
-# Exits 2/3/4/5 from bring-up.sh are pre-flight / container / API / detection
-# hard failures and will mark the service as failed; the watchdog can react.
-SuccessExitStatus=0 1
+# Strict success policy: only exit 0 from bring-up.sh (all 14 pipeline
+# steps OK or WARN, no FAILs) is treated as success. Exits 1..5 are
+# real failures and mark the service as failed; the watchdog timer
+# will then auto-rerun bring-up.sh every 5 min until it returns 0.
+# This change surfaces the stale docker-compose.yml validation
+# failure mode that previously went unnoticed for 14 h because the
+# old policy conflated exit-1 (steps FAIL) with success.
+SuccessExitStatus=0
 TimeoutStartSec=420
 Restart=no
 

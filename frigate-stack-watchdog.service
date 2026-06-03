@@ -16,7 +16,11 @@ ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/fri
 EnvironmentFile=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/.env
 StandardOutput=journal
 StandardError=journal
-# Same exit-code policy as frigate-stack.service.
-SuccessExitStatus=0 1
+# Same strict success policy as frigate-stack.service: only exit 0
+# counts. If bring-up.sh returns 1..5, systemd records the watchdog
+# run as failed, but the timer continues firing every 5 min until
+# bring-up.sh returns 0. This is the correct self-healing loop
+# for a boot-time config regression.
+SuccessExitStatus=0
 # Cap each run well below the timer interval to avoid pile-up.
 TimeoutStartSec=420
