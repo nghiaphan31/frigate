@@ -15,7 +15,8 @@
 # GPU pipeline (per half):
 #   rtspsrc + rtph264depay + h264parse           (RTSP / H.264 in)
 #     -> nvv4l2decoder                           (NVDEC, hardware decode)
-#     -> nvvidconv left=… width=2048 height=1152 (CUDA / VIC crop)
+#     -> cudaconvert left=… width=2048 height=1152 (CUDA / VIC crop)
+#        (was nvvidconv before GStreamer 1.20)
 #     -> nvv4l2h264enc bitrate=8M                (NVENC, hardware encode)
 #     -> h264parse + rtph264pay name=pay0        (H.264 / RTP out)
 #
@@ -102,9 +103,10 @@ class Pipeline:
         #  - rtspsrc + rtph264depay pulls H.264 from the Reolink.
         #  - h264parse converts AVC access units into a parseable form.
         #  - nvv4l2decoder decodes on NVDEC; output is in NVMM memory.
-        #  - nvvidconv with left/top/width/height crops ON THE GPU
-        #    (no CPU copy, no rescale, just a CUDA crop of the NVMM
-        #    frame). flip-method=0 keeps the panorama left-to-right.
+        #  - cudaconvert (was nvvidconv pre-1.20) with left/top/width/
+        #    height crops ON THE GPU (no CPU copy, no rescale, just a
+        #    CUDA crop of the NVMM frame). flip-method=0 keeps the
+        #    panorama left-to-right.
         #  - capsfilter forces the output to NVMM + NV12 to keep the
         #    entire path on the GPU; format=NV12 matches nvv4l2h264enc.
         #  - nvv4l2h264enc re-encodes on NVENC. maxperf-enable=true
@@ -122,7 +124,7 @@ class Pipeline:
             f"! rtph264depay "
             f"! h264parse "
             f"! nvv4l2decoder "
-            f"! nvvidconv left={self.crop_x} top={self.crop_y} "
+            f"! cudaconvert left={self.crop_x} top={self.crop_y} "
             f"width={self.crop_w} height={self.crop_h} "
             f"flip-method=0 "
             f"! video/x-raw(memory:NVMM),width={self.crop_w},"

@@ -44,29 +44,40 @@ if [ ! -e /dev/nvidia0 ] || [ ! -e /dev/nvidia-uvm ]; then
 fi
 echo "[entrypoint] NVIDIA devices visible"
 
-# Sanity check: the three NVIDIA GStreamer plugins must be present.
-missing=""
-for plugin in nvidia-gst-plugins-base nvidia-gst-plugins-good nvidia-gst-plugins-bad; do
-    if ! dpkg -s "$plugin" >/dev/null 2>&1; then
-        missing="$missing $plugin"
-    fi
-done
-if [ -n "$missing" ]; then
-    echo "[entrypoint] FATAL: missing NVIDIA GStreamer packages:$missing" >&2
+# Sanity check: the libgstnvcodec.so must be installed (either from a
+# PPA package, the DeepStream base image, or our build-from-source path
+# in the Dockerfile). The check is at the .so level rather than the
+# dpkg level so it works for all 3 install paths.
+NVCODEC_SO=$(find /usr/lib /usr/local/lib -name 'libgstnvcodec.so' 2>/dev/null | head -1)
+if [ -z "$NVCODEC_SO" ]; then
+    echo "[entrypoint] FATAL: libgstnvcodec.so not found" >&2
+    echo "[entrypoint]   The NVIDIA GStreamer plugins are NOT installed in this image." >&2
+    echo "[entrypoint]   See the Dockerfile comments for 3 install paths:" >&2
+    echo "[entrypoint]     (A) build from source (the current default — should be present)" >&2
+    echo "[entrypoint]     (B) DeepStream base image (requires nvcr.io login)" >&2
+    echo "[entrypoint]     (C) ruffy8919 PPA (works if the PPA is reachable)" >&2
     exit 1
 fi
-echo "[entrypoint] NVIDIA GStreamer plugins present (base, good, bad)"
+echo "[entrypoint] libgstnvcodec.so found at $NVCODEC_SO"
 
 # Verify the actual GStreamer elements are loadable. This is a deeper
-# check than dpkg -s: the plugin .so files must be on the GST_PLUGIN_PATH
-# and must not have missing symbol dependencies.
-for elem in nvv4l2decoder nvvidconv nvv4l2h264enc; do
+# check than the .so existence: the plugin must be on the GST_PLUGIN_PATH
+# and must not have missing symbol dependencies. We check both the
+# old element names (nvv4l2*, used pre-1.20 and by our split_service.py
+# pipeline) and the new ones (cudaconvert, which replaced nvvidconv in
+# 1.20+). At least one of each pair must be present.
+for elem in nvv4l2decoder nvv4l2h264enc cudaconvert; do
     if ! gst-inspect-1.0 "$elem" >/dev/null 2>&1; then
         echo "[entrypoint] FATAL: gst-inspect-1.0 $elem failed (plugin not loadable)" >&2
+        echo "[entrypoint]   libgstnvcodec.so is installed at $NVCODEC_SO but the" >&2
+        echo "[entrypoint]   element '$elem' is not registered. Common causes:" >&2
+        echo "[entrypoint]     - The .so failed to load (check 'gst-inspect-1.0 nvcodec')" >&2
+        echo "[entrypoint]     - A symbol dependency is missing (libnvidia-encode," >&2
+        echo "[entrypoint]       libnvcuvid, libcudart) — should be in cudnn-devel base" >&2
         exit 1
     fi
 done
-echo "[entrypoint] NVIDIA GStreamer elements loadable: nvv4l2decoder, nvvidconv, nvv4l2h264enc"
+echo "[entrypoint] NVIDIA GStreamer elements loadable: nvv4l2decoder, nvv4l2h264enc, cudaconvert"
 
 # Default GST_DEBUG to 2 (ERROR+WARN). Operator can override in compose.
 export GST_DEBUG="${GST_DEBUG:-2}"
