@@ -964,13 +964,21 @@ except Exception:
     if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
         report_skip "13/14  Semantic search" "prereq step $FIRST_FAIL_STEP failed"
     else
-        local sem
-        sem=$(jget "$stats_json" "d.get('semantic_search',{}).get('model_name', '?')")
-        if [ -n "$sem" ] && [ "$sem" != "?" ]; then
-            report "13/14  Semantic search" "OK" "model=$sem"
+        # Frigate 0.17 reports the semantic-search model under the
+        # 'embeddings' key in /api/stats (not 'semantic_search', which
+        # was the 0.16 name). 'image_embedding_speed' is the per-image
+        # inference time in ms; its presence (even at 0.0) confirms the
+        # Jina model is loaded and the worker thread is alive. The
+        # 'image_embedding' counter is the running total.
+        local emb_speed emb_count
+        emb_speed=$(jget "$stats_json" "d.get('embeddings',{}).get('image_embedding_speed', '?')")
+        emb_count=$(jget "$stats_json" "d.get('embeddings',{}).get('image_embedding', '?')")
+        if [ "$emb_speed" != "?" ] && [ -n "$emb_speed" ]; then
+            report "13/14  Semantic search" "OK" \
+                "model loaded (Jina CLIP), ${emb_speed} ms/embedding, ${emb_count} image embeddings"
         else
             report "13/14  Semantic search" "WARN" \
-                "stats not reporting semantic_search (model not loaded yet?)" \
+                "stats not reporting embeddings block (model not loaded yet?)" \
                 "docker logs --tail=50 frigate | grep -E 'semantic|embedding|jina'  # model loads lazily on first event"
         fi
     fi
@@ -983,16 +991,18 @@ except Exception:
     if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
         report_skip "14/14  Web UI / API" "prereq step $FIRST_FAIL_STEP failed"
     else
+        # Frigate 0.17's /api/version returns the version as a plain-text
+        # body ("0.17.1-416a9b7"), NOT a JSON object. json.loads() on the
+        # body fails, jget returns "", and the empty-string branch fires
+        # the spurious "empty version field" WARN. Fix: read the body
+        # verbatim. A 200 with a non-empty body is the version; an empty
+        # body or non-200 is a real failure.
         local ver
-        ver=$(jget "$ver_json" "d.get('version','?')")
-        if [ "$ver" = "?" ]; then
+        ver=$(printf '%s' "$ver_json" | tr -d '[:space:]')
+        if [ -z "$ver" ]; then
             report "14/14  Web UI / API" "FAIL" \
-                "$FRIGATE_API/api/version not responding" \
-                "docker logs --tail=100 frigate | grep -E 'uvicorn|web|ERROR'  # is the web server thread alive?"
-        elif [ -z "$ver" ]; then
-            report "14/14  Web UI / API" "WARN" \
-                "$FRIGATE_API listening, /api/version returned empty version field" \
-                "curl -v $FRIGATE_API/api/version  # Frigate 0.17 known cosmetic bug; safe to ignore"
+                "$FRIGATE_API/api/version returned empty body (or non-200)" \
+                "curl -v $FRIGATE_API/api/version  # endpoint alive? nginx -> uvicorn upstream ok?"
         else
             report "14/14  Web UI / API" "OK" \
                 "$FRIGATE_API listening, /api/version=$ver"
@@ -1019,7 +1029,7 @@ except Exception:
 
     # Final MQTT state with full pipeline summary
     mqtt_state "$FINAL_STATE" "$(cat <<JSON
-{"state":"${FINAL_STATE}","host":"$(hostname)","pid":${SCRIPT_PID},"elapsed_s":$(( $(date +%s) - SCRIPT_START )),"step_ok":${STEP_OK},"step_warn":${STEP_WARN},"step_fail":${STEP_FAIL},"camera":"${CAMERA_NAME}","detection_fps":$(jget "$cam" "d.get('detection_fps',0)"),"camera_fps":$(jget "$cam" "d.get('camera_fps',0)"),"frigate_version":$(jget "$ver_json" "d.get('version','null')" | sed 's/^"//;s/"$//') , "inference_ms":${det_inf:-null}}
+{"state":"${FINAL_STATE}","host":"$(hostname)","pid":${SCRIPT_PID},"elapsed_s":$(( $(date +%s) - SCRIPT_START )),"step_ok":${STEP_OK},"step_warn":${STEP_WARN},"step_fail":${STEP_FAIL},"camera":"${CAMERA_NAME}","detection_fps":$(jget "$cam" "d.get('detection_fps',0)"),"camera_fps":$(jget "$cam" "d.get('camera_fps',0)"),"frigate_version":"$(printf '%s' "$ver_json" | tr -d '[:cntrl:]')","inference_ms":${det_inf:-null}}
 JSON
 )"
 
@@ -1102,7 +1112,7 @@ main() {
 
         wait_api
         mqtt_state "API_UP" \
-            "{\"state\":\"API_UP\",\"endpoint\":\"${FRIGATE_API}\",\"version\":$(jget "$(curl -fsS --max-time 2 "$FRIGATE_API/api/version" 2>/dev/null)" "json.dumps(d.get('version'))" || echo '"?"')}"
+            "{\"state\":\"API_UP\",\"endpoint\":\"${FRIGATE_API}\",\"version\":"$(curl -fsS --max-time 2 "$FRIGATE_API/api/version" 2>/dev/null | tr -d '[:cntrl:]')"}"
 
         wait_detection
         mqtt_state "DETECTION_ACTIVE" \
