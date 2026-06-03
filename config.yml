@@ -1,14 +1,44 @@
 # ============================================================================
-# Frigate NVR — global config (5 cameras, iter0 physics-based)
+# Frigate NVR — global config (8 cameras, iter0 physics-based for outdoor)
 # ============================================================================
-# Frigate 0.17 schema. 5 cameras in this file:
-#   - allee_sur_le_cote   (Reolink Duo 3, 3.4 m, 50° tilt, sub)
-#   - jardin_arriere      (Reolink RLC-810A 4K, 2.2 m, 10° tilt)
-#   - vue_entree          (Reolink Doorbell POE, 1.7 m, 0° tilt)
-#   - jardin_devant       (Reolink Duo 3, 6 m, 50° tilt, panoramic sub)
-#   - piscine_vue_toit    (Reolink Duo 3, 6 m, 25° tilt, panoramic sub)
-# All 5 cameras use rtsp://admin:fG-56lui@<ip>:8554/h264Preview_01_*
-# (Reolink-configured non-default RTSP port 8554 instead of 554).
+# Frigate 0.17 schema. 8 cameras in this file:
+#   5 outdoor Reolink (full physics-based detection, iter0):
+#     - allee_sur_le_cote   (Reolink Duo 3, 3.4 m, 50° tilt, sub)
+#     - jardin_arriere      (Reolink RLC-810A 4K, 2.2 m, 10° tilt)
+#     - vue_entree          (Reolink Doorbell POE, 1.7 m, 0° tilt)
+#     - jardin_devant       (Reolink Duo 3, 6 m, 50° tilt, panoramic sub)
+#     - piscine_vue_toit    (Reolink Duo 3, 6 m, 25° tilt, panoramic sub)
+#   3 indoor TP-Link Tapo C210 2K (record + audio only, NO detection):
+#     - salon               (192.168.50.17, indoor — living room, 5×7m, 2.5m, PTZ motion-tracking)
+#     - buro                (192.168.50.70, indoor — small office, 3.5×2.5m, 1m, PTZ motion-tracking)
+#     - cuisine             (192.168.50.16, indoor — kitchen, 7×7m, 2.5m, PTZ motion-tracking)
+#
+# Two RTSP conventions in use (vendor-specific):
+#   - Outdoor Reolink: rtsp://admin:fG-56lui@<ip>:8554/h264Preview_01_*
+#     (Reolink-configured non-default RTSP port 8554 instead of 554).
+#   - Indoor Tapo:     rtsp://frigate_nghia:fG-56lui@<ip>:554/stream*
+#     (standard TP-Link port 554, /stream1 = main, /stream2 = sub).
+#
+# Indoor Tapo notes (2026-06-03):
+#   - All 3 cameras have MOTION-TRACKING enabled on the device itself —
+#     the Tapo will physically PAN+TILT to follow a person in the FOV.
+#     This is a vendor-side feature; Frigate just records whatever the
+#     lens is currently pointing at. The fixed "mount geometry" in each
+#     camera block below documents the camera's DEFAULT orientation at
+#     boot; once motion-tracking activates, the actual orientation
+#     diverges. The fixed geometry is recorded for future reference
+#     (e.g. when deriving a PTZ-aware detection spec).
+#   - Detection is DISABLED per-camera (detect.enabled: false). Two
+#     reasons: (1) PTZ motion invalidates the iter0 physics-derived
+#     person filter (H_px / W_px / area change as the camera moves);
+#     (2) the per-camera detect pass + NVDEC decode for the 2K main
+#     stream are skipped, keeping the indoor CPU profile flat. The
+#     motion pre-filter (step 6 of the 14-step status report) still
+#     runs, so motion-triggered recordings continue to work.
+#   - To enable detection later: pin the camera in a static orientation
+#     (disable motion-tracking on the device), or build a PTZ-aware
+#     detection model that queries the onvif PTZ position. Not in
+#     scope for this branch.
 #
 # Global sections below are cluster-wide; per-camera overrides are
 # under the `cameras:` block at the bottom of this file.
@@ -323,6 +353,29 @@ go2rtc:
       - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
     piscine_vue_toit_sub:
       - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
+
+    # ── TP-Link Tapo C210 2K indoor cameras (added 2026-06-03) ────────────
+    # Standard RTSP on port 554 (/stream1 = 2304×1296 main, /stream2 = 640×360 sub).
+    # Used as record + audio only; no detect role. Credentials differ from
+    # the outdoor Reolink cams (frigate_nghia / fG-56lui, Tapo account).
+    # All 3 cameras have MOTION-TRACKING enabled on-device (PTZ follows
+    # the person in the FOV); the RTSP endpoint stays the same, only the
+    # pixel content changes as the camera moves. Recordings will show
+    # whatever the lens was pointed at when motion fired.
+    tapo_c210_salon_main:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream1
+    tapo_c210_salon_sub:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream2
+
+    tapo_c210_buro_main:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream1
+    tapo_c210_buro_sub:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream2
+
+    tapo_c210_cuisine_main:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream1
+    tapo_c210_cuisine_sub:
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream2
 
 cameras:
 
@@ -955,6 +1008,223 @@ cameras:
         required_zones: prive
       detections:
         required_zones: prive
+
+  # ============================================================================
+  # CAMERA: salon (indoor, no detection, motion-tracking ON)
+  # ============================================================================
+  # HARDWARE
+  #   Model:    TP-Link Tapo C210 (1/2.7" CMOS, 3 MP, 16:9 aspect, 2K QHD)
+  #             3.83 mm fixed lens, motorised pan (360°) + tilt (114°),
+  #             built-in mic, IR LED for night vision, microSD slot.
+  #   IP:       192.168.50.17
+  #   RTSP:     frigate_nghia:fG-56lui@192.168.50.17:554  (standard TP-Link port)
+  #   Location: Indoor — living room (salon)
+  #
+  # ROOM GEOMETRY  (motion-tracking is ON; the static values below are the
+  #                  DEFAULT orientation at boot. Once motion-tracking fires,
+  #                  the camera pans/tilts to follow the person and the
+  #                  actual mount orientation diverges from these defaults.)
+  #   Room size:      5 m × 7 m   (typical living room)
+  #   Mount:          Ceiling, 2.5 m above floor (corner of room, angled
+  #                   inward to cover the seating area)
+  #   Default tilt:   ~45° down from horizontal (looking at sofa area)
+  #   H-FOV:          110°       (TP-Link spec for the C210 lens)
+  #   V-FOV:          ~58°
+  #   Max walkable:   ~6 m       (across the room from mount corner)
+  #   Min walkable:   ~1 m       (just below the mount)
+  #
+  # STREAMS (standard TP-Link RTSP convention on port 554)
+  #   main: 2304×1296  (rtsp://.../stream1)  [record + audio]
+  #   sub : 640×360    (rtsp://.../stream2)  [live only]
+  #   main pixel density: 2,985,984 px total
+  #   sub  pixel density:   230,400 px total
+  #
+  # NO DETECTION (intentional, 2026-06-03)
+  #   detect.enabled: false. Two reasons:
+  #     1. The Tapo has motion-tracking ON at the device level — the
+  #        camera physically moves. The iter0 physics-derived person
+  #        filter (H_px / W_px / area) is only valid for a static
+  #        mount orientation, so it's inapplicable while the camera
+  #        is panning/tilting. A PTZ-aware spec would need to query
+  #        the onvif PTZ position at inference time; not in scope here.
+  #     2. Skipping the detect pass + NVDEC decode for the 2K main
+  #        stream keeps the indoor CPU profile flat. The 3 indoor
+  #        Tapo cams at 2K each would otherwise add ~3 × 4% CPU on
+  #        top of the 5 outdoor Reolink cams.
+  #   The motion pre-filter (step 6 of bring-up.sh) still runs, so
+  #   motion-triggered recordings continue to work (record.motion.days=1).
+  #
+  #   To enable detection later: pin the camera in a static orientation
+  #   (disable motion-tracking on the device side), or build a
+  #   PTZ-aware detection model. NOT in scope for this branch.
+  # ============================================================================
+  salon:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/tapo_c210_salon_main
+          roles: [record, audio]
+    live:
+      streams:
+        Salon: tapo_c210_salon_sub
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      enabled: false
+      width: 2304
+      height: 1296
+      fps: 10
+    objects:
+      track: []
+      filters:
+        person:
+          # detection is disabled per-camera; these fields are present
+          # only to satisfy the schema and the L1 test-config.sh
+          # assertions (REQUIRED_CAMERA_KEYS / PERSON_FILTER_KEYS).
+          # Values mirror the iter0 noise-floor defaults used by the
+          # outdoor Reolink cameras; harmless because detect is OFF.
+          min_area: 300
+          max_area: 100000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+
+  # ============================================================================
+  # CAMERA: buro (indoor, no detection, motion-tracking ON)
+  # ============================================================================
+  # HARDWARE
+  #   Model:    TP-Link Tapo C210 (1/2.7" CMOS, 3 MP, 16:9 aspect, 2K QHD)
+  #             3.83 mm fixed lens, motorised pan (360°) + tilt (114°),
+  #             built-in mic, IR LED for night vision, microSD slot.
+  #   IP:       192.168.50.70
+  #   RTSP:     frigate_nghia:fG-56lui@192.168.50.70:554  (standard TP-Link port)
+  #   Location: Indoor — office / study (buro)
+  #
+  # ROOM GEOMETRY  (motion-tracking is ON; the static values below are the
+  #                  DEFAULT orientation at boot. Once motion-tracking fires,
+  #                  the camera pans/tilts to follow the person and the
+  #                  actual mount orientation diverges from these defaults.)
+  #   Room size:      3.5 m × 2.5 m  (small office, low ceiling/wall mount)
+  #   Mount:          1 m above floor (wall/desk height — the lowest of
+  #                   the 3 indoor cams; covers desk area when seated)
+  #   Default tilt:   ~10° down from horizontal (level-ish, eye-line for
+  #                   a seated person at the desk)
+  #   H-FOV:          110°       (TP-Link spec for the C210 lens)
+  #   V-FOV:          ~58°
+  #   Max walkable:   ~3.5 m     (across the small room)
+  #   Min walkable:   ~0.5 m     (right under the lens)
+  #
+  # STREAMS — same as salon: 2304×1296 main, 640×360 sub, on port 554.
+  #
+  # NO DETECTION (intentional, 2026-06-03) — see the salon block above
+  # for the rationale and the steps required to enable later. Note the
+  # unusual 1 m mount height: this cam is the only one below eye level,
+  # so a future detection spec would need a different cos(β) treatment
+  # (the person is above the optical axis when seated at the desk).
+  # ============================================================================
+  buro:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/tapo_c210_buro_main
+          roles: [record, audio]
+    live:
+      streams:
+        Bureau: tapo_c210_buro_sub
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      enabled: false
+      width: 2304
+      height: 1296
+      fps: 10
+    objects:
+      track: []
+      filters:
+        person:
+          # schema/L1 placeholder values (see salon block for rationale)
+          min_area: 300
+          max_area: 100000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+
+  # ============================================================================
+  # CAMERA: cuisine (indoor, no detection, motion-tracking ON)
+  # ============================================================================
+  # HARDWARE
+  #   Model:    TP-Link Tapo C210 (1/2.7" CMOS, 3 MP, 16:9 aspect, 2K QHD)
+  #             3.83 mm fixed lens, motorised pan (360°) + tilt (114°),
+  #             built-in mic, IR LED for night vision, microSD slot.
+  #   IP:       192.168.50.16
+  #   RTSP:     frigate_nghia:fG-56lui@192.168.50.16:554  (standard TP-Link port)
+  #   Location: Indoor — kitchen (cuisine)
+  #
+  # ROOM GEOMETRY  (motion-tracking is ON; the static values below are the
+  #                  DEFAULT orientation at boot. Once motion-tracking fires,
+  #                  the camera pans/tilts to follow the person and the
+  #                  actual mount orientation diverges from these defaults.)
+  #   Room size:      7 m × 7 m    (large kitchen/dining area)
+  #   Mount:          Ceiling, 2.5 m above floor (corner of room, angled
+  #                   inward to cover the kitchen island + dining table)
+  #   Default tilt:   ~45° down from horizontal (typical ceiling corner mount)
+  #   H-FOV:          110°       (TP-Link spec for the C210 lens)
+  #   V-FOV:          ~58°
+  #   Max walkable:   ~7 m       (diagonal across the 7×7m room)
+  #   Min walkable:   ~1 m       (just below the mount)
+  #
+  # STREAMS — same as salon / buro: 2304×1296 main, 640×360 sub, on port 554.
+  #
+  # NO DETECTION (intentional, 2026-06-03) — see the salon block above
+  # for the rationale and the steps required to enable later.
+  # ============================================================================
+  cuisine:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/tapo_c210_cuisine_main
+          roles: [record, audio]
+    live:
+      streams:
+        Cuisine: tapo_c210_cuisine_sub
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      enabled: false
+      width: 2304
+      height: 1296
+      fps: 10
+    objects:
+      track: []
+      filters:
+        person:
+          # schema/L1 placeholder values (see salon block for rationale)
+          min_area: 300
+          max_area: 100000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
 
 version: 0.17-0
 

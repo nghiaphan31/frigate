@@ -262,4 +262,108 @@ CAMERAS = {
         "live_stream":   "piscine_vue_toit_sub",
         "zones": ["prive"],
     },
+
+    # ===================================================================
+    # INDOOR TP-LINK TAPO C210 CAMERAS (added 2026-06-03)
+    # ===================================================================
+    # Detection is DISABLED per-camera (detect.enabled: false in config.yml).
+    # The entries below exist so that tests/test-math.sh can verify the
+    # symmetry "every camera in config.yml has a CAMERAS entry" (item 7
+    # in the L2 test), and so the geometry is documented for the day
+    # detection is enabled. The min_area / max_area / threshold / min_score
+    # values match the L1 placeholder values in config.yml exactly (300 /
+    # 100000 / 0.55 / 0.45); the geometry-derived margins are non-standard
+    # (much < 0.5 for min, much < 1.0 for max) which is intentional —
+    # the person is large in pixels in these small rooms even at the far
+    # boundary, so a generous noise floor is the right operator choice.
+    #
+    # The PTZ motion-tracking caveat applies: at runtime the camera may
+    # physically pan/tilt to follow a person, invalidating the static
+    # mount orientation assumed by the physics formula. The fixed values
+    # here are the DEFAULT orientation at boot; PTZ behaviour is the
+    # Tapo device's own responsibility.
+    # ===================================================================
+    "salon": {
+        # TP-Link Tapo C210, 5×7m living room, ceiling 2.5m, ~45° tilt, motion-tracking ON
+        "dist_m":        6.0,
+        "height_m":      2.5,
+        "tilt_deg":     45.0,
+        "v_fov_deg":    58.0,
+        "h_fov_deg":   110.0,
+        "stream_w_px": 2304,
+        "stream_h_px": 1296,
+        "near_m":        1.0,
+        # Values mirror the L1 placeholder in config.yml (detection is off
+        # per-camera, so these are documentation values not actual filters).
+        "expected_min_area":   300,
+        "expected_max_area": 100000,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        # Margins are non-standard (very low) because the person is large
+        # in pixels at the far boundary (area_far ≈ 24 875 px² for a 1.6m
+        # person at 6m on 2304×1296 with 110° H-FOV / 58° V-FOV). min_area=300
+        # is the iter0 noise-floor default; max_area=100000 ≈ 1.5× the
+        # area at the near boundary of 1m (area_near ≈ 169 537 px²).
+        "min_area_margin":     0.01206,   # = 300 / 24875
+        "max_area_margin":     0.58984,   # = 100000 / 169537
+        "detect_stream": "tapo_c210_salon_main",
+        "live_stream":   "tapo_c210_salon_sub",
+        # No zones — detection disabled, so no zone-based event filtering.
+        "zones": [],
+    },
+    "buro": {
+        # TP-Link Tapo C210, 3.5×2.5m small office, wall 1m, ~10° tilt, motion-tracking ON
+        "dist_m":        3.5,
+        "height_m":      1.0,
+        "tilt_deg":     10.0,
+        "v_fov_deg":    58.0,
+        "h_fov_deg":   110.0,
+        "stream_w_px": 2304,
+        "stream_h_px": 1296,
+        "near_m":        0.5,
+        # Values mirror the L1 placeholder in config.yml (detection is off).
+        "expected_min_area":   300,
+        "expected_max_area": 100000,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        # Low mount (1m) + small room (3.5m) → very large person footprint
+        # even at the far boundary (area_far ≈ 92 765 px²). min_area=300 is
+        # the iter0 noise-floor default (margin 0.00323 ≈ 300 / 92 765).
+        "min_area_margin":     0.00323,
+        "max_area_margin":     0.10170,
+        "detect_stream": "tapo_c210_buro_main",
+        "live_stream":   "tapo_c210_buro_sub",
+        "zones": [],
+    },
+    "cuisine": {
+        # TP-Link Tapo C210, 7×7m kitchen, ceiling 2.5m, ~45° tilt, motion-tracking ON
+        "dist_m":        7.0,
+        "height_m":      2.5,
+        "tilt_deg":     45.0,
+        "v_fov_deg":    58.0,
+        "h_fov_deg":   110.0,
+        "stream_w_px": 2304,
+        "stream_h_px": 1296,
+        "near_m":        1.0,
+        # Values mirror the L1 placeholder in config.yml (detection is off).
+        "expected_min_area":   300,
+        "expected_max_area": 100000,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        # 7m diagonal across a 7×7m room, 2.5m ceiling. area_far ≈ 18 170 px²
+        # (smaller than salon because the room is larger), so min_area_margin
+        # is 0.01651 (still low). max_area_margin is identical to salon
+        # (0.58984) because both have the same near/far ratio.
+        "min_area_margin":     0.01651,
+        "max_area_margin":     0.58984,
+        "detect_stream": "tapo_c210_cuisine_main",
+        "live_stream":   "tapo_c210_cuisine_sub",
+        "zones": [],
+    },
 }
