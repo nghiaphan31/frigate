@@ -514,9 +514,7 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/jardin_arriere_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/jardin_arriere_main
-          roles: [record, audio]
+          roles: [detect, record, audio]
     live:
       streams:
         Jardin arrière: jardin_arriere_sub
@@ -644,9 +642,7 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/vue_entree_main
-          roles: [detect]
-        - path: rtsp://127.0.0.1:8554/vue_entree_main
-          roles: [record, audio]
+          roles: [detect, record, audio]
     live:
       streams:
         Vue entrée: vue_entree_sub
