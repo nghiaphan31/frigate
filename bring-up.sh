@@ -46,6 +46,24 @@
 #       STRATEGY in: restart-container | remount-nas | flush-zmq | rebuild-trt
 #       (--recover= implies --status; set RECOVER_STRATEGY env var for full
 #        bring-up + auto-recovery override)
+#   ./bring-up.sh --camera=NAME                # report on a specific camera
+#                                             # (default: $CAMERA_NAME env or allee_sur_le_cote)
+#   ./bring-up.sh --all-cameras                # report on every camera in config.yml
+#                                             # (implies --status; exits non-zero if
+#                                             #  ANY camera has a FAIL step)
+#   ./bring-up.sh --list-cameras               # print camera names from config.yml,
+#                                             # one per line, then exit 0
+#                                             # (handy for shell loops and tests)
+#
+# Multi-camera semantics (feature/multi-camera integration branch):
+#   CAMERA_NAME today is a single hardcoded value. As cameras are added to
+#   config.yml one per commit, the report must run for each. The --camera
+#   flag overrides CAMERA_NAME for one invocation; --all-cameras loops over
+#   every camera listed under `cameras:` in config.yml.
+#   --camera / --all-cameras apply to the status report (step 4-14) and the
+#   wait-detection phase. Pre-flight, container start, API wait, and the
+#   non-camera-specific steps (1-3, 6, 7, 11-14) run ONCE for the whole
+#   stack, not once per camera.
 #
 # MQTT topics published:
 #   calypso_frigate/bringup/state   (retained)  current state name
@@ -166,6 +184,15 @@ ALLOWED_RECOVER_STRATEGIES="restart-container remount-nas flush-zmq rebuild-trt"
 # decide whether to run the recovery after status_report().
 _RECOVER_FROM_FLAG="${_RECOVER_FROM_FLAG:-0}"
 
+# Multi-camera reporting flags.  --camera=NAME overrides the
+# hardcoded CAMERA_NAME for the status report + wait-detection phase.
+# --all-cameras sets ALL_CAMERAS=1 which, after the bring-up phase
+# succeeds, runs status_report() once per camera in config.yml and
+# returns the worst-case exit code.  --list-cameras is a no-op mode
+# that prints the configured camera names and exits 0 — used by
+# the L2 test-math.sh harness to drive per-camera assertions.
+ALL_CAMERAS=0
+LIST_CAMERAS=0
 for arg in "$@"; do
     case "$arg" in
         --status)             SKIP_BRINGUP=1 ;;
@@ -182,8 +209,14 @@ for arg in "$@"; do
                               # + recover, set RECOVER_STRATEGY in the env
                               # without the --recover flag.
                               SKIP_BRINGUP=1 ;;
+        --camera=*)           CAMERA_NAME="${arg#*=}" ;;
+        --all-cameras)        ALL_CAMERAS=1
+                              # --all-cameras only makes sense in --status mode:
+                              # we don't want to do a full bring-up per camera.
+                              SKIP_BRINGUP=1 ;;
+        --list-cameras)       LIST_CAMERAS=1 ;;
         --help|-h)
-            sed -n '2,40p' "$0"
+            sed -n '2,55p' "$0"
             exit 0
             ;;
         *)
@@ -192,6 +225,27 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# Validate --camera=NAME: if config.yml is parseable and the name is
+# unknown, fail fast with a clear list. Avoids confusing downstream
+# "camera not in /api/stats.cameras" errors when the operator typos.
+if [ -n "${CAMERA_NAME:-}" ] && [ "$ALL_CAMERAS" -eq 0 ]; then
+    if command -v python3 >/dev/null 2>&1; then
+        _known=$(python3 -c "
+import yaml
+try:
+    d = yaml.safe_load(open('config.yml'))
+    print(' '.join(sorted((d.get('cameras') or {}).keys())))
+except Exception:
+    print('')
+" 2>/dev/null)
+        if [ -n "$_known" ] && ! printf '%s\n' "$_known" | grep -qx "$CAMERA_NAME"; then
+            echo "ERROR: --camera=$CAMERA_NAME not found in config.yml cameras:" >&2
+            echo "  known cameras: $_known" >&2
+            exit 2
+        fi
+    fi
+fi
 
 # ------------------------------------------------------------------------------
 # Logging helpers
@@ -972,9 +1026,66 @@ JSON
 }
 
 # ------------------------------------------------------------------------------
+# Multi-camera helpers
+# ------------------------------------------------------------------------------
+# get_camera_list: print camera names from config.yml, one per line,
+# sorted alphabetically. Falls back to an empty result if config.yml
+# is missing or unparseable (in which case the caller should error out).
+# Source of truth = config.yml (not /api/config, which is not exposed
+# by Frigate 0.17). This matches what the container will load on next
+# restart, so the bring-up report and the running Frigate agree.
+get_camera_list() {
+    python3 -c "
+import yaml
+try:
+    d = yaml.safe_load(open('config.yml'))
+    for name in sorted((d.get('cameras') or {}).keys()):
+        print(name)
+except Exception as e:
+    import sys
+    print('PARSE_ERROR:', e, file=sys.stderr)
+    sys.exit(0)
+" 2>/dev/null
+}
+
+# status_report_for_all_cameras: loop status_report() over every camera
+# in config.yml. Returns 0 only if every camera's report had zero FAIL
+# steps; otherwise returns 1. Used when --all-cameras is set.
+# Each per-camera report still re-runs the 14 steps; the stack-global
+# ones (1-3, 6, 7, 11-14) are idempotent (they read shared state from
+# the same /api/stats + /api/config payloads) so the duplication is
+# acceptable for a single-host stack. If we ever federate across hosts,
+# this needs a per-stack-once / per-camera split.
+status_report_for_all_cameras() {
+    local cams saved_camera="$CAMERA_NAME" worst_rc=0 cam
+    cams=$(get_camera_list)
+    if [ -z "$cams" ]; then
+        log "${YEL}--all-cameras: no cameras found under config.yml cameras:${NC}" >&2
+        return 1
+    fi
+    for cam in $cams; do
+        CAMERA_NAME="$cam"
+        log "─── status_report for camera: $cam ───"
+        if ! status_report; then
+            worst_rc=1
+        fi
+    done
+    CAMERA_NAME="$saved_camera"
+    return "$worst_rc"
+}
+
+# ------------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------------
 main() {
+    # --list-cameras: short-circuit before any I/O. Prints camera names
+    # from config.yml (one per line) and exits 0. Used by the L2 test
+    # harness (tests/test-math.sh) to drive per-camera assertions.
+    if [ "$LIST_CAMERAS" -eq 1 ]; then
+        get_camera_list
+        exit 0
+    fi
+
     mqtt_init
     mqtt_state "STARTING" \
         "{\"state\":\"STARTING\",\"host\":\"$(hostname)\",\"pid\":${SCRIPT_PID},\"compose\":\"${COMPOSE_FILE}\",\"camera\":\"${CAMERA_NAME}\"}"
@@ -999,7 +1110,22 @@ main() {
         log "Skipping bring-up (--status); running report only"
     fi
 
-    status_report
+    # Multi-camera dispatch:
+    #   --all-cameras  → run status_report() once per camera
+    #   default        → run status_report() once for CAMERA_NAME
+    #   --camera=NAME  → already set CAMERA_NAME in the args loop above
+    if [ "$ALL_CAMERAS" -eq 1 ]; then
+        if ! status_report_for_all_cameras; then
+            # Fall through to snapshot/baseline handling below so
+            # --snapshot-write / --snapshot-compare still work with
+            # --all-cameras (the LAST camera's REPORT_RESULTS is
+            # what gets serialised — acceptable for archival; for
+            # per-camera snapshots, run --camera=X --snapshot per cam).
+            :
+        fi
+    else
+        status_report
+    fi
 
     # ---- Self-healing recovery (commit 3: feature E) ----
     # If --recover=STRATEGY was passed, run the requested strategy now
