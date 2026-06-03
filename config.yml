@@ -363,14 +363,14 @@ go2rtc:
     # pixel content changes as the camera moves. Recordings will show
     # whatever the lens was pointed at when motion fired.
     tapo_c210_salon_main:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream1
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.100:554/stream1
     tapo_c210_salon_sub:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.17:554/stream2
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.100:554/stream2
 
     tapo_c210_buro_main:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream1
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.69:554/stream1
     tapo_c210_buro_sub:
-      - rtsp://frigate_nghia:fG-56lui@192.168.50.70:554/stream2
+      - rtsp://frigate_nghia:fG-56lui@192.168.50.69:554/stream2
 
     tapo_c210_cuisine_main:
       - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream1
