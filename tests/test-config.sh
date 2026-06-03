@@ -199,6 +199,32 @@ while IFS=$'\t' read -r status msg fix; do
     esac
 done < "$L1_OUT"
 
+# --- Splitter port probe (soft WARN; L1 is structural, but the operator
+#     benefits from a hint when the splitter is not running) ---
+# The 6 new half-cropped cameras (allee_sur_le_cote_left/_right,
+# jardin_devant_left/_right, piscine_vue_toit_left/_right) consume RTSP
+# streams from the splitter service on port 8556. If the port is not
+# responding, the new cameras in config.yml will go into 'disabled' state
+# at runtime (L3 catches this). L1 just emits a WARN so the operator sees
+# the hint even on a non-bring-up host. ---
+if command -v timeout >/dev/null 2>&1; then
+    if timeout 2 bash -c '>/dev/tcp/127.0.0.1/8556' 2>/dev/null; then
+        printf "  %b[ OK ]%b  splitter RTSP port 8556 is accepting connections\n" "$GRN" "$NC"
+        L1_OK=$((L1_OK+1)); L1_TOTAL=$((L1_TOTAL+1))
+    else
+        printf "  %b[WARN]%b  splitter RTSP port 8556 is NOT reachable\n" "$YEL" "$NC"
+        printf "              the 6 new half-cropped cameras (allee_sur_le_cote_left/_right,\n"
+        printf "              jardin_devant_left/_right, piscine_vue_toit_left/_right) consume\n"
+        printf "              their RTSP streams from the splitter and will be 'disabled'\n"
+        printf "              in Frigate until the splitter is up. To start it:\n"
+        printf "                docker compose -f splitter/docker-compose.splitter.yml up -d\n"
+        # WARN is informational — does NOT increment L1_FAIL. L1 is
+        # structural, not runtime; the bring-up watchdog (L3 / bring-up.sh)
+        # is the authoritative check for splitter reachability.
+        L1_TOTAL=$((L1_TOTAL+1))
+    fi
+fi
+
 # --- Summary ---
 echo "───────────────────────────────────────────────────────────────────────"
 if [ "$L1_FAIL" -eq 0 ]; then

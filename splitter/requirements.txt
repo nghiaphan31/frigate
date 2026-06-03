@@ -1,0 +1,11 @@
+# ==============================================================================
+# splitter/requirements.txt — Python deps for the splitter service
+# ==============================================================================
+# PyGObject and GStreamer Python bindings are pulled from apt in the
+# Dockerfile (python3-gi, python3-gst-1.0, gir1.2-gst-rtsp-server-1.0)
+# so we don't re-install them via pip. This file exists for documentation
+# and for any future pure-Python helpers (e.g. a tiny HTTP health endpoint
+# on port 8557 if the L1 test wants JSON rather than ffprobe output).
+#
+# We keep it minimal: the service currently uses only the stdlib + gi.
+# ==============================================================================

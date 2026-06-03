@@ -1,5 +1,5 @@
 [Unit]
-Description=Frigate NVR — periodic health check + auto-recover
+Description=Frigate NVR + splitter — periodic health check + auto-recover
 Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/STARTUP.md
 # Always wait for the docker stack service so we do not fight a concurrent bring-up.
 After=docker.service frigate-stack.service
@@ -21,6 +21,14 @@ StandardError=journal
 # run as failed, but the timer continues firing every 5 min until
 # bring-up.sh returns 0. This is the correct self-healing loop
 # for a boot-time config regression.
+#
+# The watchdog also implicitly restarts the splitter service
+# (splitter/docker-compose.splitter.yml) via bring-up.sh's
+# start_splitter_container() step (added 2026-06-03 with the
+# half-cropped cameras). If the splitter dies independently of
+# the Frigate container, the next watchdog tick recreates it.
 SuccessExitStatus=0
 # Cap each run well below the timer interval to avoid pile-up.
-TimeoutStartSec=420
+# Bumped from 420s to 600s: with 6 additional half-cropped cameras,
+# the first-run TRT build + NVDEC warmup can take longer.
+TimeoutStartSec=600

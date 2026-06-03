@@ -1,0 +1,91 @@
+# ==============================================================================
+# splitter/docker-compose.splitter.yml — Reolink Duo 3 half-crop splitter
+# ==============================================================================
+# Independent of Frigate. Runs the GStreamer-based service that decodes
+# the 3 Reolink Duo 3 main streams on the GPU, crops them into 6 halves,
+# and re-publishes the 6 H.264 streams as RTSP on port 8556.
+#
+# Frigate's go2rtc.streams in config.yml then consumes the 6 new streams
+# at rtsp://127.0.0.1:8556/<name> and feeds them to 6 new cameras blocks
+# (allee_sur_le_cote_left/_right, jardin_devant_left/_right,
+# piscine_vue_toit_left/_right).
+#
+# Mirror of docker-compose.calypso.yml's GPU pattern:
+#   - runtime: nvidia
+#   - 5 /dev/nvidia* devices passthrough
+#   - network_mode: host (so the splitter binds 0.0.0.0:8556 directly,
+#     and the 3 Reolink cameras at 192.168.50.7 / 18 / 129 are reachable
+#     without NAT)
+#   - no shm_size override (the splitter doesn't need /dev/shm)
+#   - restart: unless-stopped (managed by the systemd watchdog via
+#     bring-up.sh; survives `docker stop` for emergencies)
+#
+# Build:  cd splitter && docker build -t frigate-splitter:local .
+# Up:     docker compose -f splitter/docker-compose.splitter.yml up -d
+# Logs:   docker logs -f splitter
+# Stop:   docker compose -f splitter/docker-compose.splitter.yml down
+# ==============================================================================
+services:
+  splitter:
+    container_name: splitter
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: frigate-splitter:local
+    network_mode: host
+    # We don't need /dev/shm (the splitter doesn't do any ZMQ IPC
+    # between processes), but the gstreamer registry cache and bus
+    # logging can use a few hundred MB under load.
+    shm_size: "512m"
+    environment:
+      TZ: Europe/Paris
+      # GStreamer / splitter knobs (see split_service.py for defaults)
+      LOG_LEVEL: "${SPLITTER_LOG_LEVEL:-INFO}"
+      RTSP_PORT: "${SPLITTER_RTSP_PORT:-8556}"
+      BITRATE_BPS: "${SPLITTER_BITRATE_BPS:-8000000}"
+      IDR_INTERVAL_FRAMES: "${SPLITTER_IDR_INTERVAL_FRAMES:-30}"
+      FRAMERATE: "${SPLITTER_FRAMERATE:-15}"
+      SOURCE_W: "${SPLITTER_SOURCE_W:-4096}"
+      SOURCE_H: "${SPLITTER_SOURCE_H:-1152}"
+      # GStreamer debug: 0 = none, 1 = ERROR, 2 = WARNING, 3 = FIXME,
+      # 4 = INFO, 5 = DEBUG, 6 = LOG, 7 = TRACE. Default 2.
+      GST_DEBUG: "${SPLITTER_GST_DEBUG:-2}"
+    # We don't override the entrypoint; the Dockerfile's ENTRYPOINT is
+    # entrypoint.sh which waits for nvidia devices then execs the
+    # Python service. The CMD is `python3 -u split_service.py`.
+    # No `command:` override (s6-overlay v3 lesson: never override
+    # the image's CMD if you want clean signal handling).
+    healthcheck:
+      # TCP probe to the RTSP port. Docker's HEALTHCHECK can't do RTSP
+      # DESCRIBE; the L1 test (tests/test-config.sh) does a deeper
+      # check with ffprobe from the host side.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8556 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # No bind mounts: the service is self-contained, no host paths
+    # needed. (gst-rtsp-server binds 0.0.0.0:8556 directly under
+    # network_mode: host.)
+    volumes: []
+    # Same 5-device passthrough pattern as docker-compose.calypso.yml.
+    # nvidia0 is the only RTX 5060 Ti on Calypso; the runtime mounts
+    # the others (ctl / modeset / uvm / uvm-tools) for bookkeeping.
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+    runtime: nvidia
+    # NVIDIA container toolkit env (matches Frigate's compose)
+    # Note: with runtime: nvidia, these are usually injected by the
+    # runtime itself; declaring them here is belt-and-braces.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, video, compute, utility]
+    restart: unless-stopped

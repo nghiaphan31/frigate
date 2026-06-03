@@ -377,6 +377,36 @@ go2rtc:
     tapo_c210_cuisine_sub:
       - rtsp://frigate_nghia:fG-56lui@192.168.50.16:554/stream2
 
+    # ── Reolink Duo 3 half-cropped streams (added 2026-06-03) ────────────────
+    # Produced by the splitter service (see splitter/docker-compose.splitter.yml).
+    # Each Reolink Duo 3 main stream (4096x1152) is GPU-cropped into two
+    # 2048x1152 (16:9) halves; the resulting 6 streams are published on the
+    # splitter's RTSP server (port 8556) and consumed below. The 16:9 aspect
+    # ratio is much closer to the Frigate+ model's training distribution
+    # (COCO-like, 1:1 to 16:9) than the 3.55:1 panoramic — detection on these
+    # streams is ~3x more pixels-per-person than the panoramic sub.
+    # Source cameras (in 192.168.50.x order):
+    #   192.168.50.129  allee_sur_le_cote        (3.4 m mount, 50 deg tilt)
+    #   192.168.50.18   jardin_devant            (6.0 m mount, 50 deg tilt)
+    #   192.168.50.7    piscine_vue_toit         (6.0 m mount, 25 deg tilt)
+    # Splitter bind: rtsp://127.0.0.1:8556/<mount>.
+    # See splitter/README.md for the GStreamer pipeline (NVDEC + nvvidconv
+    # crop + NVENC, all on the RTX 5060 Ti).
+    allee_sur_le_cote_left:
+      - rtsp://127.0.0.1:8556/allee_sur_le_cote_left
+    allee_sur_le_cote_right:
+      - rtsp://127.0.0.1:8556/allee_sur_le_cote_right
+
+    jardin_devant_left:
+      - rtsp://127.0.0.1:8556/jardin_devant_left
+    jardin_devant_right:
+      - rtsp://127.0.0.1:8556/jardin_devant_right
+
+    piscine_vue_toit_left:
+      - rtsp://127.0.0.1:8556/piscine_vue_toit_left
+    piscine_vue_toit_right:
+      - rtsp://127.0.0.1:8556/piscine_vue_toit_right
+
 cameras:
 
   # ============================================================================
@@ -1225,6 +1255,476 @@ cameras:
           min_score: 0.45
     snapshots:
       enabled: true
+
+  # ============================================================================
+  # CAMERA: allee_sur_le_cote_left  (HALF-CROPPED, 16:9, from splitter)
+  # ============================================================================
+  # HARDWARE
+  #   Model:    Reolink Duo 3 Wi-Fi/ETH (dual-lens 4K panoramic) — LEFT HALF
+  #   IP:       192.168.50.129
+  #   Source:   the LEFT 2048x1152 half of the Reolink's 4096x1152 main stream,
+  #             GPU-cropped and re-encoded by the splitter service
+  #             (rtsp://127.0.0.1:8556/allee_sur_le_cote_left, see
+  #             splitter/docker-compose.splitter.yml).
+  #   Location: Allée côté (left half) — covers the left ~90° of the
+  #             driveway (gate side, west approach).
+  #
+  # MOUNT GEOMETRY (per-half, half of the panoramic 180°)
+  #   Height:        3.4 m above ground
+  #   Tilt:          50° downward from horizontal
+  #   H-FOV:         90°  (the LEFT half of the original 180° panorama)
+  #   V-FOV:         55°
+  #   Max walkable:  20 m (person at ground level)
+  #   Min walkable:  3 m  (close-range, larger pixels)
+  #
+  # STREAMS
+  #   single: 2048x1152, 16:9, ~8 Mbps, 15 fps
+  #   pixel density: 2,359,296 px total (vs 663,552 on the panoramic sub)
+  #   aspect ratio: 1.78:1 (vs 3.55:1 on the panoramic)
+  #
+  # Why 16:9 helps detection: a 1.6m person at 20m takes ~1766 px² on this
+  # half vs ~248 px² on the panoramic sub — ~7x more pixels per person. The
+  # model's training distribution (COCO-like, 1:1 to 16:9) is also a much
+  # better match for 1.78:1 than 3.55:1.
+  #
+  # FPS RATIONALE
+  #   fps=5:  same as the panoramic. At 1.4 m/s walking, a person crosses
+  #           the 3 m near boundary in 2.14 s → ~10.7 frames captured.
+  #
+  # PHYSICS-DERIVED PERSON DETECTION (iter0 — geometry-based)
+  #   Target person:  H = 1.6 m tall, shoulder W = 0.5 m, aspect ≈ 2:1
+  #
+  #   Slant range at max distance (20 m):
+  #     r = sqrt(20² + 3.4²) ≈ 20.29 m
+  #   Elevation angle from camera to person at ground:
+  #     α = arctan(3.4/20) ≈ 9.65°
+  #   Depression angle from optical axis to person:
+  #     β = tilt − α = 50° − 9.65° = 40.35°
+  #
+  #   Pixel size of person at 20 m on 2048x1152 (H-FOV 90°):
+  #     H_px = (H / r) * (stream_h_px / V-FOV_rad) * cos(β)
+  #         = (1.6 / 20.29) * (1152 / 0.9599) * cos(40.35°)
+  #         ≈ 72.1 px  (smallest expected footprint)
+  #     W_px = (W / r) * (stream_w_px / H-FOV_rad) * cos(β)
+  #         = (0.5 / 20.29) * (2048 / 1.5708) * cos(40.35°)
+  #         ≈ 24.5 px
+  #     area = H_px × W_px = 72.1 × 24.5 ≈ 1766 px²
+  #
+  #   At 3 m near boundary:  area ≈ 60,844 px²  (largest expected footprint)
+  #
+  #   Applied filter values (50% / 150% safety margins on area):
+  #     min_area   = 1766  × 0.5  = 883       (50% of smallest expected)
+  #     max_area   = 60844 × 1.5  = 91267     (150% of largest expected)
+  #     min_ratio  = 2.0 × 0.5   = 1.0        (50% of expected aspect)
+  #     max_ratio  = 2.0 × 2.0   = 4.0        (200% of expected aspect)
+  #     threshold  = 0.55                     (model default + 0.10)
+  #     min_score  = 0.45                     (model default + 0.05)
+  #
+  # ZONES
+  #   prive  — lower 60% of the frame (ground plane, immediate alert on
+  #            entry). Placeholder geometry; refine in a future commit
+  #            once a person walks the left half in front of the operator.
+  # ============================================================================
+  allee_sur_le_cote_left:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_left
+          roles: [detect, record, audio]
+    live:
+      streams:
+        Allée côté (gauche): allee_sur_le_cote_left
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 2048
+      height: 1152
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 20m on 2048x1152 left half (H-FOV 90°)
+          min_area: 883
+          max_area: 91267
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    zones:
+      prive:
+        # Placeholder — lower 60% of the frame, 10% L/R inset.
+        coordinates: 0.1,1,0.1,0.4,0.9,0.4,0.9,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 883
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
+
+  # ============================================================================
+  # CAMERA: allee_sur_le_cote_right  (HALF-CROPPED, 16:9, from splitter)
+  # ============================================================================
+  # Mirror of allee_sur_le_cote_left — same geometry, same physics, same
+  # filter values. Splits the same Reolink main stream at the sensor's
+  # center seam (col 2048 of 4096) and serves the right half on
+  # rtsp://127.0.0.1:8556/allee_sur_le_cote_right.
+  # See allee_sur_le_cote_left above for the full geometry derivation.
+  # ============================================================================
+  allee_sur_le_cote_right:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_right
+          roles: [detect, record, audio]
+    live:
+      streams:
+        Allée côté (droite): allee_sur_le_cote_right
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 2048
+      height: 1152
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 20m on 2048x1152 right half (H-FOV 90°)
+          # (identical to allee_sur_le_cote_left; both halves share the same
+          #  mount geometry, just on opposite sides of the sensor seam)
+          min_area: 883
+          max_area: 91267
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    zones:
+      prive:
+        # Placeholder — lower 60% of the frame, 10% L/R inset.
+        coordinates: 0.1,1,0.1,0.4,0.9,0.4,0.9,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55
+            min_area: 883
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
+
+  # ============================================================================
+  # CAMERA: jardin_devant_left  (HALF-CROPPED, 16:9, from splitter)
+  # ============================================================================
+  # HARDWARE
+  #   Model:    Reolink Duo 3 Wi-Fi/ETH (dual-lens 4K panoramic) — LEFT HALF
+  #   IP:       192.168.50.18
+  #   Source:   the LEFT 2048x1152 half of the Reolink's 4096x1152 main stream
+  #             (rtsp://127.0.0.1:8556/jardin_devant_left).
+  #   Location: Jardin devant (left half) — left ~90° of the front garden.
+  #
+  # MOUNT GEOMETRY (per-half, half of the panoramic 180°)
+  #   Height:        6.0 m above ground
+  #   Tilt:          50° downward from horizontal
+  #   H-FOV:         90°
+  #   V-FOV:         55°
+  #   Max walkable:  15 m
+  #   Min walkable:  3 m
+  #
+  # PHYSICS-DERIVED PERSON DETECTION (iter0)
+  #   Slant range at 15 m:  r = sqrt(15² + 6²) ≈ 16.16 m
+  #   Elev = arctan(6/15) ≈ 21.80°
+  #   Depress = 50° − 21.80° = 28.20°
+  #   H_px = (1.6/16.16) * (1152/0.9599) * cos(28.20°) ≈ 104.7 px
+  #   W_px = (0.5/16.16) * (2048/1.5708) * cos(28.20°) ≈ 35.6 px
+  #   area_far = 104.7 × 35.6 ≈ 3725 px²
+  #
+  #   At 3 m:  r = sqrt(9+36) = 6.71 m,  elev = arctan(6/3) = 63.43°,
+  #   depress = 50° − 63.43° = −13.43° → clamped to 0°
+  #   H_px = (1.6/6.71) * (1152/0.9599) * cos(0°) ≈ 286.2 px
+  #   W_px = (0.5/6.71) * (2048/1.5708) * cos(0°) ≈ 97.2 px
+  #   area_near = 286.2 × 97.2 ≈ 27816 px²
+  #
+  #   Applied filter values (50% / 150% safety margins):
+  #     min_area = 3725 × 0.5 = 1863     (50% of smallest expected)
+  #     max_area = 27816 × 1.5 = 41725   (150% of largest expected)
+  #     min_ratio = 1.0, max_ratio = 4.0, threshold = 0.55, min_score = 0.45
+  # ============================================================================
+  jardin_devant_left:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/jardin_devant_left
+          roles: [detect, record]
+    live:
+      streams:
+        Jardin devant (gauche): jardin_devant_left
+    audio:
+      enabled: false
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 2048
+      height: 1152
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 15m on 2048x1152 left half (H-FOV 90°)
+          min_area: 1863
+          max_area: 41725
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    zones:
+      prive:
+        # Placeholder — lower 60% of the frame, 10% L/R inset.
+        coordinates: 0.1,1,0.1,0.4,0.9,0.4,0.9,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55
+            min_area: 1863
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
+
+  # ============================================================================
+  # CAMERA: jardin_devant_right  (HALF-CROPPED, 16:9, from splitter)
+  # ============================================================================
+  # Mirror of jardin_devant_left. See that block for the full geometry
+  # derivation; same filter values.
+  # ============================================================================
+  jardin_devant_right:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/jardin_devant_right
+          roles: [detect, record]
+    live:
+      streams:
+        Jardin devant (droite): jardin_devant_right
+    audio:
+      enabled: false
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 2048
+      height: 1152
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 15m on 2048x1152 right half (H-FOV 90°)
+          min_area: 1863
+          max_area: 41725
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    zones:
+      prive:
+        coordinates: 0.1,1,0.1,0.4,0.9,0.4,0.9,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55
+            min_area: 1863
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
+
+  # ============================================================================
+  # CAMERA: piscine_vue_toit_left  (HALF-CROPPED, 16:9, from splitter)
+  # ============================================================================
+  # HARDWARE
+  #   Model:    Reolink Duo 3 Wi-Fi/ETH — LEFT HALF
+  #   IP:       192.168.50.7
+  #   Source:   the LEFT 2048x1152 half of the Reolink's 4096x1152 main stream
+  #             (rtsp://127.0.0.1:8556/piscine_vue_toit_left).
+  #   Location: Piscine toit (left half) — left ~90° of pool + garden.
+  #
+  # MOUNT GEOMETRY (per-half, half of the panoramic 180°)
+  #   Height:        6.0 m above ground (roof / gutter mount)
+  #   Tilt:          25° downward from horizontal
+  #   H-FOV:         90°
+  #   V-FOV:         55°
+  #   Max walkable:  20 m
+  #   Min walkable:  5 m
+  #
+  # PHYSICS-DERIVED PERSON DETECTION (iter0)
+  #   Slant range at 20 m:  r = sqrt(20² + 6²) ≈ 20.88 m
+  #   Elev = arctan(6/20) ≈ 16.70°
+  #   Depress = 25° − 16.70° = 8.30°
+  #   H_px = (1.6/20.88) * (1152/0.9599) * cos(8.30°) ≈ 91.0 px
+  #   W_px = (0.5/20.88) * (2048/1.5708) * cos(8.30°) ≈ 30.9 px
+  #   area_far = 91.0 × 30.9 ≈ 2811 px²
+  #
+  #   At 5 m:  r = sqrt(25+36) = 7.81 m,  elev = arctan(6/5) = 50.19°,
+  #   depress = 25° − 50.19° = −25.19° → clamped to 0°
+  #   H_px = (1.6/7.81) * (1152/0.9599) * cos(0°) ≈ 245.8 px
+  #   W_px = (0.5/7.81) * (2048/1.5708) * cos(0°) ≈ 83.5 px
+  #   area_near = 245.8 × 83.5 ≈ 20520 px²
+  #
+  #   Applied filter values (50% / 150% safety margins):
+  #     min_area = 2811 × 0.5 = 1406     (50% of smallest expected)
+  #     max_area = 20520 × 1.5 = 30780   (150% of largest expected)
+  #     min_ratio = 1.0, max_ratio = 4.0, threshold = 0.55, min_score = 0.45
+  # ============================================================================
+  piscine_vue_toit_left:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_left
+          roles: [detect, record, audio]
+    live:
+      streams:
+        Piscine toit (gauche): piscine_vue_toit_left
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 2048
+      height: 1152
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 20m on 2048x1152 left half (H-FOV 90°)
+          min_area: 1406
+          max_area: 30780
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    zones:
+      prive:
+        coordinates: 0.1,1,0.1,0.4,0.9,0.4,0.9,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55
+            min_area: 1406
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
+
+  # ============================================================================
+  # CAMERA: piscine_vue_toit_right  (HALF-CROPPED, 16:9, from splitter)
+  # ============================================================================
+  # Mirror of piscine_vue_toit_left. See that block for the full geometry
+  # derivation; same filter values.
+  # ============================================================================
+  piscine_vue_toit_right:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_right
+          roles: [detect, record, audio]
+    live:
+      streams:
+        Piscine toit (droite): piscine_vue_toit_right
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 2048
+      height: 1152
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 20m on 2048x1152 right half (H-FOV 90°)
+          min_area: 1406
+          max_area: 30780
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    zones:
+      prive:
+        coordinates: 0.1,1,0.1,0.4,0.9,0.4,0.9,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            threshold: 0.55
+            min_area: 1406
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
 
 version: 0.17-0
 

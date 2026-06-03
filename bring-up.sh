@@ -95,6 +95,22 @@ CONTAINER_NAME="${CONTAINER_NAME:-frigate}"
 API_TIMEOUT="${API_TIMEOUT:-60}"
 DETECT_TIMEOUT="${DETECT_TIMEOUT:-240}"
 RECOVERY_TIMEOUT="${RECOVERY_TIMEOUT:-60}"
+# Splitter service (Reolink Duo 3 half-cropper; see splitter/README.md).
+# Started BEFORE the Frigate container so the 6 new half-cropped cameras
+# in config.yml have their upstream RTSP ready when go2rtc pulls.
+#   SPLITTER_COMPOSE_FILE  — path to the splitter compose file
+#   SPLITTER_CONTAINER_NAME — docker container_name (must match compose)
+#   SPLITTER_RTSP_PORT     — port the splitter binds (matches split_service.py RTSP_PORT)
+#   SPLITTER_REQUIRED      — 1 = fatal if the compose file is missing or
+#                              the RTSP port never comes up; 0 = best-effort
+#                              (the 6 new cameras will be 'disabled' but
+#                              the rest of the stack works)
+#   SPLITTER_WAIT_TIMEOUT  — seconds to wait for the splitter RTSP port
+SPLITTER_COMPOSE_FILE="${SPLITTER_COMPOSE_FILE:-splitter/docker-compose.splitter.yml}"
+SPLITTER_CONTAINER_NAME="${SPLITTER_CONTAINER_NAME:-splitter}"
+SPLITTER_RTSP_PORT="${SPLITTER_RTSP_PORT:-8556}"
+SPLITTER_REQUIRED="${SPLITTER_REQUIRED:-1}"
+SPLITTER_WAIT_TIMEOUT="${SPLITTER_WAIT_TIMEOUT:-60}"
 SCRIPT_PID=$$
 SCRIPT_START=$(date +%s)
 
@@ -556,6 +572,91 @@ start_container() {
     done
 
     fatal "container did not reach 'running' state in 30s" 3
+}
+
+# ------------------------------------------------------------------------------
+# 2b. Splitter service (Reolink Duo 3 half-cropper)
+# ------------------------------------------------------------------------------
+# The 6 new half-cropped cameras in config.yml (allee_sur_le_cote_left /
+# _right, jardin_devant_left / _right, piscine_vue_toit_left / _right)
+# consume RTSP streams from the splitter service on port ${SPLITTER_RTSP_PORT}
+# (default 8556). The splitter must be up BEFORE Frigate starts so that
+# go2rtc can pull the 6 new streams at rtsp://127.0.0.1:8556/<name>.
+#
+#   preflight_splitter()    — verify the compose file exists, the
+#                              docker runtime is available, etc.
+#   start_splitter_container() — idempotent: skip if already running,
+#                                  otherwise `up -d`.
+#   wait_splitter()         — wait for the splitter's RTSP port to accept
+#                              connections (the container is up but the
+#                              service may need a few seconds to bind).
+# ------------------------------------------------------------------------------
+preflight_splitter() {
+    # The compose file is the source of truth. If it's missing AND
+    # SPLITTER_REQUIRED=0, log a WARN and return 0 (best-effort).
+    # If SPLITTER_REQUIRED=1, the file MUST exist.
+    if [ ! -f "$SPLITTER_COMPOSE_FILE" ]; then
+        if [ "$SPLITTER_REQUIRED" = "1" ]; then
+            fatal "$SPLITTER_COMPOSE_FILE not found (set SPLITTER_REQUIRED=0 to make the splitter optional)" 2
+        fi
+        log "${YEL}WARN:${NC} $SPLITTER_COMPOSE_FILE not found; the 6 new half-cropped cameras will be 'disabled' in Frigate"
+        return 0
+    fi
+    log "Splitter compose: ${SPLITTER_COMPOSE_FILE} (container=${SPLITTER_CONTAINER_NAME}, port=${SPLITTER_RTSP_PORT}, required=${SPLITTER_REQUIRED})"
+}
+
+start_splitter_container() {
+    # Skip if the compose file is missing (preflight_splitter already
+    # logged the WARN; nothing to do here).
+    if [ ! -f "$SPLITTER_COMPOSE_FILE" ]; then
+        return 0
+    fi
+
+    if docker ps --format '{{.Names}}' | grep -q "^${SPLITTER_CONTAINER_NAME}$"; then
+        log "Container ${SPLITTER_CONTAINER_NAME} already running"
+        return 0
+    fi
+
+    log "Starting splitter container…"
+    ${DOCKER_COMPOSE} -f "$SPLITTER_COMPOSE_FILE" up -d "$SPLITTER_CONTAINER_NAME"
+
+    local i
+    for i in $(seq 1 30); do
+        if docker ps --format '{{.Names}}' | grep -q "^${SPLITTER_CONTAINER_NAME}$"; then
+            log "Splitter container started in ${i}s"
+            return 0
+        fi
+        sleep 1
+    done
+
+    if [ "$SPLITTER_REQUIRED" = "1" ]; then
+        fatal "splitter container did not reach 'running' state in 30s" 3
+    fi
+    log "${YEL}WARN:${NC} splitter container did not start within 30s; continuing without it"
+}
+
+wait_splitter() {
+    # Skip if the compose file is missing.
+    if [ ! -f "$SPLITTER_COMPOSE_FILE" ]; then
+        return 0
+    fi
+
+    log "Waiting for splitter RTSP port ${SPLITTER_RTSP_PORT} (timeout ${SPLITTER_WAIT_TIMEOUT}s)…"
+    local i
+    for i in $(seq 1 "$SPLITTER_WAIT_TIMEOUT"); do
+        if timeout 2 bash -c ">/dev/tcp/127.0.0.1/${SPLITTER_RTSP_PORT}" 2>/dev/null; then
+            log "Splitter RTSP port ready in ${i}s"
+            return 0
+        fi
+        sleep 1
+    done
+
+    if [ "$SPLITTER_REQUIRED" = "1" ]; then
+        log "Last 30 log lines from the splitter container:"
+        docker logs --tail=30 "$SPLITTER_CONTAINER_NAME" 2>&1 || true
+        fatal "splitter RTSP port ${SPLITTER_RTSP_PORT} did not respond in ${SPLITTER_WAIT_TIMEOUT}s" 4
+    fi
+    log "${YEL}WARN:${NC} splitter RTSP port ${SPLITTER_RTSP_PORT} not reachable; the 6 new half-cropped cameras will be 'disabled' in Frigate"
 }
 
 # ------------------------------------------------------------------------------
@@ -1105,7 +1206,17 @@ main() {
     mqtt_state "PREFLIGHT_OK" \
         "{\"state\":\"PREFLIGHT_OK\",\"preflight\":\"all_8_gates_passed\"}"
 
+    # Splitter service (Reolink Duo 3 half-cropper) — must be up
+    # BEFORE Frigate so the 6 new half-cropped cameras have their
+    # upstream RTSP ready when go2rtc pulls.
+    preflight_splitter
+
     if [ "$SKIP_BRINGUP" -eq 0 ]; then
+        start_splitter_container
+        mqtt_state "SPLITTER_UP" \
+            "{\"state\":\"SPLITTER_UP\",\"container\":\"${SPLITTER_CONTAINER_NAME}\",\"port\":${SPLITTER_RTSP_PORT}}"
+        wait_splitter
+
         start_container
         mqtt_state "CONTAINER_UP" \
             "{\"state\":\"CONTAINER_UP\",\"container\":\"${CONTAINER_NAME}\"}"

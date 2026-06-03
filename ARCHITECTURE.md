@@ -11,7 +11,7 @@ End-to-end documentation of the Frigate NVR pipeline running on **Calypso** (hos
 ```mermaid
 flowchart LR
   subgraph EXT["External (your network)"]
-    CAM["Reolink Duo 3<br/>192.168.50.129:8554<br/>RTSP / H.264 / TCP"]
+    CAM["Reolink Duo 3 × 3<br/>192.168.50.7/18/129:8554<br/>RTSP / H.264 / TCP"]
     HA["Home Assistant<br/>192.168.50.125:1883<br/>Mosquitto MQTT broker"]
     NAS["NAS<br/>/mnt/nas/video/frigate_calypso<br/>NFS / SMB / local mount"]
     WEB["Browsers<br/>(live view + UI)"]
@@ -22,13 +22,22 @@ flowchart LR
     TRTL["/trt-libs<br/>(host, read-only mount)<br/>TRT 10.9.0 runtime libs"]
     TRTC["/trt-cache<br/>(host, bind mount)<br/>engine + model cache"]
     CFG["./config.yml<br/>(host)"]
+    SPLIT_DIR["./splitter/<br/>docker-compose.splitter.yml<br/>split_service.py<br/>Dockerfile"]
     ENV["./.env<br/>FRIGATE_PLUS_API_KEY<br/>FRIGATE_MEDIA_PATH"]
     DOCKER["docker daemon<br/>+ nvidia-container-toolkit"]
 
+    subgraph SPLIT["splitter container (NEW, nvidia/cuda:12.4 + GStreamer)"]
+      DEC["NVDEC × 3<br/>nvv4l2decoder"]
+      CROP["nvvideoconvert crop × 6<br/>GPU CUDA / VIC"]
+      ENC["NVENC × 6<br/>nvv4l2h264enc"]
+      RTSPS["gst-rtsp-server<br/>:8556 (6 mounts)"]
+      DEC --> CROP --> ENC --> RTSPS
+    end
+
     subgraph CTN["Frigate container (ghcr.io/blakeblackshear/frigate:stable-tensorrt)"]
       G2R["go2rtc<br/>(RTSP 8554, WebRTC 8555, API 1984)"]
-      CAP["capture ffmpeg × 1<br/>CUDA hwaccel → /tmp/cache shm"]
-      DET["detect ffmpeg × 1<br/>reads shm → motion → TRT inference"]
+      CAP["capture ffmpeg × 14<br/>CUDA hwaccel → /tmp/cache shm"]
+      DET["detect ffmpeg × 14<br/>reads shm → motion → TRT inference"]
       MQTTP["MQTT publisher"]
       REC["recorder<br/>(to /media/frigate)"]
       API["Web UI / API<br/>:5000"]
@@ -36,7 +45,9 @@ flowchart LR
     end
   end
 
-  CAM <-->|RTSP/TCP| G2R
+  CAM -->|RTSP/TCP<br/>4096x1152 main| DEC
+  CAM <-->|RTSP/TCP<br/>panoramic sub| G2R
+  RTSPS -->|rtsp://127.0.0.1:8556/<name><br/>2048x1152 halves| G2R
   G2R --> CAP
   G2R --> WEB
   CAP <-->|/tmp/cache shm| DET
@@ -49,10 +60,27 @@ flowchart LR
   TRTL -.->|ldconfig| CAP
   TRTC <-.->|bind| DET
   CFG -.->|bind :ro| CTN
+  SPLIT_DIR -.->|build context| SPLIT
   ENV -.->|env vars| CTN
+  DOCKER --> SPLIT
   DOCKER --> CTN
   DRV --> DOCKER
 ```
+
+> The **splitter container** (added 2026-06-03 with the half-cropped
+> cameras) is independent of Frigate. It GPU-decodes the 3 Reolink Duo 3
+> main streams (4096×1152 panoramic), crops each into two 2048×1152
+> (16:9) halves, and re-publishes the 6 halves as RTSP on port 8556.
+> Frigate's go2rtc pulls the 6 new streams just like the panoramic
+> sub-streams. See [§ 4.0](#40-splitter-service) for the full pipeline
+> details and [splitter/README.md](splitter/README.md) for the service
+> contract.
+>
+> The original 3 panoramic cameras (allee_sur_le_cote, jardin_devant,
+> piscine_vue_toit) stay in Frigate with their `*_sub` streams for the
+> live overview + audio role; the 6 new half-cropped cameras get
+> detect + record + audio + live via the splitter's RTSP mounts.
+> Total Frigate cameras: 14.
 
 ---
 
@@ -176,9 +204,10 @@ ln -sfn /usr/lib/ffmpeg/7.0/bin /usr/lib/ffmpeg/bin
 | Port | Purpose | Bound by |
 |---|---|---|
 | **5000** | Frigate web UI + REST API | `frigate` (uvicorn) |
-| **8554** | go2rtc RTSP re-stream | `go2rtc` |
+| **8554** | go2rtc RTSP re-stream | `go2rtc` (inside the Frigate container) |
 | **8555** | go2rtc WebRTC (browser live view) | `go2rtc` |
 | **1984** | go2rtc API + UI | `go2rtc` |
+| **8556** | **splitter RTSP re-stream** (6 half-cropped mounts, 2048×1152) | `splitter` container (added 2026-06-03) |
 
 ---
 
@@ -207,6 +236,49 @@ flowchart TD
 ---
 
 ## 4. Per-stage details
+
+### 4.0 Splitter service (Reolink Duo 3 half-cropper)
+
+| | |
+|---|---|
+| **Who** | The `splitter` container, a dedicated, independent-of-Frigate service that GPU-decodes the 3 Reolink Duo 3 main streams (4096×1152 panoramic) and crops each into two 2048×1152 (16:9) halves |
+| **Where** | A separate docker container on the Calypso host. `network_mode: host`; binds `0.0.0.0:8556` directly. Reachable by Frigate as `rtsp://127.0.0.1:8556/<mount>`. |
+| **When** | Started by `bring-up.sh`'s `start_splitter_container()` step **BEFORE** the Frigate container, so the 6 new streams are ready when go2rtc pulls. The watchdog re-creates the container if it dies. |
+| **What** | 6 GStreamer pipelines (one per half-cropped camera), each running: `rtspsrc → rtph264depay → h264parse → nvv4l2decoder (NVDEC) → nvvidconv left=<0|2048> top=0 width=2048 height=1152 (CUDA crop) → nvv4l2h264enc (NVENC) → h264parse → rtph264pay`. Hosted behind a single `gst-rtsp-server` on port 8556. |
+| **Config** | `splitter/split_service.py` (PIPELINES list of 6 entries), `splitter/Dockerfile`, `splitter/docker-compose.splitter.yml` |
+| **GPU** | 3× NVDEC (one per Reolink main stream, 4K each) + 6× nvvidconv (CUDA crop) + 6× NVENC (H.264 encode). CPU only does the RTSP handshake and the GStreamer bus. |
+| **Why a separate service** | (1) **Independent lifecycle** — the splitter can be restarted / upgraded without touching Frigate. (2) **GPU isolation** — the splitter's NVDEC + NVENC is decoupled from Frigate's TRT inference. (3) **Reusability** — the 6 RTSP streams are consumable by any RTSP client (Frigate, Home Assistant, OBS, browser). (4) **Failure containment** — if the splitter dies, the 3 original panoramic cameras + the 2 single-lens Reolink cameras + the 3 indoor Tapo cameras all keep working. |
+| **Mount points** | `/allee_sur_le_cote_left`, `/allee_sur_le_cote_right`, `/jardin_devant_left`, `/jardin_devant_right`, `/piscine_vue_toit_left`, `/piscine_vue_toit_right` — all on `rtsp://127.0.0.1:8556/<mount>` |
+| **Failure** | If a Reolink upstream dies, the corresponding 2 pipelines go into ERROR. gst-rtsp-server returns 503 on the affected mount points; the other 4 keep serving. Frigate's go2rtc will retry. If the entire container dies, the 6 new cameras in Frigate go into "disabled" state; the watchdog re-creates the container within 5 min (timer interval). |
+
+```mermaid
+flowchart LR
+  subgraph SRC["Reolink Duo 3 (3)"]
+    C1["192.168.50.129:8554<br/>allee  main 4096x1152"]
+    C2["192.168.50.18:8554<br/>jardin_devant  main 4096x1152"]
+    C3["192.168.50.7:8554<br/>piscine_vue_toit  main 4096x1152"]
+  end
+
+  subgraph SPLIT["splitter container (independent)"]
+    direction LR
+    DEC["NVDEC x3<br/>nvv4l2decoder"]
+    CROP["nvvideoconvert crop x6<br/>left 0,0,2048,1152<br/>right 2048,0,2048,1152"]
+    ENC["NVENC x6<br/>nvv4l2h264enc"]
+    RTSP["gst-rtsp-server<br/>0.0.0.0:8556<br/>6 mount points"]
+    DEC --> CROP --> ENC --> RTSP
+  end
+
+  subgraph FRG["Frigate container"]
+    G2R["go2rtc :8554"]
+  end
+
+  C1 --> DEC
+  C2 --> DEC
+  C3 --> DEC
+  RTSP -->|rtsp://127.0.0.1:8556/<name>| G2R
+```
+
+See [splitter/README.md](splitter/README.md) for the full service contract (env vars, troubleshooting, GPU usage breakdown, RTSP mount table).
 
 ### 4.1 Reolink camera (RTSP source)
 
@@ -394,7 +466,9 @@ flowchart TD
 ```mermaid
 sequenceDiagram
   participant H as Host
+  participant BU as bring-up.sh
   participant D as Docker
+  participant SP as Splitter container
   participant S as s6-overlay (PID 1)
   participant K as S6_STAGE2_HOOK
   participant I as frigate-init.sh
@@ -406,7 +480,17 @@ sequenceDiagram
   H->>H: nvidia-smi OK, /dev/nvidia* present
   H->>H: mount $FRIGATE_MEDIA_PATH OK
   H->>H: docker daemon + nvidia runtime OK
-  H->>D: docker compose up -d
+  H->>BU: ./bring-up.sh
+  BU->>BU: preflight (8 host gates) + preflight_splitter
+  BU->>D: docker compose -f splitter/docker-compose.splitter.yml up -d
+  D->>SP: container start
+  SP->>SP: entrypoint.sh — wait for /dev/nvidia*
+  SP->>SP: sanity-check NVIDIA GStreamer plugins
+  SP->>SP: exec python3 -u split_service.py
+  SP->>SP: 6 GStreamer pipelines (NVDEC + nvvidconv + NVENC) start
+  SP->>SP: gst-rtsp-server binds 0.0.0.0:8556 (6 mounts)
+  BU->>BU: wait_splitter — TCP probe 127.0.0.1:8556
+  BU->>D: docker compose -f docker-compose.calypso.yml up -d
   D->>S: container start
   S->>S: s6-overlay stage 1 — read env, prep /run/s6/container_environment
   S->>K: run $S6_STAGE2_HOOK
@@ -422,15 +506,17 @@ sequenceDiagram
   F->>F: init SQLite DB at /config/db
   F->>F: init detector (download plus:// model if absent, build TRT engine if no cache)
   F->>G: spawn go2rtc (s6 service)
-  G->>C: TCP RTSP connect to 192.168.50.129:8554
+  G->>C: TCP RTSP connect to 192.168.50.129:8554 (panoramic sub)
   C-->>G: 200 OK + SPS/PPS
-  G-->>F: stream ready
-  F->>F: spawn capture ffmpeg (CUDA hwaccel)
-  F->>F: spawn detect ffmpeg + detector
+  G->>SP: TCP RTSP connect to 127.0.0.1:8556 (6 new half-cropped streams)
+  SP-->>G: 200 OK + SPS/PPS (lazy factory spawn on first DESCRIBE)
+  G-->>F: all 14 streams ready
+  F->>F: spawn capture ffmpeg × 14 (CUDA hwaccel)
+  F->>F: spawn detect ffmpeg × 14 + detector
   F->>M: MQTT connect (192.168.50.125:1883, client_id=frigate_calypso)
   M-->>F: CONNACK
   F->>F: start web server on :5000
-  Note over F,M: Steady state — single Frigate process, frames flow, events publish
+  Note over F,M: Steady state — 1 Frigate process + 1 Splitter process, 14 cameras (8 original + 6 new half-cropped)
 ```
 
 For the manual bring-up steps with explicit pre-flight, see [STARTUP.md](STARTUP.md). For automation, see [bring-up.sh](bring-up.sh).
@@ -463,18 +549,23 @@ For the init pattern rationale (why a stage-2 hook, not a `command:` override), 
 
 | Path / port | Container | Host | Purpose |
 |---|---|---|---|
-| `/config/config.yml` | read-only mount | `./config.yml` | Frigate config |
-| `/media/frigate` | rw | `$FRIGATE_MEDIA_PATH` | Recordings + snapshots + debug |
-| `/config/model_cache` | rw | `./trt-cache` | TRT engine + plus model + Jina model |
-| `/trt-libs` | ro | `./trt-libs` | TRT 10.9.0 runtime libs |
-| `/etc/s6-overlay/scripts/frigate-init.sh` | ro | `./frigate-init.sh` | one-shot init wired via `S6_STAGE2_HOOK` (ldconfig + ffmpeg symlink) |
-| `/tmp/cache` | tmpfs 2 GB | n/a | capture→detect shm |
-| `/dev/shm` | 5 GB | n/a | Python ZMQ IPC |
+| `/config/config.yml` | read-only mount (Frigate) | `./config.yml` | Frigate config (mounts + cameras: blocks) |
+| `/media/frigate` | rw (Frigate) | `$FRIGATE_MEDIA_PATH` | Recordings + snapshots + debug |
+| `/config/model_cache` | rw (Frigate) | `./trt-cache` | TRT engine + plus model + Jina model |
+| `/trt-libs` | ro (Frigate) | `./trt-libs` | TRT 10.9.0 runtime libs |
+| `/etc/s6-overlay/scripts/frigate-init.sh` | ro (Frigate) | `./frigate-init.sh` | one-shot init wired via `S6_STAGE2_HOOK` (ldconfig + ffmpeg symlink) |
+| `/tmp/cache` | tmpfs 2 GB (Frigate) | n/a | capture→detect shm |
+| `/dev/shm` | 5 GB (Frigate) | n/a | Python ZMQ IPC |
+| `.env` | env vars (Frigate) | `./.env` | `FRIGATE_PLUS_API_KEY`, `FRIGATE_MEDIA_PATH` |
+| `./splitter/split_service.py` | bind-mount (splitter) | `./splitter/split_service.py` | Python GStreamer service (6 pipelines, gst-rtsp-server) |
+| `./splitter/entrypoint.sh` | ro (splitter) | `./splitter/entrypoint.sh` | wait-for-nvidia-devices + sanity-check plugins + exec |
+| `/dev/nvidia{0,ctl,modeset,uvm,uvm-tools}` | passthrough (both) | `/dev/nvidia*` | NVIDIA kernel-module device nodes (NVDEC + NVENC) |
 | `:5000` | host | host | Frigate API + UI |
-| `:8554` | host | host | go2rtc RTSP |
+| `:8554` | host | host | go2rtc RTSP (inside the Frigate container) |
 | `:8555` | host | host | go2rtc WebRTC |
 | `:1984` | host | host | go2rtc API/UI |
-| `.env` | env vars | `./.env` | `FRIGATE_PLUS_API_KEY`, `FRIGATE_MEDIA_PATH` |
+| **`:8556`** | host | host | **splitter RTSP** (6 half-cropped mounts, 2048×1152) |
+| `./splitter/docker-compose.splitter.yml` | n/a | `./splitter/docker-compose.splitter.yml` | builds + runs the splitter service (nvidia runtime, host net) |
 
 ---
 

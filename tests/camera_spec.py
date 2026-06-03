@@ -366,4 +366,170 @@ CAMERAS = {
         "live_stream":   "tapo_c210_cuisine_sub",
         "zones": [],
     },
+
+    # ===================================================================
+    # REOLINK DUO 3 HALF-CROPPED CAMERAS (added 2026-06-03)
+    # ===================================================================
+    # These 6 cameras are produced by the splitter service
+    # (splitter/docker-compose.splitter.yml), which GPU-decodes each
+    # Reolink Duo 3 main stream (4096x1152, panoramic) and crops it at
+    # the sensor's centre seam (col 2048 of 4096) into two 2048x1152
+    # (16:9) halves. Frigate consumes the 6 new RTSP streams at
+    # rtsp://127.0.0.1:8556/<name>.
+    #
+    # The geometry below is the PER-HALF geometry (H-FOV 90 deg, the
+    # left or right half of the original 180 deg panoramic). Mount
+    # height, tilt, distance, and near boundary are identical to the
+    # parent panoramic camera — only H-FOV and stream dimensions
+    # change.
+    #
+    # Why this is much better for the model: a 1.6m person at the
+    # far boundary takes ~1700-3700 px² on the 2048x1152 half (vs
+    # 200-500 px² on the 1536x432 panoramic sub), and the 16:9 aspect
+    # matches the Frigate+ model's training distribution (COCO-like,
+    # 1:1 to 16:9) much better than the 3.55:1 panoramic.
+    # ===================================================================
+    "allee_sur_le_cote_left": {
+        # Reolink Duo 3 LEFT half — allee, 3.4m mount, 50 deg tilt, 20m max
+        # Same mount as the parent panoramic; H-FOV halved to 90 deg
+        "dist_m":       20.0,
+        "height_m":      3.4,
+        "tilt_deg":     50.0,
+        "v_fov_deg":    55.0,
+        "h_fov_deg":    90.0,        # HALF of the 180 deg panoramic
+        "stream_w_px": 2048,         # 2048x1152 (16:9) from the splitter
+        "stream_h_px": 1152,
+        "near_m":        3.0,
+        "expected_min_area":   883,
+        "expected_max_area": 91267,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        # Clean 0.5 / 1.5 safety margins (vs the panoramic's noisy
+        # 0.5 / 2.63 — the half-cropped stream is much less noisy).
+        "min_area_margin":     0.5,
+        "max_area_margin":     1.5,
+        "detect_stream": "allee_sur_le_cote_left",
+        "live_stream":   "allee_sur_le_cote_left",
+        "zones": ["prive"],
+    },
+    "allee_sur_le_cote_right": {
+        # Mirror of allee_sur_le_cote_left — same geometry, same
+        # physics. Both halves share the same mount, just on opposite
+        # sides of the sensor seam. Filter values are identical.
+        "dist_m":       20.0,
+        "height_m":      3.4,
+        "tilt_deg":     50.0,
+        "v_fov_deg":    55.0,
+        "h_fov_deg":    90.0,
+        "stream_w_px": 2048,
+        "stream_h_px": 1152,
+        "near_m":        3.0,
+        "expected_min_area":   883,
+        "expected_max_area": 91267,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        "min_area_margin":     0.5,
+        "max_area_margin":     1.5,
+        "detect_stream": "allee_sur_le_cote_right",
+        "live_stream":   "allee_sur_le_cote_right",
+        "zones": ["prive"],
+    },
+    "jardin_devant_left": {
+        # Reolink Duo 3 LEFT half — jardin_devant, 6m mount, 50 deg tilt, 15m max
+        "dist_m":       15.0,
+        "height_m":      6.0,
+        "tilt_deg":     50.0,
+        "v_fov_deg":    55.0,
+        "h_fov_deg":    90.0,
+        "stream_w_px": 2048,
+        "stream_h_px": 1152,
+        "near_m":        3.0,
+        "expected_min_area":  1863,
+        "expected_max_area": 41725,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        "min_area_margin":     0.5,
+        "max_area_margin":     1.5,
+        "detect_stream": "jardin_devant_left",
+        "live_stream":   "jardin_devant_left",
+        "zones": ["prive"],
+    },
+    "jardin_devant_right": {
+        # Mirror of jardin_devant_left. Same mount geometry, same
+        # physics, same filter values.
+        "dist_m":       15.0,
+        "height_m":      6.0,
+        "tilt_deg":     50.0,
+        "v_fov_deg":    55.0,
+        "h_fov_deg":    90.0,
+        "stream_w_px": 2048,
+        "stream_h_px": 1152,
+        "near_m":        3.0,
+        "expected_min_area":  1863,
+        "expected_max_area": 41725,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        "min_area_margin":     0.5,
+        "max_area_margin":     1.5,
+        "detect_stream": "jardin_devant_right",
+        "live_stream":   "jardin_devant_right",
+        "zones": ["prive"],
+    },
+    "piscine_vue_toit_left": {
+        # Reolink Duo 3 LEFT half — piscine_toit, 6m mount, 25 deg tilt, 20m max
+        # (25 deg tilt is much shallower than the allee/jardin_devant
+        #  50 deg — the pool rooftop mount is significantly higher and
+        #  the target zone is closer, so a shallow tilt captures more
+        #  of the FOV without losing the ground plane.)
+        "dist_m":       20.0,
+        "height_m":      6.0,
+        "tilt_deg":     25.0,
+        "v_fov_deg":    55.0,
+        "h_fov_deg":    90.0,
+        "stream_w_px": 2048,
+        "stream_h_px": 1152,
+        "near_m":        5.0,
+        "expected_min_area":  1406,
+        "expected_max_area": 30780,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        "min_area_margin":     0.5,
+        "max_area_margin":     1.5,
+        "detect_stream": "piscine_vue_toit_left",
+        "live_stream":   "piscine_vue_toit_left",
+        "zones": ["prive"],
+    },
+    "piscine_vue_toit_right": {
+        # Mirror of piscine_vue_toit_left. Same mount geometry, same
+        # physics, same filter values.
+        "dist_m":       20.0,
+        "height_m":      6.0,
+        "tilt_deg":     25.0,
+        "v_fov_deg":    55.0,
+        "h_fov_deg":    90.0,
+        "stream_w_px": 2048,
+        "stream_h_px": 1152,
+        "near_m":        5.0,
+        "expected_min_area":  1406,
+        "expected_max_area": 30780,
+        "expected_min_ratio":  1.0,
+        "expected_max_ratio":  4.0,
+        "expected_threshold":  0.55,
+        "expected_min_score":  0.45,
+        "min_area_margin":     0.5,
+        "max_area_margin":     1.5,
+        "detect_stream": "piscine_vue_toit_right",
+        "live_stream":   "piscine_vue_toit_right",
+        "zones": ["prive"],
+    },
 }

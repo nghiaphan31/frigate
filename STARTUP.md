@@ -26,9 +26,10 @@ The startup sequence is **fail-fast, fail-loud**: every command has a clear pass
 
 - NVIDIA driver loaded, 5 device nodes present
 - NAS at `$FRIGATE_MEDIA_PATH` is mounted and writable
-- Reolink camera at `192.168.50.129:8554` is reachable
+- 3 Reolink Duo 3 cameras at `192.168.50.7:8554`, `192.168.50.18:8554`, `192.168.50.129:8554` are reachable
 - Docker daemon is up with `nvidia` runtime registered
-- Frigate container is running
+- Splitter service is running (6 half-cropped RTSP mounts on `0.0.0.0:8556`)
+- Frigate container is running (14 cameras total: 8 original + 6 new half-cropped)
 - `/api/version` returns 200 within 60 s
 - `allee_sur_le_cote.detection_fps > 0` within 240 s (covers first-run TRT build)
 - MQTT broker at `192.168.50.125:1883` is connected
@@ -150,13 +151,114 @@ df -h "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}" | tail -1
                                   # NAS, expect ≥ 20 GB free for 1-day motion retention
 ```
 
+### 2.9 Splitter service health (NEW, 2026-06-03)
+
+The 6 new half-cropped cameras (`allee_sur_le_cote_left/_right`,
+`jardin_devant_left/_right`, `piscine_vue_toit_left/_right`) consume RTSP
+streams from the splitter service on port 8556. The splitter must be up
+BEFORE the Frigate container starts (the `go2rtc.streams` entries in
+`config.yml` pull from the splitter's RTSP server).
+
+```bash
+# 1. The splitter compose file must exist
+[ -f splitter/docker-compose.splitter.yml ] \
+    && echo "OK" || echo "MISSING — cd splitter && docker build -t frigate-splitter:local ."
+
+# 2. If the splitter container is already running, port 8556 must accept connections
+docker ps --format '{{.Names}}' | grep -q '^splitter$' && \
+    timeout 2 bash -c ">/dev/tcp/127.0.0.1/8556" \
+    && echo "splitter port 8556 OK" || echo "splitter port 8556 NOT REACHABLE"
+```
+
+If the splitter image hasn't been built yet, run:
+
+```bash
+cd splitter
+docker build -t frigate-splitter:local .
+cd ..
+docker compose -f splitter/docker-compose.splitter.yml up -d splitter
+```
+
+The build pulls `nvidia/cuda:12.4.1-runtime-ubuntu22.04` (~1.5 GB compressed)
+plus the GStreamer + NVIDIA plugin packages from the `ruffy8919` PPA
+(~50 MB). First build: ~90 s. Subsequent builds: ~5 s (cached layers).
+
+The 3 Reolink Duo 3 main streams (4096×1152, 4K) are the splitter's
+upstream source. Each camera must be reachable on TCP 8554 from the host:
+
+```bash
+for ip in 192.168.50.7 192.168.50.18 192.168.50.129; do
+    timeout 3 bash -c ">/dev/tcp/$ip/8554" \
+        && echo "$ip:8554 OK" || echo "$ip:8554 UNREACHABLE"
+done
+```
+
+If any of these are unreachable, the splitter's 2 affected pipelines
+(`*_left`, `*_right`) will return 503 on the corresponding RTSP mounts,
+and the 2 affected cameras in Frigate will go into "disabled" state.
+The other 4 streams keep serving.
+
 ---
 
 ## 3. Manual startup sequence
 
-After all pre-flight checks pass, execute the 8 steps below in order. **Stop on the first failure.**
+After all pre-flight checks pass, execute the 9 steps below in order. **Stop on the first failure.**
 
-### Step 1 — Create / restart the container
+The **splitter service** (added 2026-06-03 for the 6 new half-cropped cameras) must be
+started **before** the Frigate container so the 6 new streams are ready when go2rtc
+pulls. Steps 1 and 2 below cover the splitter; step 3 starts Frigate.
+
+### Step 1 — Build and start the splitter service
+
+```bash
+cd /home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
+
+# One-time: build the splitter image (≈ 90 s, pulls nvidia/cuda + GStreamer
+# + the 3 NVIDIA GStreamer plugin packages from the ruffy8919 PPA).
+cd splitter
+docker build -t frigate-splitter:local .
+cd ..
+
+# Start the splitter container (idempotent).
+docker compose -f splitter/docker-compose.splitter.yml up -d splitter
+```
+
+**Exit criteria**: `docker ps` shows `splitter` in `running` state within 30 s.
+
+If the build fails, the most common cause is the `ruffy8919` PPA being unreachable;
+the Dockerfile will print the apt error before exiting. If the container exits
+immediately, see [splitter/README.md — Failure modes & troubleshooting](splitter/README.md#failure-modes--troubleshooting).
+
+### Step 2 — Wait for the splitter RTSP port
+
+```bash
+for i in $(seq 1 60); do
+    timeout 2 bash -c ">/dev/tcp/127.0.0.1/8556" && break
+    sleep 1
+done
+echo "splitter port 8556 ready in ${i}s"
+```
+
+**Exit criteria**: TCP connect to `127.0.0.1:8556` succeeds within 60 s.
+
+The container may be up before the gst-rtsp-server has bound the port (it
+takes a few seconds for the GLib main loop to start and the rtspsrc plugins
+to negotiate the upstream connection). If the port never comes up, see
+[§ 5.X](#5x-splitter-rtsp-port-8556-unreachable-new).
+
+Quick smoke test of all 6 mounts once the port is up:
+
+```bash
+for m in allee_sur_le_cote_left allee_sur_le_cote_right \
+         jardin_devant_left jardin_devant_right \
+         piscine_vue_toit_left piscine_vue_toit_right; do
+    timeout 3 ffprobe -v error -of json -show_streams \
+        "rtsp://127.0.0.1:8556/$m" >/dev/null 2>&1 \
+        && echo "OK   $m" || echo "FAIL $m"
+done
+```
+
+### Step 3 — Create / restart the Frigate container
 
 ```bash
 cd /home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
@@ -170,14 +272,14 @@ docker compose -f docker-compose.calypso.yml up -d frigate
 
 The compose file does **not** override the image's default `command:`. The image's
 `ENTRYPOINT` is `/init` (s6-overlay v3) and its `CMD` is `null`, so by design only
-the s6-supervised `frigate` service runs. Init that used to be tacked on at the
-end of an old `command:` block now lives in [`frigate-init.sh`](frigate-init.sh)
+the s6-supervised `frigate` service runs. Init that used to be tacked on at
+the end of an old `command:` block now lives in [`frigate-init.sh`](frigate-init.sh)
 and runs once as the `$S6_STAGE2_HOOK` before s6-rc brings the services up.
 If the container exits immediately, see [§ 5.1](#51-container-exits-immediately-after-up).
 
 If the container exits immediately, see [§ 5.1](#51-container-exits-immediately-after-up).
 
-### Step 2 — Wait for the Frigate API
+### Step 4 — Wait for the Frigate API
 
 ```bash
 for i in $(seq 1 60); do
@@ -191,7 +293,7 @@ curl -fsS http://localhost:5000/api/version | python3 -m json.tool
 
 While waiting, you can `docker logs -f frigate` to see the init progress (go2rtc connecting, model download, TRT engine build).
 
-### Step 3 — Wait for detection to start
+### Step 5 — Wait for detection to start
 
 ```bash
 for i in $(seq 1 240); do
@@ -207,19 +309,40 @@ echo "detection_fps=$fps (after ${i}s)"
 
 The first run can take ~65 s longer than subsequent runs (TRT engine build). Watch `docker logs frigate | grep -E '(TensorRT|engine|TRT)'`.
 
-### Step 4 — (only if detection is stuck) stop / start cycle
-
-If `detection_fps` is still 0 after step 3, run a stop / start cycle. This clears any stale ZMQ IPC state that `up -d` may have left behind on a re-create:
+If you have 11 cameras (the 6 new half-cropped cameras need separate
+detection warm-up; on a fresh `trt-cache` Frigate will build the engine
+once and the engine is shared across all cameras), consider also
+checking a half-cropped camera:
 
 ```bash
+for i in $(seq 1 240); do
+  fps=$(curl -fsS http://localhost:5000/api/cameras 2>/dev/null \
+      | python3 -c "import json,sys; d=json.load(sys.stdin); print(int(d.get('allee_sur_le_cote_left',{}).get('detection_fps',0)))")
+  [ "${fps:-0}" -ge 1 ] && break
+  sleep 1
+done
+echo "allee_sur_le_cote_left detection_fps=$fps (after ${i}s)"
+```
+
+### Step 6 — (only if detection is stuck) stop / start cycle
+
+If `detection_fps` is still 0 after step 5, run a stop / start cycle on
+both containers. This clears any stale ZMQ IPC state that `up -d` may
+have left behind on a re-create:
+
+```bash
+# Restart the splitter first (cheaper, no TRT build)
+docker compose -f splitter/docker-compose.splitter.yml restart splitter
+sleep 5
+# Then the Frigate container
 docker compose -f docker-compose.calypso.yml stop  frigate
 docker compose -f docker-compose.calypso.yml start frigate
-# then re-run step 3
+# then re-run step 5
 ```
 
 **Exit criteria**: `detection_fps >= 1` within 60 s of `start`.
 
-### Step 5 — Verify MQTT connection
+### Step 7 — Verify MQTT connection
 
 ```bash
 curl -fsS http://localhost:5000/api/stats \
@@ -230,7 +353,7 @@ curl -fsS http://localhost:5000/api/stats \
 
 If MQTT is disconnected, the most common cause is the Mosquitto broker not being up on the Home Assistant host. See [§ 5.5](#55-mqtt-disconnected).
 
-### Step 6 — Verify camera is producing events on demand
+### Step 8 — Verify camera is producing events on demand
 
 Trigger a person in the `prive` zone (e.g. walk to the gate):
 
@@ -241,15 +364,26 @@ mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
 
 You should see at least one `start` and one `end` message in 30 s. If not, see [§ 5.4](#54-no-events-published).
 
-### Step 7 — Verify recording is being written
+To verify the 6 new half-cropped cameras separately:
+
+```bash
+mosquitto_sub -h 192.168.50.125 -p 1883 -u mosquitto -P mosquitto \
+              -t 'calypso_frigate/events' -v -W 30 \
+              | grep -E 'allee_sur_le_cote_left|allee_sur_le_cote_right'
+```
+
+### Step 9 — Verify recording is being written
 
 ```bash
 ls -lt "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"/recordings/allee_sur_le_cote/ 2>/dev/null | head -3
+ls -lt "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"/recordings/allee_sur_le_cote_left/ 2>/dev/null | head -3
 ```
 
-**Exit criteria**: a directory and recent file exist. The exact retention depends on the `record.motion.days: 1` setting in [config.yml](config.yml).
+**Exit criteria**: a directory and recent file exist for BOTH the original
+camera and the half-cropped one. The exact retention depends on the
+`record.motion.days: 1` setting in [config.yml](config.yml).
 
-### Step 8 — Final status report
+### Step 10 — Final status report
 
 Either run [`bring-up.sh`](bring-up.sh) (it is idempotent — skips container creation if already up, runs the 14-step status report) or use the abbreviated check:
 
@@ -578,6 +712,55 @@ mountpoint -q "$FRIGATE_MEDIA_PATH" && echo OK || {
 
 Detection continues during the NAS outage (Frigate buffers in memory briefly, then drops new segments with a `failed to write segment` log line).
 
+### 5.9 Splitter service down (NEW, 2026-06-03)
+
+**Symptoms**:
+- 6 new half-cropped cameras (`allee_sur_le_cote_left/_right`,
+  `jardin_devant_left/_right`, `piscine_vue_toit_left/_right`) appear in
+  the Frigate UI as `disabled` or `not connected`.
+- The 3 original panoramic cameras + the 2 single-lens Reolink cameras
+  + the 3 indoor Tapo cameras all keep working (they don't depend on
+  the splitter).
+- TCP probe of `127.0.0.1:8556` fails.
+
+**Diagnose**:
+```bash
+docker ps --format '{{.Names}}' | grep '^splitter$' || echo "splitter not running"
+timeout 2 bash -c ">/dev/tcp/127.0.0.1/8556" || echo "splitter port 8556 not listening"
+docker logs --tail=50 splitter | grep -iE 'error|warning|failed|gst'
+```
+
+**Recovery** (in order of cost):
+1. **Restart the splitter** (clears transient GStreamer errors):
+   ```bash
+   docker compose -f splitter/docker-compose.splitter.yml restart splitter
+   sleep 10
+   timeout 2 bash -c ">/dev/tcp/127.0.0.1/8556" && echo "splitter back" || echo "still down"
+   ```
+2. **Recreate from scratch** (the watchdog will do this on its next 5-min
+   tick if you don't want to act now):
+   ```bash
+   docker compose -f splitter/docker-compose.splitter.yml down
+   docker compose -f splitter/docker-compose.splitter.yml up -d
+   ```
+3. **Rebuild the image** (if the container exits immediately on every
+   restart; the issue is probably a missing NVIDIA plugin package):
+   ```bash
+   docker compose -f splitter/docker-compose.splitter.yml down
+   cd splitter
+   docker build --no-cache -t frigate-splitter:local . 2>&1 | tee /tmp/splitter-build.log
+   cd ..
+   docker compose -f splitter/docker-compose.splitter.yml up -d
+   ```
+   The build log will show the failing apt / pip step. The most common
+   culprit is the `ruffy8919` PPA being unreachable.
+
+**If you want to bring Frigate up WITHOUT the splitter** (the 6 new
+cameras will stay in 'disabled' state, the rest of the stack works):
+```bash
+SPLITTER_REQUIRED=0 ./bring-up.sh
+```
+
 ### 5.8 Failure mode catalog (per check)
 
 This table is the machine-greppable counterpart to the inline `fix:` hints
@@ -600,9 +783,11 @@ are listed first; the 14 status-report checks follow.
 | **Pre-flight 6/8** nvidia runtime | Runtime not registered with Docker | `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker` | — |
 | **Pre-flight 7/8** `$COMPOSE_FILE` present | Wrong cwd; file deleted | `ls -la docker-compose.calypso.yml` | — |
 | **Pre-flight 8/8** `trt-libs/libnvinfer.so.10` | TRT 10.9.0 not installed; wrong pip target | `pip install --target=./trt-libs --no-deps tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34` | — |
+| **Pre-flight 9/9** `splitter compose + port 8556` (NEW) | Splitter image not built; container not started; upstream camera unreachable; NVIDIA GStreamer plugin missing | `docker compose -f splitter/docker-compose.splitter.yml ps`; `timeout 2 bash -c '>/dev/tcp/127.0.0.1/8556'` | (next watchdog tick rebuilds) |
 | **1/14** `NVIDIA GPU` | nvidia-smi returns no data (driver loaded but no GPU) | `sudo modprobe nvidia nvidia-uvm nvidia-modeset nvidia-uvm-tools` | — |
 | **2/14** `Camera RTSP reachability` | Camera offline; switch down; VLAN misconfig | `timeout 3 bash -c '>/dev/tcp/192.168.50.129/8554'` (LAN / camera / firewall) | — |
 | **3/14** `go2rtc internal` | go2rtc process dead; port 8554 not bound | `docker logs --tail=100 frigate \| grep -E 'go2rtc\|listen'` | `--recover=restart-container` |
+| **3b/14** `splitter RTSP port 8556` (NEW) | Splitter container down; NVIDIA plugin missing; ruffy8919 PPA unreachable | `docker logs --tail=50 splitter` | (next watchdog tick rebuilds) |
 | **4/14** `Capture ffmpeg` | camera entry not in `/api/stats.cameras`; ffmpeg process died | `docker logs --tail=100 frigate \| grep -E 'capture\|ffmpeg\|allee_sur_le_cote'` | `--recover=restart-container` |
 | **5/14** `Detect process` | `detection_fps=0` despite camera_fps>0. Either (a) TRT engine build failed, (b) ZMQ deadlock, (c) scene is quiet (throw a sheet at the camera to test) | `docker logs --tail=100 frigate \| grep -E 'TRT\|engine\|motion'` | `--recover=flush-zmq` (ZMQ) or `--recover=rebuild-trt` (engine) |
 | **6/14** `Motion pre-filter` | Config check only; should not FAIL | inspect `motion.threshold` and `motion.contour_area` in config.yml | — |
