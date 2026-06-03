@@ -187,6 +187,33 @@ for cam_name, spec in CAMERAS.items():
             f"set cameras.{cam_name}.detect.width/height to {spec['stream_w_px']}x{spec['stream_h_px']} "
             f"OR fix tests/camera_spec.py if the spec is wrong")
 
+    # --- 4b) detect.fps matches expected_fps (the physics-derived FPS) ---
+    expected_fps = spec.get("expected_fps")
+    if expected_fps is not None:
+        actual_fps = det.get("fps")
+        if actual_fps == expected_fps:
+            add("OK", f"camera '{cam_name}' detect.fps={actual_fps} matches spec")
+        else:
+            add("FAIL",
+                f"camera '{cam_name}' detect.fps={actual_fps} but spec says {expected_fps}",
+                f"set cameras.{cam_name}.detect.fps: {expected_fps} "
+                f"OR update expected_fps in tests/camera_spec.py if the new value is correct "
+                f"(use 'make iter0-revert CAM={cam_name}' to apply the spec)")
+
+    # --- 4c) detect.enabled matches detect_enabled (Frigate defaults to true) ---
+    expected_en = spec.get("detect_enabled")
+    if expected_en is not None:
+        actual_en = det.get("enabled")
+        if actual_en is None:
+            actual_en = True  # Frigate's per-camera default is enabled
+        if bool(actual_en) == bool(expected_en):
+            add("OK", f"camera '{cam_name}' detect.enabled={actual_en} matches spec")
+        else:
+            add("FAIL",
+                f"camera '{cam_name}' detect.enabled={actual_en} but spec says {expected_en}",
+                f"set cameras.{cam_name}.detect.enabled: {str(expected_en).lower()} in config.yml "
+                f"(note: iter0.py revert does NOT toggle detect.enabled — that's a manual decision)")
+
     # --- 5) go2rtc streams: detect_stream + live_stream must be defined ---
     streams = (cfg.get("go2rtc") or {}).get("streams") or {}
     for s in (spec.get("detect_stream"), spec.get("live_stream")):
@@ -206,6 +233,30 @@ for cam_name, spec in CAMERAS.items():
             add("FAIL",
                 f"camera '{cam_name}' spec requires zone '{z}' but it is missing in config.yml",
                 f"add cameras.{cam_name}.zones.{z}: block to config.yml")
+
+    # --- 6b) Per-zone filter overrides match expected_zones ---
+    for zname, zfilt in (spec.get("expected_zones") or {}).items():
+        zcfg = zones_cfg.get(zname) or {}
+        zpf = ((zcfg.get("filters") or {}).get("person") or {})
+        for k, ev in zfilt.items():
+            av = zpf.get(k)
+            if av is None:
+                add("FAIL",
+                    f"camera '{cam_name}' zone '{zname}' filters.person.{k} missing in config.yml",
+                    f"add {k}: {ev} under cameras.{cam_name}.zones.{zname}.filters.person")
+                continue
+            # Float fields: relative tolerance; int fields: small absolute
+            if isinstance(ev, float) or isinstance(av, float):
+                ok_match = abs(av - ev) <= SPEC_TOLERANCE
+            else:
+                ok_match = abs(av - ev) <= max(0.01, SPEC_TOLERANCE * ev)
+            if ok_match:
+                add("OK", f"camera '{cam_name}' zone '{zname}' filters.person.{k}={av} matches spec ({ev})")
+            else:
+                add("FAIL",
+                    f"camera '{cam_name}' zone '{zname}' filters.person.{k}={av} does not match spec ({ev})",
+                    f"set cameras.{cam_name}.zones.{zname}.filters.person.{k}: {ev} in config.yml "
+                    f"(or update expected_zones in tests/camera_spec.py if the new value is correct)")
 
 # --- 7) Cameras in config.yml that are NOT in the spec (warning, not fail) ---
 cams_cfg = (cfg.get("cameras") or {})

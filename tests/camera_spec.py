@@ -156,6 +156,12 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":          5,
+        "detect_enabled":    True,
+        "expected_zones": {
+            "prive":  {"threshold": 0.55, "min_area": 124, "min_ratio": 1.0, "max_ratio": 4.0},
+            "rodage": {"threshold": 0.55, "min_area": 124, "min_ratio": 1.0, "max_ratio": 4.0},
+        },
         "min_area_margin":     0.50,
         # 22500 / area_near (8556) = 2.63; reflects the operator's
         # iter0 physics derivation for the allee near boundary.
@@ -182,6 +188,11 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":          5,
+        "detect_enabled":    True,
+        "expected_zones": {
+            "prive":  {"threshold": 0.55, "min_area": 300, "min_ratio": 1.0, "max_ratio": 4.0},
+        },
         # min_area_margin < 0.5 means the operator is using min_area as
         # a NOISE FLOOR (false-positive control), not a physics floor.
         # Derived area_far at 20 m on 4K ≈ 14 000 px², but min_area=300
@@ -212,6 +223,11 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":          7,
+        "detect_enabled":    True,
+        "expected_zones": {
+            "prive":  {"threshold": 0.55, "min_area": 300, "min_ratio": 1.0, "max_ratio": 4.0},
+        },
         "min_area_margin":     0.126,
         "max_area_margin":     1.79,
         "detect_stream": "vue_entree_main",
@@ -234,6 +250,12 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":          5,
+        "detect_enabled":    True,
+        "expected_zones": {
+            "prive":  {"threshold": 0.55, "min_area":  72, "min_ratio": 1.0, "max_ratio": 4.0},
+            "rodage": {"threshold": 0.55, "min_area":  72, "min_ratio": 1.0, "max_ratio": 4.0},
+        },
         "min_area_margin":     0.138,
         "max_area_margin":     3.46,
         "detect_stream": "jardin_devant_sub",
@@ -256,6 +278,11 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":          5,
+        "detect_enabled":    True,
+        "expected_zones": {
+            "prive":  {"threshold": 0.55, "min_area": 158, "min_ratio": 1.0, "max_ratio": 4.0},
+        },
         "min_area_margin":     0.399,
         "max_area_margin":     9.36,
         "detect_stream": "piscine_vue_toit_sub",
@@ -301,6 +328,9 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":         10,
+        "detect_enabled":   False,  # motion-tracking ON; physics values are placeholders
+        "expected_zones": {},
         # Margins are non-standard (very low) because the person is large
         # in pixels at the far boundary (area_far ≈ 24 875 px² for a 1.6m
         # person at 6m on 2304×1296 with 110° H-FOV / 58° V-FOV). min_area=300
@@ -330,6 +360,9 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":         10,
+        "detect_enabled":   False,  # motion-tracking ON; physics values are placeholders
+        "expected_zones": {},
         # Low mount (1m) + small room (3.5m) → very large person footprint
         # even at the far boundary (area_far ≈ 92 765 px²). min_area=300 is
         # the iter0 noise-floor default (margin 0.00323 ≈ 300 / 92 765).
@@ -356,6 +389,9 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
+        "expected_fps":         10,
+        "detect_enabled":   False,  # motion-tracking ON; physics values are placeholders
+        "expected_zones": {},
         # 7m diagonal across a 7×7m room, 2.5m ceiling. area_far ≈ 18 170 px²
         # (smaller than salon because the room is larger), so min_area_margin
         # is 0.01651 (still low). max_area_margin is identical to salon
