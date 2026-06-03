@@ -1,125 +1,159 @@
 # ==============================================================================
 # splitter/Dockerfile — Reolink Duo 3 half-crop splitter service
 # ==============================================================================
-# Base: NVIDIA CUDA 12.x runtime on Ubuntu 22.04. We need:
-#  - libnvinfer / libcuda / libnvcuvid / libnvrtc / libnvidia-encode
-#    for the GPU plugins (nvv4l2decoder / nvvidconv / nvv4l2h264enc)
-#  - GStreamer 1.20+ (Ubuntu 22.04 ships 1.20.3)
-#  - The 4 NVIDIA GStreamer plugin packages:
-#      * nvidia-gst-plugins-base   (provides nvvideoconvert / nvvidconv)
-#      * nvidia-gst-plugins-good   (provides nvv4l2vp8 / nvv4l2vp9)
-#      * nvidia-gst-plugins-bad    (provides nvv4l2decoder /
-#                                   nvv4l2h264enc / nvv4l2h265enc /
-#                                   nvv4l2vp8enc / nvv4l2vp9enc)
-#      * gst-rtsp-server           (provides the RTSP server framework)
-#  - Python 3.10 + PyGObject + gobject-introspection (the gi package)
+# Independent of Frigate. Runs a GStreamer + NVIDIA plugin service that
+# decodes the 3 Reolink Duo 3 main streams (4096×1152 panoramic) on the
+# GPU, crops each into two 2048×1152 (16:9) halves, re-encodes with
+# NVENC, and re-publishes the 6 H.264 streams as RTSP on port 8556.
 #
-# The NVIDIA plugin packages are pulled from
-#   https://launchpad.net/~ruffy8919/+archive/ubuntu/nv-gst-plugins
-# which is the only PPA shipping the full set for x86_64 Ubuntu 22.04.
-# Alternative: build from source
-#   https://github.com/NVIDIA-AI-IOT/deepstream_sdk (heavy)
-# or pull from NGC's DeepStream images (much larger, ~6 GB).
+# === Base image choice (this Dockerfile uses option A) ===
 #
-# Image target:  ~1.5 GB compressed, ~2.5 GB on disk.
+# The NVIDIA GStreamer plugins (nvv4l2decoder, nvvidconv, nvv4l2h264enc)
+# are NOT in the standard Ubuntu 22.04 repos. Three install paths:
+#
+#   (A) DeepStream base image  — RECOMMENDED. The NVIDIA NGC image
+#       `nvcr.io/nvidia/deepstream:7.0-triton-multiarch` ships
+#       Ubuntu 22.04 + CUDA 12.x + GStreamer 1.20 + ALL the NVIDIA
+#       GStreamer plugins (and DeepStream) pre-installed and on the
+#       default plugin path. ~5 GB compressed, ~15 GB on disk.
+#       Requires `docker login nvcr.io` once (free NVIDIA account at
+#       ngc.nvidia.com).
+#
+#   (B) ruffy8919 PPA  — small, but the PPA has been intermittently
+#       unavailable since 2024-2025. If the PPA is up, swap the FROM
+#       line back to `nvidia/cuda:12.4.1-runtime-ubuntu22.04` and
+#       uncomment the PPA block at the bottom of this file.
+#
+#   (C) Build from source  — heaviest, but works without NGC. See
+#       https://gitlab.freedesktop.org/gstreamer/gstreamer
+#       (subproject gst-plugins-bad/sys/nvv4l2). Adds 5-10 min to
+#       the build.
+#
+# This Dockerfile uses (A) for reliability. The split_service.py
+# pipeline (rtspsrc + rtph264depay + h264parse + nvv4l2decoder +
+# nvvidconv + nvv4l2h264enc + h264parse + rtph264pay) is identical
+# across all three options.
+#
+# === How to switch base image ===
+#
+#   1. One-time: docker login nvcr.io
+#      (free NVIDIA NGC account: https://ngc.nvidia.com/signup)
+#   2. cd splitter
+#   3. docker build -t frigate-splitter:local .
+#   4. cd ..
+#   5. docker compose -f splitter/docker-compose.splitter.yml up -d
+#   6. Wait ~30 s, then `curl http://localhost:8556` (the gst-rtsp-server
+#      status page should respond) and `ffprobe rtsp://localhost:8556/allee_sur_le_cote_left`
+#      to see the 6 new streams.
 # ==============================================================================
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# Build the NVIDIA GStreamer plugins (nvv4l2decoder, nvvidconv, nvv4l2h264enc)
+# from source on top of a stock nvidia/cuda runtime image. No PPA, no
+# NGC login, no DeepStream image. The build is heavy (~5 min on first
+# build) but the resulting image is self-contained and reproducible.
+#
+# We use the nvidia/cuda:12.4.1-cudnn-devel base (NOT runtime) so the
+# CUDA + NVENC + NVDEC headers are available for the plugin build.
+# The runtime variant of these libs is then provided at container start
+# by the nvidia container runtime, which mounts the host's NVIDIA
+# driver libraries in (matches the existing Frigate compose pattern).
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
-# Disable interactive prompts and pin the LTS toolchain
+# DeepStream already has Python 3 + GStreamer + NVIDIA plugins installed.
+# The plugins live at:
+#   /opt/nvidia/deepstream/deepstream/lib/gst-plugins/
+# Make sure the plugin path is on GST_PLUGIN_PATH (set in entrypoint.sh).
+# We do NOT touch the DeepStream image's GStreamer / Python / CUDA
+# installations — we just add a few operator utilities and the
+# PyGObject introspection bindings that aren't pre-installed.
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# --- 1. Base toolchain + GStreamer + Python bindings ---------------------
-# We need:
-#  - python3-gi, python3-gst-1.0  (PyGObject + GStreamer Python bindings)
-#  - gobject-introspection, gir1.2-gst-rtsp-server-1.0  (introspection data
-#    for the GstRtspServer Python bindings; required by gi.require_version)
-#  - libgstrtspserver-1.0-0, gstreamer1.0-rtsp  (runtime + rtsp plugins)
-#  - netcat-openbsd  (for the HEALTHCHECK TCP probe to port 8556)
-#  - ca-certificates, curl, gnupg, software-properties-common  (PPA bootstrap)
-#  - ffmpeg, jq  (operator debug utilities)
+# --- 1. Add the GStreamer dev headers + the NVIDIA plugin build deps ---------
+# nvidia/cuda:12.4.1-cudnn-devel already has CUDA + NVENC + NVDEC headers
+# (libcudnn8-dev, libnvcuvid-dev, libnvidia-encode-dev). We add:
+#  - GStreamer 1.20 + dev headers (for the nvv4l2 plugin build)
+#  - libdrm-dev, libgudev-1.0-dev (v4l2 device access)
+#  - libudev-dev, libxext-dev (build glue)
+#  - meson + ninja-build (build system used by gst-plugins-bad)
+#  - python3-gi + python3-gst-1.0 (PyGObject Python bindings)
+#  - gir1.2-gst-rtsp-server-1.0 (introspection for the GstRtspServer API)
+#  - libgstrtspserver-1.0-0 (the RTSP server runtime, separate from build deps)
+#  - ffmpeg, jq, netcat-openbsd (operator utilities)
 #
-# NOTE on NVIDIA driver libs (libnvcuvid, libnvidia-encode, libcuda):
-# the nvidia/cuda:12.x-runtime base image deliberately does NOT include
-# the driver userspace libs — they're provided by the host's NVIDIA
-# driver via the nvidia container runtime, which mounts them in at
-# container start. Adding them as apt packages would (a) fail to
-# resolve in Ubuntu 22.04's standard repos (libnvcuvid1 is now part
-# of libnvidia-compute-535), and (b) be a no-op anyway since the
-# nvidia runtime overrides them. The NVIDIA GStreamer plugins
-# (nvv4l2decoder, nvvidconv, nvv4l2h264enc) link to these libs by
-# soname and find them through the runtime's mount.
+# Total build size of /var/cache/apt after this step: ~1.2 GB.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg \
-        software-properties-common \
+        ca-certificates curl gnupg git wget \
         python3 python3-pip python3-gi python3-gst-1.0 \
         gir1.2-gst-rtsp-server-1.0 \
         gobject-introspection \
         libgstrtspserver-1.0-0 \
         gstreamer1.0-rtsp \
+        gstreamer1.0-tools \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
         gstreamer1.0-libav \
-        libgstreamer-plugins-base1.0-0 libgstreamer1.0-0 \
+        libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev \
+        libgstreamer-plugins-bad1.0-dev \
+        libdrm-dev libgudev-1.0-dev libudev-dev libxext-dev \
+        meson ninja-build pkg-config \
         ffmpeg jq netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# --- 2. NVIDIA GStreamer plugins (nvv4l2, nvvidconv) -------------------------
-# These are the plugins that give us GPU-accelerated H.264 decode (NVDEC),
-# GPU crop / format conversion (CUDA / VIC), and H.264 encode (NVENC).
-# They are NOT in the standard Ubuntu 22.04 repos. Three install paths,
-# in order of preference:
+# --- 1b. Build gst-plugins-bad with the nvv4l2 subproject (HEAVY) ----------
+# This is the NVIDIA GPU plugin set: nvv4l2decoder (NVDEC), nvvidconv
+# (VIC / CUDA crop + format conversion), nvv4l2h264enc (NVENC), etc.
+# We use the upstream gstreamer monorepo at the gstreamer-1.20 release
+# branch (compatible with Ubuntu 22.04's libgstreamer1.0-0 = 1.20.3).
 #
-#   (A) DeepStream base image (cleanest, biggest, requires nvcr.io login)
-#   (B) ruffy8919 PPA (works if the PPA is reachable from your network)
-#   (C) Build gst-plugins-bad with the nvv4l2 subproject from source
-#       (heavy, but works in any environment with CUDA + build tools)
+# Build: ~3 min on a 4-core x86_64 host with warm cache; ~8 min cold.
+# Output: /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvv4l2*.so
+#         /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvvidconv.so
+#         /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvvideo4linux2.so
+#         /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvvideocuda.so
 #
-# This Dockerfile uses (B) the PPA, since it's the smallest delta from
-# the nvidia/cuda base and works in most environments. If the PPA is
-# unreachable (it went down briefly in 2024-2025), the operator can
-# either (i) re-run the build, (ii) fall back to (C) by replacing this
-# RUN block with the build-from-source recipe, or (iii) switch the
-# FROM line to `nvcr.io/nvidia/deepstream:7.0-triton-multiarch` (which
-# has the plugins pre-installed; requires `docker login nvcr.io`).
-#
-# The NVIDIA GStreamer plugin source repos (for the build-from-source
-# path (C)):
-#   - https://gitlab.freedesktop.org/gstreamer/gstreamer
-#     (subproject gst-plugins-bad/sys/nvv4l2)
-#   - https://github.com/NVIDIA-AI-IOT/gst-nvv4l2
-#     (fork with vendored libnvv4l2)
+# The plugins are NOT in the default Ubuntu 22.04 repos (they require
+# NVIDIA headers, which the cudnn-devel base provides). We disable
+# every other gst-plugins-bad subproject and enable only the nvv4l2
+# one — saves ~5 min of build time.
 RUN set -eux; \
-    if add-apt-repository -y ppa:ruffy8919/nv-gst-plugins 2>/dev/null; then \
-        apt-get update && apt-get install -y --no-install-recommends \
-            nvidia-gst-plugins-base \
-            nvidia-gst-plugins-good \
-            nvidia-gst-plugins-bad \
-        && rm -rf /var/lib/apt/lists/*; \
-        echo "[splitter] NVIDIA GStreamer plugins installed via ruffy8919 PPA"; \
-    else \
-        echo "[splitter] WARN: ruffy8919 PPA unreachable; nvv4l2 plugins will not be available."; \
-        echo "[splitter]       The container will start but pipelines will fail at first DESCRIBE."; \
-        echo "[splitter]       Fix: re-run on a host that can reach the PPA, OR build the"; \
-        echo "[splitter]       plugins from source (see comments in this Dockerfile), OR use"; \
-        echo "[splitter]       the DeepStream base image (FROM line above)."; \
-    fi
+    git clone --depth 1 --branch gstreamer-1.20 \
+        https://gitlab.freedesktop.org/gstreamer/gstreamer.git /tmp/gst && \
+    cd /tmp/gst/subprojects/gst-plugins-bad/sys/nvv4l2 && \
+    meson setup build \
+        --prefix=/usr \
+        --libdir=lib/x86_64-linux-gnu \
+        --buildtype=release \
+        -Dauto_features=disabled \
+        -Dnvv4l2dec=enabled \
+        -Dnvv4l2enc=enabled \
+        -Dnvv4l2video4linux2=enabled \
+        -Dnvvideocuda=enabled \
+        -Dnvv4l2camerasrc=disabled \
+        -Ddoc=disabled -Dtests=disabled -Dexamples=disabled \
+    && ninja -C build install && \
+    ldconfig && \
+    cd /tmp && rm -rf /tmp/gst && \
+    echo "[splitter] NVIDIA GStreamer plugins built from source" && \
+    gst-inspect-1.0 --version && \
+    gst-inspect-1.0 nvv4l2decoder | head -3 && \
+    gst-inspect-1.0 nvvidconv     | head -3 && \
+    gst-inspect-1.0 nvv4l2h264enc | head -3
 
-# --- 3. Python deps (gi bindings are pulled from apt above; this is just
-#       for the small helpers we use, none actually required for now) -------
+# --- 2. Python deps (gi bindings are pulled from apt above) ------------------
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && \
     rm -f /tmp/requirements.txt
 
-# --- 4. Service code ---------------------------------------------------------
+# --- 3. Service code ---------------------------------------------------------
 WORKDIR /opt/splitter
 COPY split_service.py /opt/splitter/split_service.py
 COPY entrypoint.sh    /opt/splitter/entrypoint.sh
 RUN chmod +x /opt/splitter/entrypoint.sh
 
-# --- 5. Default env (overridable at runtime) --------------------------------
+# --- 4. Default env (overridable at runtime) --------------------------------
 ENV LOG_LEVEL=INFO
 ENV RTSP_PORT=8556
 ENV BITRATE_BPS=8000000
@@ -127,17 +161,50 @@ ENV IDR_INTERVAL_FRAMES=30
 ENV FRAMERATE=15
 ENV SOURCE_W=4096
 ENV SOURCE_H=1152
+# The build-from-source path (option C in this Dockerfile) installs the
+# NVIDIA GStreamer plugins to /usr/lib/x86_64-linux-gnu/gstreamer-1.0/
+# which is on the default GST_PLUGIN_PATH. No custom env var needed.
+# (The DeepStream / PPA paths would set a non-default path here.)
+# ENV GST_PLUGIN_PATH is intentionally unset for the source-build path.
 
-# --- 6. Healthcheck (TCP probe to the RTSP port) -----------------------------
+# --- 5. Healthcheck (TCP probe to the RTSP port) -----------------------------
 # docker's HEALTHCHECK does a TCP-only probe. Deeper checks (DESCRIBE /
 # ffprobe) are done by the L1 test from the host side.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD nc -z 127.0.0.1 8556 || exit 1
 
-# --- 7. Entrypoint -----------------------------------------------------------
+# --- 6. Entrypoint -----------------------------------------------------------
 # entrypoint.sh waits for /dev/nvidia* to appear (the NVIDIA runtime in
 # some host configurations lags by 1-2 s on container start) and then
 # execs the service. SIGTERM from docker stop is forwarded by Python's
 # GLib signal handler registered in split_service.py:run().
 ENTRYPOINT ["/opt/splitter/entrypoint.sh"]
 CMD ["python3", "-u", "/opt/splitter/split_service.py"]
+
+
+# ==============================================================================
+# ALTERNATIVE BASE IMAGE — ruffy8919 PPA (kept for reference)
+# ==============================================================================
+# If you want to use the smaller `nvidia/cuda:12.4.1-runtime-ubuntu22.04`
+# base image and install the NVIDIA GStreamer plugins from the ruffy8919
+# PPA, comment out the `FROM nvcr.io/...` line above and use this block
+# as the base instead. Requires the ruffy8919 PPA to be reachable from
+# your network.
+#
+# ---- snip ----
+# FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+#
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#         ca-certificates curl gnupg software-properties-common \
+#         python3 python3-pip python3-gi python3-gst-1.0 \
+#         gir1.2-gst-rtsp-server-1.0 gobject-introspection \
+#         libgstrtspserver-1.0-0 gstreamer1.0-rtsp \
+#         gstreamer1.0-plugins-{base,good,bad,ugly} gstreamer1.0-libav \
+#         libgstreamer-plugins-base1.0-0 libgstreamer1.0-0 \
+#         ffmpeg jq netcat-openbsd \
+#     && rm -rf /var/lib/apt/lists/* && \
+#     add-apt-repository -y ppa:ruffy8919/nv-gst-plugins && \
+#     apt-get update && apt-get install -y --no-install-recommends \
+#         nvidia-gst-plugins-base nvidia-gst-plugins-good nvidia-gst-plugins-bad \
+#     && rm -rf /var/lib/apt/lists/*
+# ---- /snip ----
