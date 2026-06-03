@@ -235,13 +235,14 @@ if [ -n "${CAMERA_NAME:-}" ] && [ "$ALL_CAMERAS" -eq 0 ]; then
 import yaml
 try:
     d = yaml.safe_load(open('config.yml'))
-    print(' '.join(sorted((d.get('cameras') or {}).keys())))
+    print('\n'.join(sorted((d.get('cameras') or {}).keys())))
 except Exception:
-    print('')
+    pass
 " 2>/dev/null)
-        if [ -n "$_known" ] && ! printf '%s\n' "$_known" | grep -qx "$CAMERA_NAME"; then
+        if [ -n "$_known" ] && ! printf '%s\n' "$_known" | grep -qxF "$CAMERA_NAME"; then
             echo "ERROR: --camera=$CAMERA_NAME not found in config.yml cameras:" >&2
-            echo "  known cameras: $_known" >&2
+            echo "  known cameras:" >&2
+            printf '    %s\n' $_known >&2
             exit 2
         fi
     fi
