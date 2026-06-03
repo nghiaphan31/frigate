@@ -141,8 +141,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN set -eux; \
     # The NVIDIA driver userspace libs (libnvcuvid.so, libnvidia-encode.so,
     # libcuda.so) are needed at link time so the nvcodec plugin can register
-    # its elements. They live in the `graphics-drivers` PPA, not the
-    # default Ubuntu 22.04 repos. Add the PPA and install the packages.
+    # its elements. They are NOT in the default Ubuntu 22.04 repos and the
+    # `graphics-drivers` PPA is not pre-configured on the cudnn-devel base
+    # image, so we use the NVIDIA CUDA repository's cuda-keyring package
+    # to add them in a single source. This was switched from the
+    # `graphics-drivers` PPA approach (commit "add cuda-keyring …") for
+    # reproducibility — no extra Launchpad GPG fetch, no `add-apt-repository`.
     apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common wget gnupg ca-certificates \
     && wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
