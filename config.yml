@@ -294,6 +294,16 @@ go2rtc:
     vue_entree_sub:
       - rtsp://admin:YKXC7P9B@192.168.50.222:554/h264Preview_01_sub
 
+    # ── Jardin devant — Reolink Duo 3 (192.168.50.18) ─────────────────
+    # Main stream:  4096×1152  (panoramic, 3.5:1) — used for recording
+    # Sub stream:   1536×432   (panoramic, 3.5:1) — used for detection
+    # (panoramic sub for full overview; _left/_right half-crop cameras
+    # are a separate concern and are NOT added in this branch)
+    jardin_devant_main:
+      - rtsp://admin:6bn8D2xa@192.168.50.18:554/h264Preview_01_main
+    jardin_devant_sub:
+      - rtsp://admin:6bn8D2xa@192.168.50.18:554/h264Preview_01_sub
+
 cameras:
 
   # ============================================================================
@@ -670,6 +680,144 @@ cameras:
         required_zones: prive
       detections:
         required_zones: prive
+
+  # ============================================================================
+  # CAMERA: jardin_devant
+  # ============================================================================
+  # HARDWARE
+  #   Model:    Reolink Duo 3 Wi-Fi/ETH (dual-lens 4K panoramic)
+  #   IP:       192.168.50.18
+  #   RTSP:     admin:6bn8D2xa@192.168.50.18:554
+  #   Location: Jardin devant — front garden, full panoramic overview
+  #
+  # MOUNT GEOMETRY
+  #   Height:        6.0 m above ground
+  #   Tilt:          50° downward from horizontal
+  #   H-FOV:         180°  (full panoramic)
+  #   V-FOV:         55°
+  #   Max walkable:  15 m (person at ground level, front garden shorter
+  #                       than the rear allee)
+  #   Min walkable:  3 m  (close-range at the front of the garden)
+  #
+  # STREAMS (sub only for detect; main is reserved for future _left/
+  # _right half-crop cameras and is currently unused for THIS camera)
+  #   main: 4096×1152  (rtsp://.../h264Preview_01_main)  [NOT USED here]
+  #   sub : 1536×432   (rtsp://.../h264Preview_01_sub)   [detect + record + live]
+  #   panoramic aspect ratio: 3.55:1
+  #   sub pixel density: 663,552 px total
+  #
+  # Note on panoramic detection:
+  #   The 3.55:1 aspect ratio is incompatible with most detection model
+  #   input shapes (320×320, 640×640 are square). Frigate's ffmpeg
+  #   accepts the 1536×432 input directly, but the model down-samples
+  #   non-uniformly, so a person in the FOV is much smaller in
+  #   pixel-density terms than on a 16:9 camera at the same distance.
+  #   This drives the lower min_area=72 (vs allee's 124 at 20m).
+  #
+  # FPS RATIONALE
+  #   fps=5:  3 m shortest walkable dim → ~10.7 frames at 1.4 m/s.
+  #
+  # PHYSICS-DERIVED PERSON DETECTION (iter0 — geometry-based, May 2026)
+  #   Target person:  H = 1.6 m tall, shoulder W = 0.5 m, aspect ≈ 2:1
+  #
+  #   Slant range at max distance (15 m):
+  #     r = √(d² + h²) = √(15² + 6²) ≈ 16.16 m
+  #   Elevation angle from camera to person at ground:
+  #     α = arctan(h/d) = arctan(6/15) ≈ 21.80°
+  #   Depression angle from optical axis to person:
+  #     β = tilt − α = 50° − 21.80° = 28.20°
+  #
+  #   Pixel size of person at 15 m on sub 1536×432:
+  #     H_px = (H / r) × (stream_h_px / V-FOV_rad) × cos(β)
+  #         = (1.6 / 16.16) × (432 / 0.9599) × cos(28.20°)
+  #         ≈ 39 px  (smallest expected footprint)
+  #     W_px = (W / r) × (stream_w_px / H-FOV_rad) × cos(β)
+  #         = (0.5 / 16.16) × (1536 / 3.1416) × cos(28.20°)
+  #         ≈ 13 px
+  #     area = H_px × W_px = 39 × 13 ≈ 522 px²
+  #
+  #   At 3 m near boundary:  area ≈ 3 906 px²  (largest expected footprint)
+  #
+  #   Applied filter values (iter0):
+  #     min_area   = 522 × 0.138 = 72      (noise floor)
+  #     max_area   = 3 906 × 3.46 = 13 514 (rejects anything bigger than a person at 3 m)
+  #     min_ratio  = 2.0 × 0.50   = 1.0    (50% of expected aspect)
+  #     max_ratio  = 2.0 × 2.00   = 4.0    (200% of expected aspect)
+  #     threshold  = 0.55                   (model default + 0.10)
+  #     min_score  = 0.45                   (model default + 0.05)
+  #
+  # ZONES (zone filters mirror camera-level filter, no per-zone override)
+  #   prive  — front garden, immediate alert on entry
+  #   rodage — fence line, alert only after 10 s loitering
+  # ============================================================================
+  jardin_devant:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/jardin_devant_sub
+          roles: [detect, record]  # unified: same stream for both roles
+    live:
+      streams:
+        Jardin devant (panoramique): jardin_devant_sub
+    audio:
+      enabled: false
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 1536
+      height: 432
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 15m on 1536×432 sub-stream
+          min_area: 72
+          max_area: 13500
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    motion:
+      mask: 0.647,0.095,0.64,0.188,0.653,0.229,0.675,0.211,0.682,0.129,0.671,0.077
+    zones:
+      prive:
+        # Front garden — immediate alert on entry
+        coordinates:
+          0,0.533,0.234,0.84,0.249,0.631,0.258,0.541,0.264,0.474,0.266,0.396,0.283,0.253,0.293,0.241,0.321,0.223,0.472,0.241,0.572,0.253,0.637,0.307,0.656,0.217,0.694,0.234,0.727,0.26,0.746,0.274,0.76,0.237,0.779,0.433,0.785,0.479,0.826,0.828,1,0.61,1,0.716,1,0.767,1,0.827,1,1,0,1
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 72
+            min_ratio: 1.0
+            max_ratio: 4.0
+      rodage:
+        # Fence line — alert only after 10 s loitering
+        coordinates:
+          0.303,0,0.346,0,0.433,0,0.528,0,0.602,0,0.635,0,0.666,0.026,0.702,0.093,0.73,0.124,0.748,0.131,0.758,0.236,0.752,0.273,0.744,0.297,0.679,0.243,0.658,0.226,0.64,0.291,0.568,0.254,0.499,0.229,0.438,0.229,0.316,0.231,0.282,0.227,0.233,0.835,0.209,0.809,0.259,0.214,0.272,0.129
+        loitering_time: 10
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 72
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: rodage
 
 version: 0.17-0
 
