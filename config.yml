@@ -278,6 +278,14 @@ go2rtc:
     allee_sur_le_cote_sub:
       - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
 
+    # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ─────
+    # Main stream:  3840×2160  (4K UHD, used for detection + recording)
+    # Sub stream:   640×360    (used for live view only)
+    jardin_arriere_main:
+      - rtsp://admin:VQpzN8wK@192.168.50.207:554/h264Preview_01_main
+    jardin_arriere_sub:
+      - rtsp://admin:VQpzN8wK@192.168.50.207:554/h264Preview_01_sub
+
 cameras:
 
   # ============================================================================
@@ -400,6 +408,134 @@ cameras:
         required_zones: prive
       detections:
         required_zones: rodage
+
+  # ============================================================================
+  # CAMERA: jardin_arriere
+  # ============================================================================
+  # HARDWARE
+  #   Model:    Reolink RLC-810A (4.0 mm fixed lens, single-sensor 4K bullet)
+  #   IP:       192.168.50.207
+  #   RTSP:     admin:VQpzN8wK@192.168.50.207:554
+  #   Location: Jardin arrière — rear garden, north-facing, covers play
+  #             area + shed
+  #
+  # MOUNT GEOMETRY
+  #   Height:        2.2 m above ground
+  #   Tilt:          10° downward from horizontal
+  #   H-FOV:         87°  (RLC-810A 4.0 mm lens)
+  #   V-FOV:         44°
+  #   Max walkable:  20 m (person at ground level)
+  #   Min walkable:  5 m  (close-range, larger pixels)
+  #
+  # STREAMS (main = 4K UHD for detect + record; sub = 640×360 for live)
+  #   main: 3840×2160  (rtsp://.../h264Preview_01_main)  [detect + record + audio]
+  #   sub : 640×360    (rtsp://.../h264Preview_01_sub)   [live only]
+  #   main pixel density: 8,294,400 px total
+  #   sub  pixel density:   230,400 px total
+  #
+  # FPS RATIONALE
+  #   fps=5:  5 m shortest walkable dim → ~17.9 frames at 1.4 m/s.
+  #           4K at 10 fps wastes GPU decode time (NVDEC saturates at
+  #           ~5 fps for 3840×2160 with hwaccel_output_format cuda)
+  #           AND the model input is 320×320 — 8x more pixels decoded
+  #           than the model consumes. 5 fps is the sweet spot.
+  #
+  # PHYSICS-DERIVED PERSON DETECTION (iter0 — geometry-based, May 2026)
+  #   Target person:  H = 1.6 m tall, shoulder W = 0.5 m, aspect ≈ 2:1
+  #
+  #   Slant range at max distance (20 m):
+  #     r = √(d² + h²) = √(20² + 2.2²) ≈ 20.12 m
+  #   Elevation angle from camera to person at ground:
+  #     α = arctan(h/d) = arctan(2.2/20) ≈ 6.28°
+  #   Depression angle from optical axis to person:
+  #     β = tilt − α = 10° − 6.28° = 3.72°
+  #
+  #   Pixel size of person at 20 m on main 3840×2160:
+  #     H_px = (H / r) × (stream_h_px / V-FOV_rad) × cos(β)
+  #         = (1.6 / 20.12) × (2160 / 0.7680) × cos(3.72°)
+  #         ≈ 223 px  (smallest expected footprint)
+  #     W_px = (W / r) × (stream_w_px / H-FOV_rad) × cos(β)
+  #         = (0.5 / 20.12) × (3840 / 1.5184) × cos(3.72°)
+  #         ≈ 63 px
+  #     area = H_px × W_px = 223 × 63 ≈ 14 016 px²
+  #
+  #   At 5 m near boundary:  area ≈ 190 838 px²  (largest expected footprint)
+  #
+  #   Applied filter values (iter0 — noise-floor on min, conservative on max):
+  #     min_area   = 14 016 × 0.022 = 308     (noise floor: catches ~3 m person on 4K)
+  #     max_area   = 190 838 × 0.61 = 116 411  (rejects anything bigger than a person at 5 m)
+  #     min_ratio  = 2.0 × 0.50   = 1.0       (50% of expected aspect)
+  #     max_ratio  = 2.0 × 2.00   = 4.0       (200% of expected aspect)
+  #     threshold  = 0.55                     (model default + 0.10)
+  #     min_score  = 0.45                     (model default + 0.05)
+  #
+  # ZONES (zone filters mirror camera-level filter, no per-zone override)
+  #   prive  — play area + shed, immediate alert on entry
+  # ============================================================================
+  jardin_arriere:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/jardin_arriere_main
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/jardin_arriere_main
+          roles: [record, audio]
+    live:
+      streams:
+        Jardin arrière: jardin_arriere_sub
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 3840
+      height: 2160
+      fps: 5
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 20m on 3840×2160 main stream
+          min_area: 300
+          max_area: 117000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    motion:
+      mask:
+        # Trees and fence reflections that trigger false motion events
+        - 0.087,0.123,0.065,0.241,0.072,0.32,0.095,0.365,0.155,0.411,0.198,0.384,0.231,0.336,0.245,0.301,0.222,0.262,0.22,0.215,0.208,0.163,0.189,0.131,0.158,0.122,0.13,0.12
+        - 0.429,0.073,0.45,0.078,0.471,0.126,0.47,0.158,0.453,0.188,0.429,0.179,0.412,0.143,0.398,0.115
+        - 0.626,0.271,0.645,0.276,0.645,0.313,0.626,0.312
+        - 0.589,0.265,0.605,0.268,0.604,0.298,0.587,0.293
+        - 0.535,0.258,0.558,0.264,0.555,0.321,0.529,0.314
+        - 0.149,0.017,0.253,0.021,0.253,0.07,0.15,0.063
+        - 0.351,0.061,0.367,0.028,0.392,0.023,0.414,0.036,0.424,0.061,0.392,0.067
+    zones:
+      prive:
+        # Play area + shed — immediate alert on entry
+        coordinates:
+          0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,0.997,0.997
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 300
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
 
 version: 0.17-0
 

@@ -191,7 +191,7 @@ CAMERAS = {
         # around the derived value, which becomes [92, 308] when
         # margin=0.022).
         "min_area_margin":     0.022,
-        "max_area_margin":     1.50,
+        "max_area_margin":     0.61,
         "detect_stream": "jardin_arriere_main",
         "live_stream":   "jardin_arriere_sub",
         "zones": ["prive"],
