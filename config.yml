@@ -1,9 +1,19 @@
 # ============================================================================
-# Frigate NVR — global config (allee_sur_le_cote, single-camera scope)
+# Frigate NVR — global config (5 cameras, iter0 physics-based)
 # ============================================================================
-# Frigate 0.17 schema. Single camera in this file (allee_sur_le_cote).
+# Frigate 0.17 schema. 5 cameras in this file:
+#   - allee_sur_le_cote   (Reolink Duo 3, 3.4 m, 50° tilt, sub)
+#   - jardin_arriere      (Reolink RLC-810A 4K, 2.2 m, 10° tilt)
+#   - vue_entree          (Reolink Doorbell POE, 1.7 m, 0° tilt)
+#   - jardin_devant       (Reolink Duo 3, 6 m, 50° tilt, panoramic sub)
+#   - piscine_vue_toit    (Reolink Duo 3, 6 m, 25° tilt, panoramic sub)
+# All 5 cameras use rtsp://admin:fG-56lui@<ip>:8554/h264Preview_01_*
+# (Reolink-configured non-default RTSP port 8554 instead of 554).
+#
 # Global sections below are cluster-wide; per-camera overrides are
 # under the `cameras:` block at the bottom of this file.
+# See tests/camera_spec.py for the per-camera physics spec that
+# drives the L2 test-math.sh assertions.
 #
 # Doc references (this repo):
 #   - ARCHITECTURE.md §4   — per-stage pipeline details
