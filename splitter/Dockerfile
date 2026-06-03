@@ -139,13 +139,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # libnvidia-compute-XX package which is in the cudnn-devel base's
 # standard apt sources.
 RUN set -eux; \
+    # The NVIDIA driver userspace libs (libnvcuvid.so, libnvidia-encode.so,
+    # libcuda.so) are needed at link time so the nvcodec plugin can register
+    # its elements. They live in the `graphics-drivers` PPA, not the
+    # default Ubuntu 22.04 repos. Add the PPA and install the packages.
     apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common wget gnupg ca-certificates \
+    && wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
+        && dpkg -i cuda-keyring_1.1-1_all.deb \
+        && rm -f cuda-keyring_1.1-1_all.deb \
+    && apt-get update && apt-get install -y --no-install-recommends \
         libnvidia-compute-535 \
         libnvidia-encode-535 libnvidia-decode-535 \
     && rm -rf /var/lib/apt/lists/* && \
     git clone --depth 1 --branch 1.20.3 \
         https://gitlab.freedesktop.org/gstreamer/gstreamer.git /tmp/gst && \
     cd /tmp/gst/subprojects/gst-plugins-bad && \
+    PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig \
     meson setup build \
         --prefix=/usr \
         --libdir=lib/x86_64-linux-gnu \
@@ -157,14 +167,11 @@ RUN set -eux; \
     ldconfig && \
     cd /tmp && rm -rf /tmp/gst && \
     echo "[splitter] NVIDIA GStreamer plugins built from source (libgstnvcodec.so)" && \
-    gst-inspect-1.0 --version && \
-    gst-inspect-1.0 nvcodec 2>&1 | head -8 && \
-    echo "--- nvv4l2decoder ---" && \
-    gst-inspect-1.0 nvv4l2decoder | head -3 && \
-    echo "--- cudaconvert (renamed from nvvidconv in 1.20+) ---" && \
-    gst-inspect-1.0 cudaconvert  | head -3 && \
-    echo "--- nvv4l2h264enc ---" && \
-    gst-inspect-1.0 nvv4l2h264enc | head -3
+    echo "=== nvcodec feature count (must be > 0; was 0 when libs were missing) ===" && \
+    gst-inspect-1.0 nvcodec 2>&1 | grep -E "features?:|nvv4l2|cudaconvert" | head -10 && \
+    echo "--- nvv4l2decoder ---" && gst-inspect-1.0 nvv4l2decoder 2>&1 | head -3 && \
+    echo "--- cudaconvert    ---" && gst-inspect-1.0 cudaconvert   2>&1 | head -3 && \
+    echo "--- nvv4l2h264enc ---" && gst-inspect-1.0 nvv4l2h264enc 2>&1 | head -3
 
 # --- 2. Python deps (gi bindings are pulled from apt above) ------------------
 COPY requirements.txt /tmp/requirements.txt
