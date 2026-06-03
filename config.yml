@@ -286,6 +286,14 @@ go2rtc:
     jardin_arriere_sub:
       - rtsp://admin:VQpzN8wK@192.168.50.207:554/h264Preview_01_sub
 
+    # ── Vue entrée — Reolink Doorbell POE (192.168.50.222) ─────────────
+    # Main stream:  2560×1920  (4:3, used for detection + recording)
+    # Sub stream:   640×480    (4:3, used for live view only)
+    vue_entree_main:
+      - rtsp://admin:YKXC7P9B@192.168.50.222:554/h264Preview_01_main
+    vue_entree_sub:
+      - rtsp://admin:YKXC7P9B@192.168.50.222:554/h264Preview_01_sub
+
 cameras:
 
   # ============================================================================
@@ -521,6 +529,132 @@ cameras:
         # Play area + shed — immediate alert on entry
         coordinates:
           0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,0.997,0.997
+        loitering_time: 0
+        inertia: 3
+        objects: [person]
+        filters:
+          person:
+            # iter0: physics-based — matches camera-level filter
+            threshold: 0.55
+            min_area: 300
+            min_ratio: 1.0
+            max_ratio: 4.0
+    review:
+      alerts:
+        required_zones: prive
+      detections:
+        required_zones: prive
+
+  # ============================================================================
+  # CAMERA: vue_entree
+  # ============================================================================
+  # HARDWARE
+  #   Model:    Reolink Doorbell POE (1/2.7" CMOS, 5 MP, 4:3 aspect)
+  #   IP:       192.168.50.222
+  #   RTSP:     admin:YKXC7P9B@192.168.50.222:554
+  #   Location: Front door / entry walkway — eye-level view of visitors
+  #
+  # MOUNT GEOMETRY
+  #   Height:        1.7 m above ground (doorbell at face height)
+  #   Tilt:          0°  (level — no downward tilt; doorbell designed
+  #                       for face-to-face view)
+  #   H-FOV:         135°  (Doorbell POE wide-angle lens)
+  #   V-FOV:         100°
+  #   Max walkable:  20 m (person at ground level, ~3 m to door)
+  #   Min walkable:  3 m  (close-range at the doorstep)
+  #
+  # STREAMS (main = 2560×1920 4:3 for detect + record; sub = 640×480 for live)
+  #   main: 2560×1920  (rtsp://.../h264Preview_01_main)  [detect + record + audio]
+  #   sub : 640×480    (rtsp://.../h264Preview_01_sub)   [live only]
+  #   main pixel density: 4,915,200 px total
+  #   sub  pixel density:   307,200 px total
+  #
+  # FPS RATIONALE
+  #   fps=7:  3 m shortest walkable dim → ~15 frames at 1.4 m/s.
+  #           4:3 aspect at 7 fps gives a comfortable frame budget
+  #           for the wide-angle lens (135° H-FOV); 5 fps would lose
+  #           visitors who walk across the FOV in <0.5 s.
+  #
+  # PHYSICS-DERIVED PERSON DETECTION (iter0 — geometry-based, May 2026)
+  #   Target person:  H = 1.6 m tall, shoulder W = 0.5 m, aspect ≈ 2:1
+  #
+  #   Slant range at max distance (20 m):
+  #     r = √(d² + h²) = √(20² + 1.7²) ≈ 20.07 m
+  #   Elevation angle from camera to person at ground:
+  #     α = arctan(h/d) = arctan(1.7/20) ≈ 4.86°
+  #   Depression angle from optical axis to person:
+  #     β = tilt − α = 0° − 4.86° = −4.86° (person is ABOVE optical axis)
+  #     → clamped to 0° for the iter0 formula (foreshortening ignored
+  #       for the rare case of a level-tilt camera looking at distant
+  #       ground)
+  #
+  #   Pixel size of person at 20 m on main 2560×1920:
+  #     H_px = (H / r) × (stream_h_px / V-FOV_rad) × cos(β)
+  #         = (1.6 / 20.07) × (1920 / 1.7453) × cos(0°)
+  #         ≈ 88 px  (smallest expected footprint)
+  #     W_px = (W / r) × (stream_w_px / H-FOV_rad) × cos(β)
+  #         = (0.5 / 20.07) × (2560 / 2.3562) × cos(0°)
+  #         ≈ 27 px
+  #     area = H_px × W_px = 88 × 27 ≈ 2 377 px²
+  #
+  #   At 3 m near boundary:  area ≈ 80 340 px²  (largest expected footprint)
+  #
+  #   Applied filter values (iter0 — noise floor + conservative upper):
+  #     min_area   = 2 377 × 0.126 = 300     (noise floor: catches ~3 m person on 4:3 main)
+  #     max_area   = 80 340 × 1.79 = 143 808 (rejects anything bigger than a person at 3 m)
+  #     min_ratio  = 2.0 × 0.50   = 1.0      (50% of expected aspect)
+  #     max_ratio  = 2.0 × 2.00   = 4.0      (200% of expected aspect)
+  #     threshold  = 0.55                     (model default + 0.10)
+  #     min_score  = 0.45                     (model default + 0.05)
+  #
+  # ZONES (zone filters mirror camera-level filter, no per-zone override)
+  #   prive  — entry walkway + doorstep, immediate alert on entry
+  # ============================================================================
+  vue_entree:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/vue_entree_main
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/vue_entree_main
+          roles: [record, audio]
+    live:
+      streams:
+        Vue entrée: vue_entree_sub
+    audio:
+      enabled: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: false
+    detect:
+      width: 2560
+      height: 1920
+      fps: 7
+    objects:
+      track: [person]
+      filters:
+        person:
+          # iter0: physics-based — 160cm person at 20m on 2560×1920 main stream
+          min_area: 300
+          max_area: 144000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+    snapshots:
+      enabled: true
+    motion:
+      mask:
+        # Sky / distant trees / reflected surfaces that trigger false motion
+        - 0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081
+        - 0.975,0.602,0.998,0.604,0.996,0.286,0.962,0.29,0.968,0.342,0.924,0.39,0.906,0.406,0.932,0.452,0.92,0.477,0.921,0.525,0.937,0.548,0.964,0.553
+        - 0.704,0,0.766,0.103,0.799,0.102,0.872,0.082,0.904,0.055,0.877,0.005,0.857,0
+    zones:
+      prive:
+        # Entry walkway + doorstep — immediate alert on entry
+        coordinates:
+          0,0.735,0,0.488,0.304,0.523,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0.73,1,0.741,0.953,0.676,0.893,0.515,0.96,0.363,0.975,0.188,0.956,0.036,0.89,0.03,0.744
         loitering_time: 0
         inertia: 3
         objects: [person]
