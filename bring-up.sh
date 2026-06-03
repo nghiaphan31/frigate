@@ -1115,18 +1115,25 @@ main() {
     #   --all-cameras  → run status_report() once per camera
     #   default        → run status_report() once for CAMERA_NAME
     #   --camera=NAME  → already set CAMERA_NAME in the args loop above
+    # Capture the worst exit code so main() returns 1 if ANY camera's
+    # report had a FAIL step.  Bug: the earlier code did
+    #     if ! status_report_for_all_cameras; then : ; fi
+    # which silently swallowed the worst_rc and made the L3 test
+    # report HEALTHY for a stack where every camera was FAILing.
+    # The fix: capture the rc and propagate to the script's exit
+    # code at the end of main().
+    local report_rc=0
     if [ "$ALL_CAMERAS" -eq 1 ]; then
         if ! status_report_for_all_cameras; then
-            # Fall through to snapshot/baseline handling below so
-            # --snapshot-write / --snapshot-compare still work with
-            # --all-cameras (the LAST camera's REPORT_RESULTS is
-            # what gets serialised — acceptable for archival; for
-            # per-camera snapshots, run --camera=X --snapshot per cam).
-            :
+            report_rc=1
         fi
     else
-        status_report
+        if ! status_report; then
+            report_rc=1
+        fi
     fi
+    # Exported for use by the snapshot/serialisation block below.
+    _REPORT_RC="$report_rc"
 
     # ---- Self-healing recovery (commit 3: feature E) ----
     # If --recover=STRATEGY was passed, run the requested strategy now
@@ -1168,6 +1175,15 @@ main() {
             print_snapshot "$out_path" || exit 1
         fi
     fi
+
+    # ---- Final exit code ----
+    # The snapshot/baseline path above exits explicitly with its own rc.
+    # If we got here without an early exit, propagate the report rc.
+    # Pre-fix bug: main() always returned 0, so an L3 test that ran
+    # status_report_for_all_cameras (worst_rc=1) and then --snapshot
+    # would exit 0 from the snapshot block, masking the camera FAILs.
+    # Now: if _REPORT_RC is 1 and snapshot didn't already exit, exit 1.
+    [ "${_REPORT_RC:-0}" -eq 0 ] || exit "${_REPORT_RC}"
 }
 
 # ------------------------------------------------------------------------------
