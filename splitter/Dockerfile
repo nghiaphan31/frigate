@@ -105,8 +105,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --- 1b. Build gst-plugins-bad with the nvv4l2 subproject (HEAVY) ----------
 # This is the NVIDIA GPU plugin set: nvv4l2decoder (NVDEC), nvvidconv
 # (VIC / CUDA crop + format conversion), nvv4l2h264enc (NVENC), etc.
-# We use the upstream gstreamer monorepo at the gstreamer-1.20 release
-# branch (compatible with Ubuntu 22.04's libgstreamer1.0-0 = 1.20.3).
+# We use the upstream gstreamer monorepo at the 1.20.3 tag (matches
+# Ubuntu 22.04's libgstreamer1.0-0 = 1.20.3 exactly; using a newer
+# tag would force a libgstreamer ABI mismatch at load time).
 #
 # Build: ~3 min on a 4-core x86_64 host with warm cache; ~8 min cold.
 # Output: /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstnvv4l2*.so
@@ -119,7 +120,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # every other gst-plugins-bad subproject and enable only the nvv4l2
 # one — saves ~5 min of build time.
 RUN set -eux; \
-    git clone --depth 1 --branch gstreamer-1.20 \
+    git clone --depth 1 --branch 1.20.3 \
         https://gitlab.freedesktop.org/gstreamer/gstreamer.git /tmp/gst && \
     cd /tmp/gst/subprojects/gst-plugins-bad/sys/nvv4l2 && \
     meson setup build \
