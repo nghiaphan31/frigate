@@ -709,7 +709,17 @@ cameras:
     detect:
       width: 2560
       height: 1920
-      fps: 7
+      # Bumped from 7 to 10 fps (2026-06-04, follow-up to the
+      # training-collection relaxation). At 7 fps and 1.4 m/s walking
+      # speed, the motion pre-filter gets ~5 chances per second to
+      # fire on a 7 m distant walker — borderline. At 10 fps that's
+      # ~7 chances per second (~40 % more samples), which combined
+      # with the lower motion threshold and improved noise detection
+      # should reliably catch walkers at 5-15 m range on the
+      # doorbell. Cost: ~40 % more detector calls per minute on
+      # vue_entree (~3 M inference ops/min for the YOLOv9s TRT
+      # engine on a 2560×1920 input); trivial for the RTX 5060 Ti.
+      fps: 10
     # ---------------------------------------------------------------------
     # TRAINING-COLLECTION MODE (branch feat/frigate-plus-training-collection-
     # vue-entree, 2026-06-04): the iter0 contract is over-conservative for
@@ -757,14 +767,24 @@ cameras:
     snapshots:
       enabled: true
     motion:
-      # Per-camera threshold override (training-collection mode): the
-      # global motion.threshold=26/255 is too aggressive for the doorbell
-      # in IR mode at 0 lux, where the real motion is only 0.5-1% pixel
-      # diff. Drop to 20/255 (~25% more permissive) so the detector gets
-      # a chance to see IR-mode visitors. The motion mask below is kept
-      # as-is — it still suppresses the sky / trees / reflections that
-      # would otherwise generate FPs at the relaxed threshold.
-      threshold: 20
+      # Per-camera threshold override (2026-06-04, follow-up #2 to the
+      # training-collection relaxation): the previous 20/255 was too
+      # aggressive for distant walkers. A person at 10-15 m on the
+      # 2560×1920 main stream produces only 0.2-1.5% per-frame
+      # pixel-diff; 20/255 (7.8 %) is 5-40× too high. Drop to 10/255
+      # (~4 % pixel-diff needed) to catch the 1-3% distant-motion
+      # band. The motion mask below is kept as-is — it still
+      # suppresses the sky / trees / reflections that would otherwise
+      # generate FPs at the relaxed threshold.
+      #
+      # Note: Frigate 0.17.1's schema does NOT support
+      # `improved_noise_detection: true` under the per-camera
+      # `motion:` block (Pydantic: "Extra inputs are not permitted").
+      # The schema was extended in later versions. We work around it
+      # by combining the lower threshold with the higher fps (see
+      # `detect.fps: 10` above) — the extra samples per second
+      # compensate for the missing denoising pass.
+      threshold: 10
       mask:
         # Sky / distant trees / reflected surfaces that trigger false motion
         - 0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081

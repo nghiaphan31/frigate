@@ -241,7 +241,13 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
-        "expected_fps":          7,
+        # Bumped from 7 to 10 fps (2026-06-04, follow-up to the
+        # training-collection relaxation). At 10 fps the motion
+        # pre-filter gets ~40 % more chances per second to fire on
+        # distant walkers, which combined with the lower motion
+        # threshold (10/255) and improved_noise_detection closes the
+        # 5-15 m distance gap that the previous 7 fps config missed.
+        "expected_fps":         10,
         "detect_enabled":    True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area": 300, "min_ratio": 1.0, "max_ratio": 4.0},
