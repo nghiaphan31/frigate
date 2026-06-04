@@ -37,6 +37,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 .PHONY: help test test-bringup test-config test-math test-bringup-only list-cameras baseline \
+        evaluate \
         iter0-show iter0-diff iter0-diff-all iter0-revert iter0-revert-all iter0-revert-y
 
 help:
@@ -49,6 +50,7 @@ help:
 	@echo "  make test-bringup-only   L3 only (skip L1/L2)"
 	@echo "  make list-cameras        print camera names from config.yml"
 	@echo "  make baseline            regenerate tests/baselines/snapshot.json"
+	@echo "  make evaluate            per-camera Frigate+ training-need verdict (live, requires Frigate)"
 	@echo ""
 	@echo "  Iter0 default manager (tests/iter0.py, spec = tests/camera_spec.py):"
 	@echo "  make iter0-show CAM=<name>     show the iter0 spec for one camera"
@@ -77,6 +79,23 @@ test-bringup-only:
 
 list-cameras:
 	@./bring-up.sh --list-cameras
+
+# ------------------------------------------------------------------------------
+# evaluate — per-camera Frigate+ training-need evaluator (live, requires Frigate)
+# ------------------------------------------------------------------------------
+# Pulls recent events from the running Frigate API, computes the per-camera
+# top_score distribution, and prints a per-camera verdict (OK / borderline /
+# TRAINING NEEDED). Use this to decide which cameras need their iter0 contract
+# relaxed to capture more Frigate+ training data. See tests/wait-and-evaluate.sh
+# for the verdict rule and tests/camera_spec.py for the training_collection_mode
+# flag that suppresses the L2 spec-vs-actual match for cameras in that mode.
+#
+#   make evaluate                    # all cameras from config.yml
+#   make evaluate CAMS=vue_entree    # specific cameras (space-separated)
+#   FRIGATE_URL=http://frigate:5000 make evaluate   # remote Frigate
+# ------------------------------------------------------------------------------
+evaluate:
+	@tests/wait-and-evaluate.sh $(CAMS)
 
 baseline:
 	@mkdir -p tests/baselines

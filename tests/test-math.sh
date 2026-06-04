@@ -85,52 +85,66 @@ for cam_name, spec in CAMERAS.items():
             f"add cameras.{cam_name}: block to config.yml, OR remove the entry from tests/camera_spec.py")
         continue
 
+    tcm = bool(spec.get("training_collection_mode"))
+
     # --- 1) Spec-vs-actual filter value match (5 % tolerance) ---
-    pf = (cam_cfg.get("objects") or {}).get("filters") or {}
-    pf = pf.get("person") or {}
-    for spec_key, cfg_key, label in [
-        ("expected_min_area",  "min_area",  "min_area"),
-        ("expected_max_area",  "max_area",  "max_area"),
-        ("expected_threshold", "threshold", "threshold"),
-        ("expected_min_score", "min_score", "min_score"),
-    ]:
-        expected = spec.get(spec_key)
-        actual   = pf.get(cfg_key)
-        if actual is None:
-            add("FAIL",
-                f"camera '{cam_name}' objects.filters.person.{cfg_key} missing in config.yml",
-                f"add {cfg_key}: {expected} under cameras.{cam_name}.objects.filters.person")
-            continue
-        # Float fields: use relative tolerance; int fields: exact-or-5%-of-expected
-        if isinstance(expected, float) or isinstance(actual, float):
-            ok_match = abs(actual - expected) <= SPEC_TOLERANCE
-        else:
-            ok_match = abs(actual - expected) <= max(1, SPEC_TOLERANCE * expected)
-        if ok_match:
-            add("OK", f"camera '{cam_name}' person.{label}={actual} matches spec ({expected})")
-        else:
-            add("FAIL",
-                f"camera '{cam_name}' person.{label}={actual} does not match spec ({expected})",
-                f"set cameras.{cam_name}.objects.filters.person.{cfg_key}: {expected} in config.yml (or update tests/camera_spec.py if the new value is correct)")
+    if tcm:
+        add("SKIP",
+            f"camera '{cam_name}' spec-vs-actual match (training_collection_mode=True; "
+            f"see tests/camera_spec.py for the iter0 contract and config.yml "
+            f"cameras.{cam_name} for the actual relaxed values)")
+    else:
+        pf = (cam_cfg.get("objects") or {}).get("filters") or {}
+        pf = pf.get("person") or {}
+        for spec_key, cfg_key, label in [
+            ("expected_min_area",  "min_area",  "min_area"),
+            ("expected_max_area",  "max_area",  "max_area"),
+            ("expected_threshold", "threshold", "threshold"),
+            ("expected_min_score", "min_score", "min_score"),
+        ]:
+            expected = spec.get(spec_key)
+            actual   = pf.get(cfg_key)
+            if actual is None:
+                add("FAIL",
+                    f"camera '{cam_name}' objects.filters.person.{cfg_key} missing in config.yml",
+                    f"add {cfg_key}: {expected} under cameras.{cam_name}.objects.filters.person")
+                continue
+            # Float fields: use relative tolerance; int fields: exact-or-5%-of-expected
+            if isinstance(expected, float) or isinstance(actual, float):
+                ok_match = abs(actual - expected) <= SPEC_TOLERANCE
+            else:
+                ok_match = abs(actual - expected) <= max(1, SPEC_TOLERANCE * expected)
+            if ok_match:
+                add("OK", f"camera '{cam_name}' person.{label}={actual} matches spec ({expected})")
+            else:
+                add("FAIL",
+                    f"camera '{cam_name}' person.{label}={actual} does not match spec ({expected})",
+                    f"set cameras.{cam_name}.objects.filters.person.{cfg_key}: {expected} in config.yml (or update tests/camera_spec.py if the new value is correct)")
 
     # --- 2) min_ratio / max_ratio match (exact, since they're discrete) ---
-    for spec_key, cfg_key, label in [
-        ("expected_min_ratio", "min_ratio", "min_ratio"),
-        ("expected_max_ratio", "max_ratio", "max_ratio"),
-    ]:
-        expected = spec.get(spec_key)
-        actual   = pf.get(cfg_key)
-        if actual is None:
-            add("FAIL",
-                f"camera '{cam_name}' person.{cfg_key} missing in config.yml",
-                f"add {cfg_key}: {expected} under cameras.{cam_name}.objects.filters.person")
-            continue
-        if abs(actual - expected) <= max(0.01, SPEC_TOLERANCE * expected):
-            add("OK", f"camera '{cam_name}' person.{label}={actual} matches spec ({expected})")
-        else:
-            add("FAIL",
-                f"camera '{cam_name}' person.{label}={actual} does not match spec ({expected})",
-                f"set cameras.{cam_name}.objects.filters.person.{cfg_key}: {expected} in config.yml")
+    if tcm:
+        # already recorded as a single SKIP above; no per-key assertions
+        pass
+    else:
+        pf = (cam_cfg.get("objects") or {}).get("filters") or {}
+        pf = pf.get("person") or {}
+        for spec_key, cfg_key, label in [
+            ("expected_min_ratio", "min_ratio", "min_ratio"),
+            ("expected_max_ratio", "max_ratio", "max_ratio"),
+        ]:
+            expected = spec.get(spec_key)
+            actual   = pf.get(cfg_key)
+            if actual is None:
+                add("FAIL",
+                    f"camera '{cam_name}' person.{cfg_key} missing in config.yml",
+                    f"add {cfg_key}: {expected} under cameras.{cam_name}.objects.filters.person")
+                continue
+            if abs(actual - expected) <= max(0.01, SPEC_TOLERANCE * expected):
+                add("OK", f"camera '{cam_name}' person.{label}={actual} matches spec ({expected})")
+            else:
+                add("FAIL",
+                    f"camera '{cam_name}' person.{label}={actual} does not match spec ({expected})",
+                    f"set cameras.{cam_name}.objects.filters.person.{cfg_key}: {expected} in config.yml")
 
     # --- 3) Spec self-consistency: the expected_min_area / max_area
     #        must match what you'd get by applying the spec's
@@ -235,28 +249,36 @@ for cam_name, spec in CAMERAS.items():
                 f"add cameras.{cam_name}.zones.{z}: block to config.yml")
 
     # --- 6b) Per-zone filter overrides match expected_zones ---
-    for zname, zfilt in (spec.get("expected_zones") or {}).items():
-        zcfg = zones_cfg.get(zname) or {}
-        zpf = ((zcfg.get("filters") or {}).get("person") or {})
-        for k, ev in zfilt.items():
-            av = zpf.get(k)
-            if av is None:
-                add("FAIL",
-                    f"camera '{cam_name}' zone '{zname}' filters.person.{k} missing in config.yml",
-                    f"add {k}: {ev} under cameras.{cam_name}.zones.{zname}.filters.person")
-                continue
-            # Float fields: relative tolerance; int fields: small absolute
-            if isinstance(ev, float) or isinstance(av, float):
-                ok_match = abs(av - ev) <= SPEC_TOLERANCE
-            else:
-                ok_match = abs(av - ev) <= max(0.01, SPEC_TOLERANCE * ev)
-            if ok_match:
-                add("OK", f"camera '{cam_name}' zone '{zname}' filters.person.{k}={av} matches spec ({ev})")
-            else:
-                add("FAIL",
-                    f"camera '{cam_name}' zone '{zname}' filters.person.{k}={av} does not match spec ({ev})",
-                    f"set cameras.{cam_name}.zones.{zname}.filters.person.{k}: {ev} in config.yml "
-                    f"(or update expected_zones in tests/camera_spec.py if the new value is correct)")
+    # SKIP for tcm cameras (their zone filters are also intentionally
+    # below the iter0 contract — see the training_collection_mode block
+    # at the top of the camera loop for the rationale).
+    if tcm:
+        # The single SKIP record was already added above (one per
+        # camera, not one per assertion). Nothing to do here.
+        pass
+    else:
+        for zname, zfilt in (spec.get("expected_zones") or {}).items():
+            zcfg = zones_cfg.get(zname) or {}
+            zpf = ((zcfg.get("filters") or {}).get("person") or {})
+            for k, ev in zfilt.items():
+                av = zpf.get(k)
+                if av is None:
+                    add("FAIL",
+                        f"camera '{cam_name}' zone '{zname}' filters.person.{k} missing in config.yml",
+                        f"add {k}: {ev} under cameras.{cam_name}.zones.{zname}.filters.person")
+                    continue
+                # Float fields: relative tolerance; int fields: small absolute
+                if isinstance(ev, float) or isinstance(av, float):
+                    ok_match = abs(av - ev) <= SPEC_TOLERANCE
+                else:
+                    ok_match = abs(av - ev) <= max(0.01, SPEC_TOLERANCE * ev)
+                if ok_match:
+                    add("OK", f"camera '{cam_name}' zone '{zname}' filters.person.{k}={av} matches spec ({ev})")
+                else:
+                    add("FAIL",
+                        f"camera '{cam_name}' zone '{zname}' filters.person.{k}={av} does not match spec ({ev})",
+                        f"set cameras.{cam_name}.zones.{zname}.filters.person.{k}: {ev} in config.yml "
+                        f"(or update expected_zones in tests/camera_spec.py if the new value is correct)")
 
 # --- 7) Cameras in config.yml that are NOT in the spec (warning, not fail) ---
 cams_cfg = (cfg.get("cameras") or {})

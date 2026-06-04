@@ -710,20 +710,61 @@ cameras:
       width: 2560
       height: 1920
       fps: 7
+    # ---------------------------------------------------------------------
+    # TRAINING-COLLECTION MODE (branch feat/frigate-plus-training-collection-
+    # vue-entree, 2026-06-04): the iter0 contract is over-conservative for
+    # the doorbell — see discussion in commit message. Relaxed to capture
+    # the edge cases the Frigate+ model is currently bad at:
+    #   * IR-mode at 0 lux: scores 0.30-0.50 (well below iter0 0.55)
+    #   * head-and-shoulders views at 1.7 m / 0° tilt: class 20 (face) crops
+    #   * face-fills-frame at the doorstep: bbox > 144 000 px²
+    #   * side / crouching / arms-spread body poses
+    # Expected effect: 5-10x more events on vue_entree, 30-50% FP rate
+    # (temporary). Revert to iter0 once Frigate+ has been retrained on the
+    # accumulated data and a new plus://<hash> is issued. Re-evaluation
+    # of all 8 cameras is automated by `make evaluate` (see Makefile and
+    # tests/wait-and-evaluate.sh).
+    # ---------------------------------------------------------------------
     objects:
-      track: [person]
+      # Track BOTH person AND face. The global model.labelmap at
+      # config.yml:246 still rewrites face→person for the user-facing UI
+      # (so the user sees `person` events), but the raw class-20 bounding
+      # box is preserved in the snapshot+thumbnail for Frigate+ to learn
+      # from — this is the single highest-value Frigate+ training sample
+      # the doorbell can produce.
+      track: [person, face]
       filters:
         person:
-          # iter0: physics-based — 160cm person at 20m on 2560×1920 main stream
-          min_area: 300
-          max_area: 144000
-          min_ratio: 1.0
-          max_ratio: 4.0
-          threshold: 0.55
-          min_score: 0.45
+          # Relaxed for training collection (was iter0: 300/144000/1.0/4.0/0.55/0.45)
+          min_area: 150
+          max_area: 800000
+          min_ratio: 0.4
+          max_ratio: 8.0
+          threshold: 0.4
+          min_score: 0.3
+        face:
+          # Override the auto-generated `face` filter (which defaults to
+          # 0.7 / 0.7 / 0..24M / 0..24M area+ratio). At the doorbell the
+          # model can return `face` for a partial head-and-shoulders view
+          # at confidence 0.3-0.5; the auto filter would reject all of
+          # them. Match the permissive person filter.
+          min_area: 0
+          max_area: 800000
+          min_ratio: 0.0
+          max_ratio: 8.0
+          threshold: 0.3
+          min_score: 0.3
     snapshots:
       enabled: true
     motion:
+      # Per-camera threshold override (training-collection mode): the
+      # global motion.threshold=26/255 is too aggressive for the doorbell
+      # in IR mode at 0 lux, where the real motion is only 0.5-1% pixel
+      # diff. Drop to 20/255 (~25% more permissive) so the detector gets
+      # a chance to see IR-mode visitors. The motion mask below is kept
+      # as-is — it still suppresses the sky / trees / reflections that
+      # would otherwise generate FPs at the relaxed threshold.
+      threshold: 20
       mask:
         # Sky / distant trees / reflected surfaces that trigger false motion
         - 0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081
@@ -736,19 +777,34 @@ cameras:
           0,0.735,0,0.488,0.304,0.523,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0.73,1,0.741,0.953,0.676,0.893,0.515,0.96,0.363,0.975,0.188,0.956,0.036,0.89,0.03,0.744
         loitering_time: 0
         inertia: 3
-        objects: [person]
+        # Add `face` so face crops inside the prive zone count as zone
+        # hits (they get rewritten to `person` by model.labelmap for the
+        # UI, but Frigate+ sees the raw face box).
+        objects: [person, face]
         filters:
           person:
-            # iter0: physics-based — matches camera-level filter
-            threshold: 0.55
-            min_area: 300
-            min_ratio: 1.0
-            max_ratio: 4.0
+            # Relaxed to match the camera-level filter
+            threshold: 0.4
+            min_area: 150
+            min_ratio: 0.4
+            max_ratio: 8.0
+          face:
+            threshold: 0.3
+            min_area: 0
+            min_ratio: 0.0
+            max_ratio: 8.0
     review:
+      # TRAINING-COLLECTION mode: every detection becomes an alert and
+      # a reviewable item, not just zone hits. This is the most
+      # important change for Frigate+ data collection — detections
+      # outside the prive zone (passersby on the public sidewalk) are
+      # also valid Frigate+ training samples for "what does a non-zone
+      # person look like at this camera", and gating them out would
+      # starve the model of useful variation.
       alerts:
-        required_zones: prive
+        required_zones: []
       detections:
-        required_zones: prive
+        required_zones: []
 
   # ============================================================================
   # CAMERA: jardin_devant

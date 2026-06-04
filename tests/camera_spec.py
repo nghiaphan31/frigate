@@ -217,6 +217,24 @@ CAMERAS = {
         "stream_w_px": 2560,
         "stream_h_px": 1920,
         "near_m":        3.0,
+        # ────────────────────────────────────────────────────────────
+        # TRAINING-COLLECTION MODE (branch
+        # feat/frigate-plus-training-collection-vue-entree, 2026-06-04).
+        # The expected_* values below are STILL the iter0 contract for
+        # documentation/geometry-derivation purposes, but the camera is
+        # INTENTIONALLY not running with those values — see the comment
+        # block in config.yml:713-732. The training_collection_mode flag
+        # tells tests/test-math.sh to skip the spec-vs-actual match
+        # assertions (sections 1 + 2) for this camera, while still
+        # running the geometry derivation (section 3) so the spec stays
+        # self-consistent. The test-bringup.sh L3 report still runs
+        # normally on vue_entree.
+        #
+        # To revert to iter0: change config.yml back to the
+        # expected_* values below, set training_collection_mode to
+        # False (or remove the key), and re-run `make test`.
+        # ────────────────────────────────────────────────────────────
+        "training_collection_mode": True,
         "expected_min_area":   300,
         "expected_max_area": 144000,
         "expected_min_ratio":  1.0,
