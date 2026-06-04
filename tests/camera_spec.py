@@ -182,13 +182,21 @@ CAMERAS = {
         "stream_w_px": 3840,
         "stream_h_px": 2160,
         "near_m":        5.0,
+        # TRAINING-COLLECTION MODE (2026-06-04). The iter0 contract was
+        # over-conservative for the back garden — a live walk test on
+        # 2026-06-04 produced no motion at all (global motion.threshold
+        # = 26/255 was too high, fps=5 gave too few samples/sec). Same
+        # rationale as vue_entree: relax the iter0 contract to capture
+        # the 0.30-0.55 score band that Frigate+ learns fastest from.
+        "training_collection_mode": True,
         "expected_min_area":   300,
         "expected_max_area": 117000,
         "expected_min_ratio":  1.0,
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
-        "expected_fps":          5,
+        # Bumped 5 → 10 fps (see vue_entree comment; same reasoning)
+        "expected_fps":         10,
         "detect_enabled":    True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area": 300, "min_ratio": 1.0, "max_ratio": 4.0},

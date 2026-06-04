@@ -581,21 +581,49 @@ cameras:
     detect:
       width: 3840
       height: 2160
-      fps: 5
+      # Bumped 5 → 10 fps (2026-06-04, training-collection
+      # relaxation). At 5 fps the motion pre-filter gets only ~3-4
+      # chances per second to fire on a 1.4 m/s walker; 10 fps
+      # doubles that and combined with the lower motion threshold
+      # (10) closes the distance gap the iter0 contract missed.
+      fps: 10
     objects:
-      track: [person]
+      # Track BOTH person AND face (training-collection mode,
+      # 2026-06-04). The global model.labelmap still rewrites
+      # face→person for the UI, but the raw face bbox is kept for
+      # Frigate+ training.
+      track: [person, face]
       filters:
         person:
-          # iter0: physics-based — 160cm person at 20m on 3840×2160 main stream
-          min_area: 300
+          # Training-collection relaxation (was iter0: 300/117000/1.0/4.0/0.55/0.45)
+          min_area: 150
           max_area: 117000
-          min_ratio: 1.0
-          max_ratio: 4.0
-          threshold: 0.55
-          min_score: 0.45
+          min_ratio: 0.4
+          max_ratio: 8.0
+          threshold: 0.4
+          min_score: 0.3
+        face:
+          # Permissive override of the auto-generated 0.7/0.7 face filter
+          min_area: 0
+          max_area: 117000
+          min_ratio: 0.0
+          max_ratio: 8.0
+          threshold: 0.3
+          min_score: 0.3
     snapshots:
       enabled: true
     motion:
+      # Per-camera threshold override (training-collection mode,
+      # 2026-06-04, refined after walk test). The user reported
+      # motion+detection working at 5-7 m but missed at "quite far
+      # distance" (~15-20 m). A walker at 20 m on 4K moves ~12
+      # stream-pixels per frame at 1.4 m/s; the per-pixel
+      # intensity change is small (low contrast against background)
+      # and the contour may fragment. Drop to 5/255 (~2 % per-pixel
+      # diff) to catch the smallest motion. Trade-off: ~2x more
+      # noise motion events (cloud edges, insects) which the
+      # detector will reject.
+      threshold: 5
       mask:
         # Trees and fence reflections that trigger false motion events
         - 0.087,0.123,0.065,0.241,0.072,0.32,0.095,0.365,0.155,0.411,0.198,0.384,0.231,0.336,0.245,0.301,0.222,0.262,0.22,0.215,0.208,0.163,0.189,0.131,0.158,0.122,0.13,0.12
@@ -612,14 +640,22 @@ cameras:
           0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,0.997,0.997
         loitering_time: 0
         inertia: 3
-        objects: [person]
+        # Add `face` so face crops inside the prive zone count as
+        # zone hits (rewritten to `person` by model.labelmap for the
+        # UI, but Frigate+ sees the raw face box).
+        objects: [person, face]
         filters:
           person:
-            # iter0: physics-based — matches camera-level filter
-            threshold: 0.55
-            min_area: 300
-            min_ratio: 1.0
-            max_ratio: 4.0
+            # Match the relaxed camera-level filter
+            threshold: 0.4
+            min_area: 150
+            min_ratio: 0.4
+            max_ratio: 8.0
+          face:
+            threshold: 0.3
+            min_area: 0
+            min_ratio: 0.0
+            max_ratio: 8.0
     review:
       alerts:
         required_zones: prive
@@ -745,25 +781,32 @@ cameras:
       track: [person, face]
       filters:
         person:
-          # Relaxed for training collection (was iter0: 300/144000/1.0/4.0/0.55/0.45)
-          min_area: 150
+          # DIAGNOSTIC 2026-06-04: ultra-permissive to test whether the
+          # YOLOv9s model can SEE a person at 15-20 m on the 2560×1920
+          # main stream at all. The model internally downscales to
+          # 320×320, so a person at 20 m is ~11×3 model-pixels — at the
+          # edge of the model's minimum-detectable-size. If the user
+          # walks at distance and STILL sees no event, the answer is
+          # "this camera + this model can't see at this distance" and
+          # we need a different approach (digital zoom, smaller crop,
+          # etc.). If the user DOES see events, the model is fine and
+          # we tighten back up.
+          #
+          # Was (training-collection): 150/800000/0.4/8.0/0.4/0.3
+          min_area: 25              # 50 % of the smallest expected 20 m footprint
           max_area: 800000
-          min_ratio: 0.4
-          max_ratio: 8.0
-          threshold: 0.4
-          min_score: 0.3
+          min_ratio: 0.2            # accept any aspect (head, side, etc.)
+          max_ratio: 12.0
+          threshold: 0.10           # accept very low confidence
+          min_score: 0.10
         face:
-          # Override the auto-generated `face` filter (which defaults to
-          # 0.7 / 0.7 / 0..24M / 0..24M area+ratio). At the doorbell the
-          # model can return `face` for a partial head-and-shoulders view
-          # at confidence 0.3-0.5; the auto filter would reject all of
-          # them. Match the permissive person filter.
+          # Match the permissive person filter
           min_area: 0
           max_area: 800000
           min_ratio: 0.0
-          max_ratio: 8.0
-          threshold: 0.3
-          min_score: 0.3
+          max_ratio: 12.0
+          threshold: 0.10
+          min_score: 0.10
     snapshots:
       enabled: true
     motion:
@@ -803,16 +846,16 @@ cameras:
         objects: [person, face]
         filters:
           person:
-            # Relaxed to match the camera-level filter
-            threshold: 0.4
-            min_area: 150
-            min_ratio: 0.4
-            max_ratio: 8.0
+            # Match the ultra-permissive camera-level filter (diagnostic)
+            threshold: 0.10
+            min_area: 25
+            min_ratio: 0.2
+            max_ratio: 12.0
           face:
-            threshold: 0.3
+            threshold: 0.10
             min_area: 0
             min_ratio: 0.0
-            max_ratio: 8.0
+            max_ratio: 12.0
     review:
       # TRAINING-COLLECTION mode: every detection becomes an alert and
       # a reviewable item, not just zone hits. This is the most
