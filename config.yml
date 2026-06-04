@@ -1093,20 +1093,56 @@ cameras:
     detect:
       width: 1536
       height: 432
-      fps: 5
+      # Bumped 5 → 10 fps (2026-06-04, training-collection
+      # relaxation). At 5 fps the motion pre-filter gets only ~3-4
+      # chances per second to fire on a 1.4 m/s walker; 10 fps
+      # doubles that and combined with the lower motion threshold
+      # (5/255 below) closes the distance gap the iter0 contract
+      # missed on this panoramic sub stream.
+      fps: 10
     objects:
-      track: [person]
+      # Track BOTH person AND face (training-collection mode,
+      # 2026-06-04). The global model.labelmap still rewrites
+      # face→person for the UI, but the raw face bbox is kept for
+      # Frigate+ training.
+      track: [person, face]
       filters:
         person:
-          # iter0: physics-based — 160cm person at 20m on 1536×432 sub-stream
-          min_area: 158
+          # Training-collection relaxation (was iter0:
+          # 158/27000/1.0/4.0/0.55/0.45). Rationale: a 20 m walker
+          # on the 1536×432 panoramic sub stream is only 34×12
+          # model-pixels after the 432/320 downscale — the iter0
+          # contract under-counted at distance, so the motion
+          # pre-filter (global threshold 26) AND the area/ratio/
+          # score cutoffs all rejected the small but valid detection.
+          min_area: 72          # ~50% of the 20 m footprint (158/2.2)
           max_area: 27000
-          min_ratio: 1.0
-          max_ratio: 4.0
-          threshold: 0.55
-          min_score: 0.45
+          min_ratio: 0.5        # accept aspect variants (head-only, side)
+          max_ratio: 8.0
+          threshold: 0.30
+          min_score: 0.25
+        face:
+          # Permissive override of the auto-generated 0.7/0.7 face filter
+          min_area: 0
+          max_area: 27000
+          min_ratio: 0.0
+          max_ratio: 8.0
+          threshold: 0.30
+          min_score: 0.25
     snapshots:
       enabled: true
+    motion:
+      # Per-camera override (training-collection mode, 2026-06-04).
+      # The global motion.threshold=26 was too high for the
+      # 1536×432 panoramic sub stream — a 20 m walker produces
+      # only ~5-8 % per-pixel diff (vs the 10 % required by
+      # threshold=26). Drop to 5/255 to catch the small distant
+      # motion. contour_area dropped from the global 30 to 10
+      # to keep small motion blobs from being filtered out on this
+      # noisy sub stream. Trade-off: ~2x more noise events, all
+      # rejected by the detector downstream.
+      threshold: 5
+      contour_area: 10
     zones:
       prive:
         # Pool + garden — immediate alert on entry
@@ -1114,14 +1150,22 @@ cameras:
           0.097,1,0.178,0.715,0.249,0.38,0.245,0.3,0.243,0.249,0.233,0.173,0.27,0.084,0.291,0.031,0.301,0,0.316,0,0.37,0,0.374,0.059,0.387,0.059,0.4,0.059,0.405,0.021,0.495,0.021,0.534,0.098,0.587,0.257,0.615,0.338,0.629,0.406,0.642,0.445,0.652,0.454,0.666,0.453,0.681,0.499,0.691,0.576,0.703,0.609,0.713,0.611,0.796,0.006,0.999,0,0.998,0.994
         loitering_time: 0
         inertia: 3
-        objects: [person]
+        # Add face so face crops inside the prive zone count as
+        # zone hits (rewritten to person by model.labelmap for the
+        # UI, but Frigate+ sees the raw face box).
+        objects: [person, face]
         filters:
           person:
-            # iter0: physics-based — matches camera-level filter
-            threshold: 0.55
-            min_area: 158
-            min_ratio: 1.0
-            max_ratio: 4.0
+            # Match the relaxed camera-level filter
+            threshold: 0.30
+            min_area: 72
+            min_ratio: 0.5
+            max_ratio: 8.0
+          face:
+            threshold: 0.30
+            min_area: 0
+            min_ratio: 0.0
+            max_ratio: 8.0
     review:
       alerts:
         required_zones: prive
