@@ -619,17 +619,30 @@ cameras:
     snapshots:
       enabled: true
     motion:
-      # Per-camera threshold override (training-collection mode,
-      # 2026-06-04, refined after walk test). The user reported
-      # motion+detection working at 5-7 m but missed at "quite far
-      # distance" (~15-20 m). A walker at 20 m on 4K moves ~12
-      # stream-pixels per frame at 1.4 m/s; the per-pixel
-      # intensity change is small (low contrast against background)
-      # and the contour may fragment. Drop to 5/255 (~2 % per-pixel
-      # diff) to catch the smallest motion. Trade-off: ~2x more
-      # noise motion events (cloud edges, insects) which the
-      # detector will reject.
-      threshold: 5
+      # Per-camera threshold override (night mode, 2026-06-04).
+      # Bumped from 5/255 (training-collection) → 30/255 to stop
+      # the 200%+ CPU storm at night. At 5/255 (~2 % per-pixel
+      # diff) every IR-illuminated foliage blob and every
+      # compression artefact on the 4K main stream registered as
+      # motion; the relaxed person filter (min_area: 150,
+      # min_score: 0.3) then confirmed many of those as events,
+      # which is what filled the debug view with motion boxes.
+      #
+      # At 30/255 (~12 % per-pixel diff) we:
+      #   - CATCH walkers at 5-7 m (5-10 % diff, borderline)
+      #   - MISS walkers at 10 m+ (2-5 % diff)
+      #   - SUPPRESS most night noise (IR sensor noise 1-3 %,
+      #     compression artefacts 1-5 %)
+      #
+      # Trade-off: this camera is less sensitive at night than
+      # the daytime training-collection mode. Acceptable because
+      # the 5 m walkable zone is the primary alert zone (prive);
+      # distant walkers (>10 m) were always in the "review"
+      # category, not "alert", and can be reviewed in the morning.
+      # If we want to recover some of the 10-20 m range later, the
+      # right path is a day/night split config, not a lower
+      # threshold (which would bring the noise storm back).
+      threshold: 30
       mask:
         # Trees and fence reflections that trigger false motion events
         - 0.087,0.123,0.065,0.241,0.072,0.32,0.095,0.365,0.155,0.411,0.198,0.384,0.231,0.336,0.245,0.301,0.222,0.262,0.22,0.215,0.208,0.163,0.189,0.131,0.158,0.122,0.13,0.12
@@ -639,6 +652,8 @@ cameras:
         - 0.535,0.258,0.558,0.264,0.555,0.321,0.529,0.314
         - 0.149,0.017,0.253,0.021,0.253,0.07,0.15,0.063
         - 0.351,0.061,0.367,0.028,0.392,0.023,0.414,0.036,0.424,0.061,0.392,0.067
+      contour_area: 30
+      improve_contrast: true
     zones:
       prive:
         # Play area + shed — immediate alert on entry
