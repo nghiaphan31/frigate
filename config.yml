@@ -667,16 +667,25 @@ cameras:
         objects: [person, face]
         filters:
           person:
-            # Match the relaxed camera-level filter
-            threshold: 0.4
-            min_area: 150
-            min_ratio: 0.4
-            max_ratio: 8.0
+            # TIGHTERED 2026-06-05: the in-zone filter sits ON TOP
+            # of the (still relaxed) camera-level filter, so this
+            # gate is what the iPhone notification ultimately
+            # depends on. Iter0-style values for the prive zone —
+            # matches the camera-level iter0 derivation at
+            # config.yml:560-565 (16:9 main stream 3840×2160,
+            # 2.2 m mount, 10° tilt, 87° H-FOV, 5-20 m walkable).
+            threshold: 0.55
+            min_area: 500
+            min_ratio: 1.0
+            max_ratio: 4.0
           face:
-            threshold: 0.3
-            min_area: 0
-            min_ratio: 0.0
-            max_ratio: 8.0
+            # Mirror the prive filter so the missing model.labelmap
+            # (see commit-message note) doesn't sneak face FPs past
+            # the prive gate either.
+            threshold: 0.55
+            min_area: 500
+            min_ratio: 1.0
+            max_ratio: 4.0
     review:
       alerts:
         required_zones: prive
@@ -868,26 +877,39 @@ cameras:
         objects: [person, face]
         filters:
           person:
-            # Match the ultra-permissive camera-level filter (diagnostic)
-            threshold: 0.10
-            min_area: 25
-            min_ratio: 0.2
-            max_ratio: 12.0
+            # TIGHTERED 2026-06-05: while the user is away with the
+            # alarm armed_away, only high-confidence in-prive events
+            # should become a zone hit. The camera-level filter above
+            # stays ultra-permissive (0.10) so passersby outside the
+            # prive zone still trigger detection events for Frigate+
+            # training (see review.detections below). Iter0-style
+            # thresholds for the prive zone itself.
+            threshold: 0.55
+            min_area: 500
+            min_ratio: 1.0
+            max_ratio: 4.0
           face:
-            threshold: 0.10
-            min_area: 0
-            min_ratio: 0.0
-            max_ratio: 12.0
+            # Mirror the prive filter so the missing model.labelmap
+            # (see commit-message note) doesn't sneak face FPs past
+            # the prive gate either.
+            threshold: 0.55
+            min_area: 500
+            min_ratio: 1.0
+            max_ratio: 4.0
     review:
-      # TRAINING-COLLECTION mode: every detection becomes an alert and
-      # a reviewable item, not just zone hits. This is the most
-      # important change for Frigate+ data collection — detections
-      # outside the prive zone (passersby on the public sidewalk) are
-      # also valid Frigate+ training samples for "what does a non-zone
-      # person look like at this camera", and gating them out would
-      # starve the model of useful variation.
+      # UPDATED 2026-06-05: was `required_zones: []` (every detection
+      # becomes an alert — passersby on the public sidewalk trigger
+      # iPhone notifications via the HA automation). Now gates alerts
+      # to the prive zone (driveway + doorstep) so the user is not
+      # pinged for non-property motion while armed_away.
+      #
+      # `detections` keeps `required_zones: []` to preserve the
+      # training-collection purpose: passersby still produce
+      # `detection`-type events (visible in the Frigate UI, feed
+      # Frigate+) — they just don't generate the alert that the
+      # HA→iPhone notification chain subscribes to.
       alerts:
-        required_zones: []
+        required_zones: [prive]
       detections:
         required_zones: []
 
