@@ -1146,7 +1146,18 @@ cameras:
       # doubles that and combined with the lower motion threshold
       # (5/255 below) closes the distance gap the iter0 contract
       # missed on this panoramic sub stream.
-      fps: 10
+      #
+      # Reduced 10 → 5 fps (2026-06-22, CPU fix). The 180°
+      # panoramic sub stream has persistent noise (clouds, tree
+      # branches, heat shimmer) that the motion pre-filter can't
+      # reject by threshold alone — at 10 fps the detector was
+      # invoked 3.4× per frame (detection_fps=34.4 vs
+      # process_fps=10.1), driving process CPU to 45%. Halving
+      # to 5 fps halves the detector invocations regardless of
+      # motion region count. The 1.4 m/s walker still gets ~3-4
+      # chances/sec at 5 fps (sufficient for the 20 m max
+      # walkable distance).
+      fps: 5
     objects:
       # Track BOTH person AND face (training-collection mode,
       # 2026-06-04). The global model.labelmap still rewrites
@@ -1182,17 +1193,24 @@ cameras:
     snapshots:
       enabled: true
     motion:
-      # Per-camera override (training-collection mode, 2026-06-04).
-      # The global motion.threshold=26 was too high for the
-      # 1536×432 panoramic sub stream — a 20 m walker produces
-      # only ~5-8 % per-pixel diff (vs the 10 % required by
-      # threshold=26). Drop to 5/255 to catch the small distant
-      # motion. contour_area dropped from the global 30 to 10
-      # to keep small motion blobs from being filtered out on this
-      # noisy sub stream. Trade-off: ~2x more noise events, all
-      # rejected by the detector downstream.
-      threshold: 5
-      contour_area: 10
+      # Per-camera override (training-collection mode, 2026-06-04,
+      # tightened 2026-06-22). The global motion.threshold=26 was
+      # too high for the 1536×432 panoramic sub stream — a 20 m
+      # walker produces only ~5-8 % per-pixel diff (vs the 10 %
+      # required by threshold=26). The 2026-06-04 drop to 5/255 +
+      # contour_area=10 caught the small distant motion but also
+      # let through ~4 noise regions/frame (clouds, IR LED
+      # switching, compression artefacts), causing
+      # detection_fps=42.7 (4.23× process_fps) and process CPU=45%.
+      # First tightening to 10/255 + contour_area=20 was
+      # insufficient (detection_fps only dropped to 37.6, ratio
+      # 3.76×) — the noise floor on this panoramic sub is above
+      # 10/255. Final values 15/255 + contour_area=25: still
+      # catches the 20 m walker (~5-8% diff > 15/255=5.9%
+      # threshold) but rejects the persistent noise. Expected:
+      # detection_fps → ~10-12, process CPU → ~10-15%.
+      threshold: 15
+      contour_area: 25
     zones:
       prive:
         # Pool + garden — immediate alert on entry

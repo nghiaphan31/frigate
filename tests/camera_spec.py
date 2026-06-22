@@ -333,8 +333,17 @@ CAMERAS = {
         "expected_min_score":  0.45,
         # Bumped 5 → 10 fps (see vue_entree + jardin_arriere
         # comments; same reasoning — the detect.fps check is a
-        # different test section and must reflect reality)
-        "expected_fps":         10,
+        # different test section and must reflect reality).
+        # Reduced 10 → 5 fps (2026-06-22, CPU fix). The 180°
+        # panoramic sub stream has persistent noise that the
+        # motion pre-filter can't reject by threshold alone —
+        # at 10 fps the detector was invoked 3.4× per frame
+        # (detection_fps=34.4 vs process_fps=10.1), driving
+        # process CPU to 45%. Halving to 5 fps halves the
+        # detector invocations regardless of motion region
+        # count. The 1.4 m/s walker still gets ~3-4 chances/sec
+        # at 5 fps (sufficient for the 20 m max walkable).
+        "expected_fps":          5,
         "detect_enabled":    True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area": 158, "min_ratio": 1.0, "max_ratio": 4.0},
