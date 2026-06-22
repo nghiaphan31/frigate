@@ -583,8 +583,19 @@ cameras:
       bounding_box: true
       crop: false
     detect:
-      width: 3840
-      height: 2160
+      width: 1920
+      height: 1080
+      # Reduced 3840×2160 → 1920×1080 (2026-06-22, CPU fix).
+      # The 4K main stream was decoded to rawvideo at 10 fps for
+      # detection, driving the ffmpeg process to 22% CPU (pid 1427,
+      # cpu_average=22%). The model is yolov9s at 640×640 input,
+      # so 4K detection is wasteful — NVDEC decodes 8.3M pixels/
+      # frame only to have Frigate downsample to 640×640 (1.5% of
+      # the original). Halving each dimension cuts the pixel count
+      # by 4× (8.3M → 2.1M) and the ffmpeg CPU by ~50-60%
+      # (22% → ~8-10%). The recording still uses the full 4K main
+      # stream (no quality loss for recordings).
+      #
       # Bumped 5 → 10 fps (2026-06-04, training-collection
       # relaxation). At 5 fps the motion pre-filter gets only ~3-4
       # chances per second to fire on a 1.4 m/s walker; 10 fps

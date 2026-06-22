@@ -179,8 +179,8 @@ CAMERAS = {
         "tilt_deg":     10.0,
         "v_fov_deg":    44.0,
         "h_fov_deg":    87.0,
-        "stream_w_px": 3840,
-        "stream_h_px": 2160,
+        "stream_w_px": 1920,
+        "stream_h_px": 1080,
         "near_m":        5.0,
         # TRAINING-COLLECTION MODE (2026-06-04). The iter0 contract was
         # over-conservative for the back garden — a live walk test on
@@ -188,6 +188,15 @@ CAMERAS = {
         # = 26/255 was too high, fps=5 gave too few samples/sec). Same
         # rationale as vue_entree: relax the iter0 contract to capture
         # the 0.30-0.55 score band that Frigate+ learns fastest from.
+        #
+        # Reduced 3840×2160 → 1920×1080 (2026-06-22, CPU fix).
+        # The 4K main stream was decoded to rawvideo at 10 fps for
+        # detection, driving the ffmpeg process to 22% CPU. The
+        # model is yolov9s at 640×640 input, so 4K detection is
+        # wasteful — NVDEC decodes 8.3M pixels/frame only to have
+        # Frigate downsample to 640×640. Halving each dimension
+        # cuts the pixel count by 4× and the ffmpeg CPU by ~50-60%.
+        # The recording still uses the full 4K main stream.
         "training_collection_mode": True,
         "expected_min_area":   300,
         "expected_max_area": 117000,
