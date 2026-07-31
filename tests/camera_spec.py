@@ -159,7 +159,6 @@ CAMERAS = {
         "expected_fps":          5,
         "detect_enabled":    True,
         "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area": 124, "min_ratio": 1.0, "max_ratio": 4.0},
             "rodage": {"threshold": 0.55, "min_area": 124, "min_ratio": 1.0, "max_ratio": 4.0},
         },
         "min_area_margin":     0.50,
@@ -207,9 +206,7 @@ CAMERAS = {
         "expected_min_score":  0.45,
         "expected_fps":          5,
         "detect_enabled":    True,
-        "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area": 500, "min_ratio": 1.0, "max_ratio": 4.0},
-        },
+        "expected_zones": {},
         # The margins below were re-derived for the 1080p detect
         # stream (4c77d3d, 2026-06-22). The original 4K values were
         # 0.022 (min) and 0.61 (max) for an area_far ≈ 14 000 and
@@ -259,9 +256,7 @@ CAMERAS = {
         "expected_min_score":  0.45,
         "expected_fps":          7,
         "detect_enabled":    True,
-        "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area": 500, "min_ratio": 1.0, "max_ratio": 4.0},
-        },
+        "expected_zones": {},
         "min_area_margin":     0.126,
         "max_area_margin":     1.79,
         "detect_stream": "vue_entree_main",
@@ -287,7 +282,6 @@ CAMERAS = {
         "expected_fps":          5,
         "detect_enabled":    True,
         "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area":  72, "min_ratio": 1.0, "max_ratio": 4.0},
             "rodage": {"threshold": 0.55, "min_area":  72, "min_ratio": 1.0, "max_ratio": 4.0},
         },
         "min_area_margin":     0.138,
@@ -329,9 +323,7 @@ CAMERAS = {
         # (sufficient for the 20 m max walkable).
         "expected_fps":          5,
         "detect_enabled":    True,
-        "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area": 158, "min_ratio": 1.0, "max_ratio": 4.0},
-        },
+        "expected_zones": {},
         "min_area_margin":     0.399,
         "max_area_margin":     9.36,
         "detect_stream": "piscine_vue_toit_sub",
