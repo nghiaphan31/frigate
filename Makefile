@@ -37,7 +37,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 .PHONY: help test test-bringup test-config test-math test-bringup-only list-cameras baseline \
-        evaluate \
+        evaluate phase5 phase5-syntactic \
         iter0-show iter0-diff iter0-diff-all iter0-revert iter0-revert-all iter0-revert-y
 
 help:
@@ -51,6 +51,8 @@ help:
 	@echo "  make list-cameras        print camera names from config.yml"
 	@echo "  make baseline            regenerate tests/baselines/snapshot.json"
 	@echo "  make evaluate            per-camera Frigate+ training-need verdict (live, requires Frigate)"
+	@echo "  make phase5              per-camera threshold re-derivation (live, requires Frigate; see plans/PLAN-2026-07-31-phase5.md)"
+	@echo "  make phase5-syntactic    fast syntax-check of tests/phase5-derive-thresholds.py (no Frigate)"
 	@echo ""
 	@echo "  Iter0 default manager (tests/iter0.py, spec = tests/camera_spec.py):"
 	@echo "  make iter0-show CAM=<name>     show the iter0 spec for one camera"
@@ -64,7 +66,10 @@ help:
 	@echo "  Iter0 dependency: pip3 install --user ruamel.yaml"
 	@echo ""
 
-test: test-config test-math
+# phase5-syntactic is a hard prerequisite of `test` so a syntax error
+# in the Phase 5 decision-matrix code is caught by CI before the
+# operator runs a 24-48h soak.
+test: phase5-syntactic test-config test-math
 
 test-bringup: test test-bringup-only
 
@@ -96,6 +101,36 @@ list-cameras:
 # ------------------------------------------------------------------------------
 evaluate:
 	@tests/wait-and-evaluate.sh $(CAMS)
+
+# ------------------------------------------------------------------------------
+# phase5 — per-camera threshold re-derivation against the new model
+# ------------------------------------------------------------------------------
+# Companion to plans/PLAN-2026-07-31-phase5.md and the Phase 4 commit
+# (post-iter1). Pulls the per-camera top_score distribution from the
+# running Frigate API and applies a per-camera decision matrix to
+# recommend a new (threshold, min_score) pair relative to the iter0
+# contract. Operator reviews, updates tests/camera_spec.py, then runs
+# `make iter0-revert-y CAM=<name>` to apply.
+#
+# Requires the live Frigate stack to be on the iter0 config for at
+# least 24-48h (otherwise the script returns INSUFFICIENT DATA).
+#
+#   make phase5                    # all 5 outdoor cameras, last 10000 events
+#   make phase5 CAMS=vue_entree    # one camera
+#   make phase5 JSON=out/phase5.json   # also write raw JSON
+#   FRIGATE_URL=http://frigate:5000 make phase5
+# ------------------------------------------------------------------------------
+phase5:
+	@tests/phase5-derive-thresholds.py $(CAMS) $(if $(JSON),--json=$(JSON),)
+
+# phase5-syntactic — fast no-Frigate syntax check, suitable for CI
+# ------------------------------------------------------------------------------
+# Runs python3 -m py_compile on the script so a syntax error in the
+# decision-matrix code is caught before the operator pulls the trigger
+# on a 24-48h soak.
+# ------------------------------------------------------------------------------
+phase5-syntactic:
+	@python3 -m py_compile tests/phase5-derive-thresholds.py && echo "phase5-derive-thresholds.py: syntax OK"
 
 baseline:
 	@mkdir -p tests/baselines
