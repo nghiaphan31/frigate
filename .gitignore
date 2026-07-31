@@ -17,10 +17,11 @@ trt-libs/
 trt-cache/tensorrt/
 
 # ============================================================================
-# FRIGATE+ MODEL BINARY — 28 MB, downloaded on first run.
+# FRIGATE+ MODEL BINARY — 48 MB, downloaded on first run.
 # ============================================================================
+# Previous (now-superseded) model: 6ea1f38db36e21f44a1eb1071d9958ed (28 MB)
 # Sibling .json file is KEPT (documents the model hash for reproducibility).
-trt-cache/6ea1f38db36e21f44a1eb1071d9958ed
+trt-cache/c1aa04320f389aa6c7702bf9ddd3fe6d
 
 # ============================================================================
 # SEMANTIC SEARCH ONNX MODELS — 84 MB vision + 262 MB text, downloaded once.
