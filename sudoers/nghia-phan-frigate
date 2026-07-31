@@ -1,0 +1,43 @@
+# ==============================================================================
+# Passwordless sudo for nghia-phan — Frigate stack + NAS mount management
+# ==============================================================================
+# Installed by the agent to allow unattended bring-up/recovery of:
+#   - the NAS systemd mount (mnt-nas-video.mount, NFS to 192.168.50.232)
+#   - the Frigate bring-up service (frigate-stack.service)
+#   - the periodic watchdog (frigate-stack-watchdog.{service,timer})
+# All commands are scoped to specific unit names and the single mount point;
+# anything outside this list still requires the user's password.
+#
+# Install:
+#   sudo install -m 0440 -o root -g root \
+#     /home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/sudoers/nghia-phan-frigate \
+#     /etc/sudoers.d/nghia-phan-frigate
+#   sudo visudo -c -f /etc/sudoers.d/nghia-phan-frigate
+#
+# Uninstall:
+#   sudo rm -f /etc/sudoers.d/nghia-phan-frigate
+# ==============================================================================
+Cmnd_Alias FRIGATE_AGENT_CMDS = \
+    /usr/bin/systemctl reset-failed mnt-nas-video.mount, \
+    /usr/bin/systemctl start mnt-nas-video.mount, \
+    /usr/bin/systemctl stop mnt-nas-video.mount, \
+    /usr/bin/systemctl restart mnt-nas-video.mount, \
+    /usr/bin/systemctl status mnt-nas-video.mount, \
+    /usr/bin/systemctl reset-failed frigate-stack.service, \
+    /usr/bin/systemctl start frigate-stack.service, \
+    /usr/bin/systemctl stop frigate-stack.service, \
+    /usr/bin/systemctl restart frigate-stack.service, \
+    /usr/bin/systemctl status frigate-stack.service, \
+    /usr/bin/systemctl reset-failed frigate-stack-watchdog.service, \
+    /usr/bin/systemctl start frigate-stack-watchdog.service, \
+    /usr/bin/systemctl status frigate-stack-watchdog.service, \
+    /usr/bin/systemctl is-active frigate-stack.service, \
+    /usr/bin/systemctl is-active mnt-nas-video.mount, \
+    /usr/bin/systemctl daemon-reload, \
+    /usr/bin/journalctl -u frigate-stack.service *, \
+    /usr/bin/journalctl -u frigate-stack-watchdog.service *, \
+    /usr/bin/journalctl -u mnt-nas-video.mount *, \
+    /usr/bin/mount /mnt/nas/video, \
+    /usr/bin/umount /mnt/nas/video
+
+nghia-phan ALL=(root) NOPASSWD: FRIGATE_AGENT_CMDS
