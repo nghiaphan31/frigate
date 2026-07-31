@@ -596,48 +596,38 @@ cameras:
       # (22% → ~8-10%). The recording still uses the full 4K main
       # stream (no quality loss for recordings).
       #
-      # Bumped 5 → 10 fps (2026-06-04, training-collection
-      # relaxation). At 5 fps the motion pre-filter gets only ~3-4
-      # chances per second to fire on a 1.4 m/s walker; 10 fps
-      # doubles that and combined with the lower motion threshold
-      # (10) closes the distance gap the iter0 contract missed.
-      fps: 10
+      # fps=5 (iter0 contract restored 2026-07-31). The 10 fps used
+      # during the 2026-06-04 → 2026-07-30 training-collection period
+      # was a temporary relaxation that doubled the detector-call
+      # rate to widen the net for Frigate+ labelling. The new
+      # plus://c1aa04320f389aa6c7702bf9ddd3fe6d yolonas model is
+      # trained on that wider net, so the iter0 contract is again
+      # the right production setting.
+      fps: 5
     objects:
-      # Track BOTH person AND face (training-collection mode,
-      # 2026-06-04). The global model.labelmap still rewrites
-      # face→person for the UI, but the raw face bbox is kept for
-      # Frigate+ training.
-      track: [person, face]
+      track: [person]
       filters:
         person:
-          # Training-collection relaxation (was iter0: 300/117000/1.0/4.0/0.55/0.45)
-          min_area: 150
+          # iter0 contract (restored 2026-07-31)
+          min_area: 300
           max_area: 117000
-          min_ratio: 0.4
-          max_ratio: 8.0
-          threshold: 0.4
-          min_score: 0.3
-        face:
-          # Permissive override of the auto-generated 0.7/0.7 face filter
-          min_area: 0
-          max_area: 117000
-          min_ratio: 0.0
-          max_ratio: 8.0
-          threshold: 0.3
-          min_score: 0.3
-      mask: 
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
+      mask:
         0.002,0.005,0.994,0.005,0.999,0.158,0.752,0.207,0.695,0.113,0.657,0.321,0.527,0.321,0.535,0.152,0.522,0.118,0.48,0.124,0.459,0.198,0.411,0.164,0.389,0.11,0.318,0.107,0.263,0.054,0.254,0.104,0.248,0.287,0.233,0.354,0.166,0.416,0.098,0.379,0.075,0.345,0,0.345
     snapshots:
       enabled: true
     motion:
-      # Per-camera threshold override (night mode, 2026-06-04).
-      # Bumped from 5/255 (training-collection) → 30/255 to stop
-      # the 200%+ CPU storm at night. At 5/255 (~2 % per-pixel
-      # diff) every IR-illuminated foliage blob and every
-      # compression artefact on the 4K main stream registered as
-      # motion; the relaxed person filter (min_area: 150,
-      # min_score: 0.3) then confirmed many of those as events,
-      # which is what filled the debug view with motion boxes.
+      # Per-camera threshold override (night mode, kept 2026-07-31 as
+      # a deliberate production value, not a training-collection
+      # artefact). The 30/255 value was chosen because the global
+      # default of 26/255 was overwhelmed by IR-mode noise on this
+      # 4K main stream (every IR-illuminated foliage blob + every
+      # compression artefact on 8.3 M pixels/frame at 5 fps registered
+      # as motion; the iter0 person filter (min_area: 300,
+      # min_score: 0.45) then confirmed many of those as events).
       #
       # At 30/255 (~12 % per-pixel diff) we:
       #   - CATCH walkers at 5-7 m (5-10 % diff, borderline)
@@ -645,14 +635,14 @@ cameras:
       #   - SUPPRESS most night noise (IR sensor noise 1-3 %,
       #     compression artefacts 1-5 %)
       #
-      # Trade-off: this camera is less sensitive at night than
-      # the daytime training-collection mode. Acceptable because
-      # the 5 m walkable zone is the primary alert zone (prive);
-      # distant walkers (>10 m) were always in the "review"
-      # category, not "alert", and can be reviewed in the morning.
-      # If we want to recover some of the 10-20 m range later, the
-      # right path is a day/night split config, not a lower
-      # threshold (which would bring the noise storm back).
+      # Trade-off: this camera is less sensitive at night than the
+      # global default. Acceptable because the 5 m walkable zone is
+      # the primary alert zone (prive); distant walkers (>10 m)
+      # were always in the "review" category, not "alert", and can
+      # be reviewed in the morning. If we want to recover some of
+      # the 10-20 m range later, the right path is a day/night
+      # split config, not a lower threshold (which would bring the
+      # noise storm back).
       threshold: 30
       mask:
         # Trees and fence reflections that trigger false motion events
@@ -672,27 +662,15 @@ cameras:
           0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,0.997,0.997
         loitering_time: 0
         inertia: 3
-        # Add `face` so face crops inside the prive zone count as
-        # zone hits (rewritten to `person` by model.labelmap for the
-        # UI, but Frigate+ sees the raw face box).
-        objects: [person, face]
+        objects: [person]
         filters:
           person:
-            # TIGHTERED 2026-06-05: the in-zone filter sits ON TOP
-            # of the (still relaxed) camera-level filter, so this
-            # gate is what the iPhone notification ultimately
-            # depends on. Iter0-style values for the prive zone —
-            # matches the camera-level iter0 derivation at
-            # config.yml:560-565 (16:9 main stream 3840×2160,
-            # 2.2 m mount, 10° tilt, 87° H-FOV, 5-20 m walkable).
-            threshold: 0.55
-            min_area: 500
-            min_ratio: 1.0
-            max_ratio: 4.0
-          face:
-            # Mirror the prive filter so the missing model.labelmap
-            # (see commit-message note) doesn't sneak face FPs past
-            # the prive gate either.
+            # min_area 300 (iter0) → 500 (deliberate 2026-06-05
+            # tightening, kept 2026-07-31). The 4K main stream at
+            # 15-20 m can produce noise-floor bboxes in the 300-500
+            # px² band that the iter0 contract lets through; bumping
+            # the in-zone floor to 500 suppresses them without
+            # affecting close-range (5 m) detection.
             threshold: 0.55
             min_area: 500
             min_ratio: 1.0
@@ -786,90 +764,38 @@ cameras:
     detect:
       width: 2560
       height: 1920
-      # Bumped from 7 to 10 fps (2026-06-04, follow-up to the
-      # training-collection relaxation). At 7 fps and 1.4 m/s walking
-      # speed, the motion pre-filter gets ~5 chances per second to
-      # fire on a 7 m distant walker — borderline. At 10 fps that's
-      # ~7 chances per second (~40 % more samples), which combined
-      # with the lower motion threshold and improved noise detection
-      # should reliably catch walkers at 5-15 m range on the
-      # doorbell. Cost: ~40 % more detector calls per minute on
-      # vue_entree (~3 M inference ops/min for the YOLOv9s TRT
-      # engine on a 2560×1920 input); trivial for the RTX 5060 Ti.
-      fps: 10
-    # ---------------------------------------------------------------------
-    # TRAINING-COLLECTION MODE (branch feat/frigate-plus-training-collection-
-    # vue-entree, 2026-06-04): the iter0 contract is over-conservative for
-    # the doorbell — see discussion in commit message. Relaxed to capture
-    # the edge cases the Frigate+ model is currently bad at:
-    #   * IR-mode at 0 lux: scores 0.30-0.50 (well below iter0 0.55)
-    #   * head-and-shoulders views at 1.7 m / 0° tilt: class 20 (face) crops
-    #   * face-fills-frame at the doorstep: bbox > 144 000 px²
-    #   * side / crouching / arms-spread body poses
-    # Expected effect: 5-10x more events on vue_entree, 30-50% FP rate
-    # (temporary). Revert to iter0 once Frigate+ has been retrained on the
-    # accumulated data and a new plus://<hash> is issued. Re-evaluation
-    # of all 8 cameras is automated by `make evaluate` (see Makefile and
-    # tests/wait-and-evaluate.sh).
-    # ---------------------------------------------------------------------
+      # fps=7 (iter0 contract restored 2026-07-31, after the
+      # plus://c1aa04320f389aa6c7702bf9ddd3fe6d model was issued).
+      # The 10 fps used during the 2026-06-04 → 2026-07-30
+      # training-collection period doubled the detector-call rate
+      # to widen the net for Frigate+ labelling; the new model is
+      # now trained on that wider net, so the iter0 contract is
+      # again the right production setting.
+      fps: 7
     objects:
-      # Track BOTH person AND face. The global model.labelmap at
-      # config.yml:246 still rewrites face→person for the user-facing UI
-      # (so the user sees `person` events), but the raw class-20 bounding
-      # box is preserved in the snapshot+thumbnail for Frigate+ to learn
-      # from — this is the single highest-value Frigate+ training sample
-      # the doorbell can produce.
-      track: [person, face]
+      track: [person]
       filters:
         person:
-          # DIAGNOSTIC 2026-06-04: ultra-permissive to test whether the
-          # YOLOv9s model can SEE a person at 15-20 m on the 2560×1920
-          # main stream at all. The model internally downscales to
-          # 320×320, so a person at 20 m is ~11×3 model-pixels — at the
-          # edge of the model's minimum-detectable-size. If the user
-          # walks at distance and STILL sees no event, the answer is
-          # "this camera + this model can't see at this distance" and
-          # we need a different approach (digital zoom, smaller crop,
-          # etc.). If the user DOES see events, the model is fine and
-          # we tighten back up.
-          #
-          # Was (training-collection): 150/800000/0.4/8.0/0.4/0.3
-          min_area: 25              # 50 % of the smallest expected 20 m footprint
-          max_area: 800000
-          min_ratio: 0.2            # accept any aspect (head, side, etc.)
-          max_ratio: 12.0
-          threshold: 0.10           # accept very low confidence
-          min_score: 0.10
-        face:
-          # Match the permissive person filter
-          min_area: 0
-          max_area: 800000
-          min_ratio: 0.0
-          max_ratio: 12.0
-          threshold: 0.10
-          min_score: 0.10
+          # iter0 contract (restored 2026-07-31). See
+          # config.yml:736-766 for the physics derivation
+          # (1.6 m person at 3-20 m on 2560×1920 main stream).
+          min_area: 300
+          max_area: 144000
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
       mask: 0.806,0.142,0.864,0.449,0.927,0.444,0.876,0.219
     snapshots:
       enabled: true
     motion:
-      # Per-camera threshold override (2026-06-04, follow-up #2 to the
-      # training-collection relaxation): the previous 20/255 was too
-      # aggressive for distant walkers. A person at 10-15 m on the
-      # 2560×1920 main stream produces only 0.2-1.5% per-frame
-      # pixel-diff; 20/255 (7.8 %) is 5-40× too high. Drop to 10/255
-      # (~4 % pixel-diff needed) to catch the 1-3% distant-motion
-      # band. The motion mask below is kept as-is — it still
-      # suppresses the sky / trees / reflections that would otherwise
-      # generate FPs at the relaxed threshold.
-      #
-      # Note: Frigate 0.17.1's schema does NOT support
-      # `improved_noise_detection: true` under the per-camera
-      # `motion:` block (Pydantic: "Extra inputs are not permitted").
-      # The schema was extended in later versions. We work around it
-      # by combining the lower threshold with the higher fps (see
-      # `detect.fps: 10` above) — the extra samples per second
-      # compensate for the missing denoising pass.
-      threshold: 10
+      # No per-camera motion override (restored 2026-07-31). The
+      # training-collection per-camera threshold: 10/255 was a
+      # temporary relaxation to widen the net for Frigate+ labelling
+      # on the doorbell; the new yolonas model is trained on the
+      # wider net and the global default 26/255 is again correct.
+      # The motion mask below is kept as a long-term FP-suppressor
+      # for sky / distant trees / reflected surfaces.
       mask:
         # Sky / distant trees / reflected surfaces that trigger false motion
         - 0.623,0.08,0.605,0.109,0.602,0.175,0.633,0.181,0.668,0.186,0.678,0.157,0.678,0.109,0.655,0.081
@@ -878,47 +804,32 @@ cameras:
     zones:
       prive:
         # Entry walkway + doorstep — immediate alert on entry
-        coordinates: 
+        coordinates:
           0,0.735,0,0.488,0.304,0.523,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0.73,1,0.741,0.953,0.676,0.893,0.515,0.96,0.363,0.975,0.188,0.956,0.036,0.89,0.03,0.744
         loitering_time: 0
         inertia: 3
-        # Add `face` so face crops inside the prive zone count as zone
-        # hits (they get rewritten to `person` by model.labelmap for the
-        # UI, but Frigate+ sees the raw face box).
-        objects: [person, face]
+        objects: [person]
         filters:
           person:
-            # TIGHTERED 2026-06-05: while the user is away with the
-            # alarm armed_away, only high-confidence in-prive events
-            # should become a zone hit. The camera-level filter above
-            # stays ultra-permissive (0.10) so passersby outside the
-            # prive zone still trigger detection events for Frigate+
-            # training (see review.detections below). Iter0-style
-            # thresholds for the prive zone itself.
-            threshold: 0.55
-            min_area: 500
-            min_ratio: 1.0
-            max_ratio: 4.0
-          face:
-            # Mirror the prive filter so the missing model.labelmap
-            # (see commit-message note) doesn't sneak face FPs past
-            # the prive gate either.
+            # min_area 300 (iter0) → 500 (deliberate 2026-06-05
+            # tightening, kept 2026-07-31). At 1.7 m / 0° tilt the
+            # doorbell sees a 20 m distant walker as a 27×88 px
+            # bbox (≈2400 px²); the iter0 contract would also
+            # catch motion-band noise in the 300-500 px² range
+            # that triggers a review-class event. The 500 px²
+            # in-zone floor suppresses those without affecting
+            # close-range (3 m) detection.
             threshold: 0.55
             min_area: 500
             min_ratio: 1.0
             max_ratio: 4.0
     review:
-      # UPDATED 2026-06-05: was `required_zones: []` (every detection
-      # becomes an alert — passersby on the public sidewalk trigger
-      # iPhone notifications via the HA automation). Now gates alerts
-      # to the prive zone (driveway + doorstep) so the user is not
-      # pinged for non-property motion while armed_away.
-      #
-      # `detections` keeps `required_zones: []` to preserve the
-      # training-collection purpose: passersby still produce
-      # `detection`-type events (visible in the Frigate UI, feed
-      # Frigate+) — they just don't generate the alert that the
-      # HA→iPhone notification chain subscribes to.
+      # Gate alerts to the prive zone (driveway + doorstep) so the
+      # user is not pinged for non-property motion while armed_away.
+      # passersby on the public sidewalk still produce detection-type
+      # events (visible in the Frigate UI for review) but do not
+      # generate the alert that the HA→iPhone notification chain
+      # subscribes to.
       alerts:
         required_zones: [prive]
       detections:
@@ -1151,100 +1062,64 @@ cameras:
     detect:
       width: 1536
       height: 432
-      # Bumped 5 → 10 fps (2026-06-04, training-collection
-      # relaxation). At 5 fps the motion pre-filter gets only ~3-4
-      # chances per second to fire on a 1.4 m/s walker; 10 fps
-      # doubles that and combined with the lower motion threshold
-      # (5/255 below) closes the distance gap the iter0 contract
-      # missed on this panoramic sub stream.
-      #
-      # Reduced 10 → 5 fps (2026-06-22, CPU fix). The 180°
-      # panoramic sub stream has persistent noise (clouds, tree
-      # branches, heat shimmer) that the motion pre-filter can't
-      # reject by threshold alone — at 10 fps the detector was
-      # invoked 3.4× per frame (detection_fps=34.4 vs
-      # process_fps=10.1), driving process CPU to 45%. Halving
-      # to 5 fps halves the detector invocations regardless of
-      # motion region count. The 1.4 m/s walker still gets ~3-4
-      # chances/sec at 5 fps (sufficient for the 20 m max
-      # walkable distance).
+      # fps=5 (4c77d3d, 2026-06-22, post-iter1 production). The
+      # 10 fps used during the 2026-06-04 → 2026-07-30
+      # training-collection period was reverted; the 5 fps is the
+      # right production value for the 180° panoramic sub stream
+      # (the 1.4 m/s walker gets ~3-4 chances/sec at 5 fps, which
+      # is sufficient for the 20 m max walkable distance).
       fps: 5
     objects:
-      # Track BOTH person AND face (training-collection mode,
-      # 2026-06-04). The global model.labelmap still rewrites
-      # face→person for the UI, but the raw face bbox is kept for
-      # Frigate+ training.
-      track: [person, face]
+      track: [person]
       filters:
         person:
-          # Training-collection relaxation (was iter0:
-          # 158/27000/1.0/4.0/0.55/0.45). Rationale: a 20 m walker
-          # on the 1536×432 panoramic sub stream is only 34×12
-          # model-pixels after the 432/320 downscale — the iter0
-          # contract under-counted at distance, so the motion
-          # pre-filter (global threshold 26) AND the area/ratio/
-          # score cutoffs all rejected the small but valid detection.
-          min_area: 72          # ~50% of the 20 m footprint (158/2.2)
+          # iter0 contract (restored 2026-07-31). See
+          # config.yml:1015-1042 for the physics derivation
+          # (1.6 m person at 5-20 m on 1536×432 panoramic sub
+          # stream, 6 m mount, 25° tilt, 180° H-FOV).
+          min_area: 158
           max_area: 27000
-          min_ratio: 0.5        # accept aspect variants (head-only, side)
-          max_ratio: 8.0
-          threshold: 0.30
-          min_score: 0.25
-        face:
-          # Permissive override of the auto-generated 0.7/0.7 face filter
-          min_area: 0
-          max_area: 27000
-          min_ratio: 0.0
-          max_ratio: 8.0
-          threshold: 0.30
-          min_score: 0.25
+          min_ratio: 1.0
+          max_ratio: 4.0
+          threshold: 0.55
+          min_score: 0.45
       mask:
         - 0.002,0.991,0,0.003,0.295,0.006,0.23,0.172,0.247,0.381,0.094,0.991
         - 0.371,0,0.792,0.012,0.713,0.589,0.67,0.429,0.645,0.432,0.599,0.278,0.538,0.094,0.495,0.018,0.404,0.018,0.399,0.054,0.374,0.051
     snapshots:
       enabled: true
     motion:
-      # Per-camera override (training-collection mode, 2026-06-04,
-      # tightened 2026-06-22). The global motion.threshold=26 was
-      # too high for the 1536×432 panoramic sub stream — a 20 m
-      # walker produces only ~5-8 % per-pixel diff (vs the 10 %
-      # required by threshold=26). The 2026-06-04 drop to 5/255 +
-      # contour_area=10 caught the small distant motion but also
-      # let through ~4 noise regions/frame (clouds, IR LED
-      # switching, compression artefacts), causing
-      # detection_fps=42.7 (4.23× process_fps) and process CPU=45%.
-      # First tightening to 10/255 + contour_area=20 was
-      # insufficient (detection_fps only dropped to 37.6, ratio
-      # 3.76×) — the noise floor on this panoramic sub is above
-      # 10/255. Final values 15/255 + contour_area=25: still
-      # catches the 20 m walker (~5-8% diff > 15/255=5.9%
-      # threshold) but rejects the persistent noise. Expected:
-      # detection_fps → ~10-12, process CPU → ~10-15%.
+      # Per-camera override (4c77d3d, 2026-06-22, post-iter1
+      # production). The global motion.threshold=26 is too high for
+      # the 1536×432 panoramic sub stream — a 20 m walker
+      # produces only ~5-8 % per-pixel diff (vs the 10 % required
+      # by threshold=26). The 15/255 + contour_area=25 values
+      # were iteratively tuned to:
+      #   - CATCH walkers at 5-20 m (~5-8 % diff > 15/255=5.9 %
+      #     threshold)
+      #   - REJECT the persistent noise on this panoramic sub
+      #     (clouds, IR LED switching, compression artefacts)
+      #   - KEEP detection_fps in the 10-12 range, process CPU in
+      #     the 10-15 % range (vs the 45 % the 5/10 training-mode
+      #     values produced).
       threshold: 15
       contour_area: 25
     zones:
       prive:
         # Pool + garden — immediate alert on entry
-        coordinates: 
+        coordinates:
           0.097,1,0.178,0.715,0.249,0.38,0.245,0.3,0.243,0.249,0.233,0.173,0.27,0.084,0.291,0.031,0.301,0,0.316,0,0.37,0,0.374,0.059,0.387,0.059,0.4,0.059,0.405,0.021,0.495,0.021,0.534,0.098,0.587,0.257,0.615,0.338,0.629,0.406,0.642,0.445,0.652,0.454,0.666,0.453,0.681,0.499,0.691,0.576,0.703,0.609,0.713,0.611,0.796,0.006,0.999,0,0.998,0.994
         loitering_time: 0
         inertia: 3
         # Add face so face crops inside the prive zone count as
-        # zone hits (rewritten to person by model.labelmap for the
-        # UI, but Frigate+ sees the raw face box).
-        objects: [person, face]
+        objects: [person]
         filters:
           person:
-            # Match the relaxed camera-level filter
-            threshold: 0.30
-            min_area: 72
-            min_ratio: 0.5
-            max_ratio: 8.0
-          face:
-            threshold: 0.30
-            min_area: 0
-            min_ratio: 0.0
-            max_ratio: 8.0
+            # iter0 contract (mirrors camera-level filter)
+            threshold: 0.55
+            min_area: 158
+            min_ratio: 1.0
+            max_ratio: 4.0
     review:
       alerts:
         required_zones: prive

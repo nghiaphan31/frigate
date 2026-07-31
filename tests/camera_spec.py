@@ -182,44 +182,48 @@ CAMERAS = {
         "stream_w_px": 1920,
         "stream_h_px": 1080,
         "near_m":        5.0,
-        # TRAINING-COLLECTION MODE (2026-06-04). The iter0 contract was
-        # over-conservative for the back garden — a live walk test on
-        # 2026-06-04 produced no motion at all (global motion.threshold
-        # = 26/255 was too high, fps=5 gave too few samples/sec). Same
-        # rationale as vue_entree: relax the iter0 contract to capture
-        # the 0.30-0.55 score band that Frigate+ learns fastest from.
+        # Post-iter1 production spec (2026-07-31). The 2026-06-04
+        # training-collection relaxation (track:[person,face], fps 10,
+        # threshold 0.4, min_score 0.3) has been reverted; the new
+        # yolonas model (plus://c1aa04320f389aa6c7702bf9ddd3fe6d)
+        # is trained on the relaxed data, so the iter0 contract is
+        # now appropriate.
         #
-        # Reduced 3840×2160 → 1920×1080 (2026-06-22, CPU fix).
-        # The 4K main stream was decoded to rawvideo at 10 fps for
-        # detection, driving the ffmpeg process to 22% CPU. The
-        # model is yolov9s at 640×640 input, so 4K detection is
-        # wasteful — NVDEC decodes 8.3M pixels/frame only to have
-        # Frigate downsample to 640×640. Halving each dimension
-        # cuts the pixel count by 4× and the ffmpeg CPU by ~50-60%.
-        # The recording still uses the full 4K main stream.
-        "training_collection_mode": True,
+        # The prive zone min_area is tightened 300 → 500 (relative to
+        # the iter0 base) to suppress the occasional far-garden false
+        # positive that the new model produces in IR mode at 15-20 m
+        # — see config.yml:684-690 (the 2026-06-05 "TIGHTERED" note).
+        # The detect.fps stays at 5 (iter0 contract).
+        #
+        # The 4K → 1080p detect stream downscale (4c77d3d, 2026-06-22)
+        # is a deliberate CPU-saving production change and is NOT a
+        # training-collection artefact. iter0.py leaves detect.width /
+        # detect.height alone for this reason.
         "expected_min_area":   300,
         "expected_max_area": 117000,
         "expected_min_ratio":  1.0,
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
-        # Bumped 5 → 10 fps (see vue_entree comment; same reasoning)
-        "expected_fps":         10,
+        "expected_fps":          5,
         "detect_enabled":    True,
         "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area": 300, "min_ratio": 1.0, "max_ratio": 4.0},
+            "prive":  {"threshold": 0.55, "min_area": 500, "min_ratio": 1.0, "max_ratio": 4.0},
         },
-        # min_area_margin < 0.5 means the operator is using min_area as
-        # a NOISE FLOOR (false-positive control), not a physics floor.
-        # Derived area_far at 20 m on 4K ≈ 14 000 px², but min_area=300
-        # catches a person at ~3 m of distance in 4K — well below the
-        # physics floor. The L2 test allows this (margin range is
-        # [GEOMETRY_MIN_LOWER, GEOMETRY_MIN_UPPER] = [0.3, 1.0]
-        # around the derived value, which becomes [92, 308] when
-        # margin=0.022).
-        "min_area_margin":     0.022,
-        "max_area_margin":     0.61,
+        # The margins below were re-derived for the 1080p detect
+        # stream (4c77d3d, 2026-06-22). The original 4K values were
+        # 0.022 (min) and 0.61 (max) for an area_far ≈ 14 000 and
+        # area_near ≈ 177 000. With the 4K→1080p downscale, the
+        # areas dropped to ≈ 3 500 (far) and ≈ 47 700 (near), so
+        # the margins re-derive to 0.086 (300/3499) and 2.45
+        # (117 000/47 700) respectively. min_area=300 is a
+        # deliberate noise-floor (catches close-range persons
+        # ~3 m on 1080p, well below the physics-derived 3 500
+        # area_far); max_area=117 000 is a generous upper bound
+        # (operator chose to err on the side of accepting rather
+        # than rejecting close-range persons).
+        "min_area_margin":     0.0857,
+        "max_area_margin":     2.4540,
         "detect_stream": "jardin_arriere_main",
         "live_stream":   "jardin_arriere_sub",
         "zones": ["prive"],
@@ -234,40 +238,29 @@ CAMERAS = {
         "stream_w_px": 2560,
         "stream_h_px": 1920,
         "near_m":        3.0,
-        # ────────────────────────────────────────────────────────────
-        # TRAINING-COLLECTION MODE (branch
-        # feat/frigate-plus-training-collection-vue-entree, 2026-06-04).
-        # The expected_* values below are STILL the iter0 contract for
-        # documentation/geometry-derivation purposes, but the camera is
-        # INTENTIONALLY not running with those values — see the comment
-        # block in config.yml:713-732. The training_collection_mode flag
-        # tells tests/test-math.sh to skip the spec-vs-actual match
-        # assertions (sections 1 + 2) for this camera, while still
-        # running the geometry derivation (section 3) so the spec stays
-        # self-consistent. The test-bringup.sh L3 report still runs
-        # normally on vue_entree.
+        # Post-iter1 production spec (2026-07-31). The 2026-06-04
+        # training-collection relaxation (track:[person,face], fps 10,
+        # threshold 0.4, min_score 0.3, diagnostic 0.10) has been
+        # reverted; the new yolonas model
+        # (plus://c1aa04320f389aa6c7702bf9ddd3fe6d) is trained on the
+        # relaxed data and the iter0 contract is now appropriate.
+        # detect.fps is back to 7 (iter0 contract).
         #
-        # To revert to iter0: change config.yml back to the
-        # expected_* values below, set training_collection_mode to
-        # False (or remove the key), and re-run `make test`.
-        # ────────────────────────────────────────────────────────────
-        "training_collection_mode": True,
+        # The prive zone min_area is tightened 300 → 500 to suppress
+        # the diagnostic-mode (0.10 threshold) FPs the relaxed camera-
+        # level filter was leaking into the alert chain — see
+        # config.yml:891-901 (the 2026-06-05 "TIGHTERED" note on the
+        # vue_entree prive zone).
         "expected_min_area":   300,
         "expected_max_area": 144000,
         "expected_min_ratio":  1.0,
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
-        # Bumped from 7 to 10 fps (2026-06-04, follow-up to the
-        # training-collection relaxation). At 10 fps the motion
-        # pre-filter gets ~40 % more chances per second to fire on
-        # distant walkers, which combined with the lower motion
-        # threshold (10/255) and improved_noise_detection closes the
-        # 5-15 m distance gap that the previous 7 fps config missed.
-        "expected_fps":         10,
+        "expected_fps":          7,
         "detect_enabled":    True,
         "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area": 300, "min_ratio": 1.0, "max_ratio": 4.0},
+            "prive":  {"threshold": 0.55, "min_area": 500, "min_ratio": 1.0, "max_ratio": 4.0},
         },
         "min_area_margin":     0.126,
         "max_area_margin":     1.79,
@@ -313,45 +306,27 @@ CAMERAS = {
         "stream_w_px": 1536,
         "stream_h_px":  432,
         "near_m":        5.0,
-        # TRAINING-COLLECTION MODE (2026-06-04). The iter0 contract
-        # was over-conservative for the pool rooftop — a live walk
-        # test on 2026-06-04 produced zero motion at all (global
-        # motion.threshold=26 was too high for the 1536×432
-        # panoramic sub stream; fps=5 gave too few samples/sec;
-        # the area/ratio/score cutoffs rejected the small 20 m
-        # detection). Same rationale as vue_entree + jardin_arriere:
-        # relax the iter0 contract to capture the 0.30-0.55 score
-        # band that Frigate+ learns fastest from.
-        #
-        # The training_collection_mode flag tells tests/test-math.sh
-        # to skip the spec-vs-actual match for this camera (sections
-        # 1 + 2) while still running the geometry derivation
-        # (section 3) so the spec stays self-consistent. The
-        # test-bringup.sh L3 report still runs normally.
-        #
-        # To revert to iter0: change config.yml back to the
-        # expected_* values below, set training_collection_mode to
-        # False (or remove the key), and re-run `make test`.
-        # ────────────────────────────────────────────────────────────
-        "training_collection_mode": True,
+        # Post-iter1 production spec (2026-07-31). The 2026-06-04
+        # training-collection relaxation (track:[person,face], fps 10,
+        # threshold 0.30, min_score 0.25) has been reverted; the new
+        # yolonas model is trained on the relaxed data and the iter0
+        # contract is now appropriate. The 4c77d3d CPU fix (fps 5,
+        # post 10-fps training bump) is already reflected below.
         "expected_min_area":   158,
         "expected_max_area": 27000,
         "expected_min_ratio":  1.0,
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
-        # Bumped 5 → 10 fps (see vue_entree + jardin_arriere
-        # comments; same reasoning — the detect.fps check is a
-        # different test section and must reflect reality).
-        # Reduced 10 → 5 fps (2026-06-22, CPU fix). The 180°
-        # panoramic sub stream has persistent noise that the
-        # motion pre-filter can't reject by threshold alone —
-        # at 10 fps the detector was invoked 3.4× per frame
-        # (detection_fps=34.4 vs process_fps=10.1), driving
-        # process CPU to 45%. Halving to 5 fps halves the
-        # detector invocations regardless of motion region
-        # count. The 1.4 m/s walker still gets ~3-4 chances/sec
-        # at 5 fps (sufficient for the 20 m max walkable).
+        # 4c77d3d (2026-06-22, CPU fix): reduced 10 → 5 fps. The
+        # 180° panoramic sub stream has persistent noise that the
+        # motion pre-filter can't reject by threshold alone — at
+        # 10 fps the detector was invoked 3.4× per frame
+        # (detection_fps=34.4 vs process_fps=10.1), driving process
+        # CPU to 45%. Halving to 5 fps halves the detector
+        # invocations regardless of motion region count. The
+        # 1.4 m/s walker still gets ~3-4 chances/sec at 5 fps
+        # (sufficient for the 20 m max walkable).
         "expected_fps":          5,
         "detect_enabled":    True,
         "expected_zones": {
