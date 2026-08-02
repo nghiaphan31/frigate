@@ -878,8 +878,25 @@ cameras:
     zones:
       prive:
         # Entry walkway + doorstep — immediate alert on entry
+        # POLYGON-FOOTGUN-NOTE 2026-08-02: the previous 21-vertex polygon
+        # had a bay-window cutout along the bottom edge (vertices 14-21
+        # dipping up to y=0.975). Frigate's zone match uses the bbox BOTTOM-
+        # CENTER (not the centroid), so a close-up person's feet at y=0.988
+        # fell OUTSIDE the polygon -> no zone hit -> event demoted from
+        # ALERT to detection. The 14-vertex polygon below has a flat bottom
+        # at y=1 covering the full doorstep. DO NOT re-introduce the bay
+        # window without re-verifying against a close-up test walk.
+        #
+        # HOT-RELOAD-GOTCHA 2026-08-02: PUT /api/config/set updates
+        # /api/config + the WebUI, but the detection workers cache the
+        # polygon shape at startup. A config-only change leaves them
+        # using the OLD polygon until the container is restarted
+        # (./bring-up.sh --recover=restart-container). Symptom of
+        # partial hot-reload: bbox geometrically inside the new polygon
+        # yet event.zones=[] from /api/events/<id>. Full diagnosis:
+        # tests/baselines/diagnosis-vue-entree-no-alert-2026-08-02.md
         coordinates: 
-          0,0.735,0,0.488,0.304,0.523,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0.73,1,0.741,0.953,0.676,0.893,0.515,0.96,0.363,0.975,0.188,0.956,0.036,0.89,0.03,0.744
+          0,0.735,0,0.488,0.304,0.523,0.308,0,0.456,0,0.685,0,0.731,0.154,0.809,0.204,0.823,0.275,0.836,0.361,0.85,0.487,1,0.491,1,1,0,1
         loitering_time: 0
         inertia: 3
         # Add `face` so face crops inside the prive zone count as zone
@@ -897,7 +914,7 @@ cameras:
             # thresholds for the prive zone itself.
             threshold: 0.55
             min_area: 500
-            min_ratio: 1.0
+            min_ratio: 0.2
             max_ratio: 4.0
           face:
             # Mirror the prive filter so the missing model.labelmap

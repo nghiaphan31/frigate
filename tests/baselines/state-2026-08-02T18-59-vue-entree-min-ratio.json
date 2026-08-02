@@ -1,0 +1,208 @@
+{
+  "schema_version": 2,
+  "report_ts_utc": "2026-08-02T19:08:06Z",
+  "report_ts_epoch": 1785697686,
+  "report_ts_local": "2026-08-02T21:08:06+0200",
+  "host": "Calypso",
+  "frigate_url": "http://localhost:5000",
+  "go2rtc_url": "http://localhost:1984",
+  "mqtt_broker": "192.168.50.125:1883",
+  "media_path": "/mnt/nas/video/frigate_calypso",
+  "window_hours": 1,
+  "stats_api_status": "ok",
+  "mode": "state",
+  "summary": {
+    "cameras_total": 1,
+    "cameras_ok": 1,
+    "cameras_degraded": 0,
+    "cameras_fail": 0,
+    "cameras_detection_disabled": 0
+  },
+  "cameras": [
+    {
+      "camera": "vue_entree",
+      "verdict": "OK",
+      "stages": {
+        "1_identity": {
+          "status": "OK",
+          "camera": "vue_entree",
+          "ip": "192.168.50.222",
+          "rtsp_inputs": [
+            "rtsp://127.0.0.1:8554/vue_entree_main"
+          ],
+          "input_roles": [
+            "detect,record,audio"
+          ],
+          "detect_enabled": true,
+          "detect_width": 2560,
+          "detect_height": 1920,
+          "detect_fps": 10,
+          "track": [
+            "person",
+            "face"
+          ],
+          "audio_enabled": true,
+          "mqtt_enabled": true,
+          "snapshots_enabled": true,
+          "review_alerts_zones": [
+            "prive"
+          ],
+          "review_detections_zones": [],
+          "zones": [
+            "prive"
+          ],
+          "person_filter": {
+            "min_area": 25,
+            "max_area": 800000,
+            "min_ratio": 0.2,
+            "max_ratio": 12.0,
+            "threshold": 0.1,
+            "min_score": 0.1
+          }
+        },
+        "2_rtsp_source": {
+          "status": "OK",
+          "ip": "192.168.50.222",
+          "port": 8554,
+          "rtt_ms": 0.3
+        },
+        "3_go2rtc_restream": {
+          "status": "OK",
+          "streams": {
+            "vue_entree_main": {
+              "producers": 1,
+              "consumers": 2,
+              "status": "OK"
+            }
+          }
+        },
+        "4_capture_ffmpeg": {
+          "status": "OK",
+          "camera_fps": 10.1
+        },
+        "5_detect_process": {
+          "status": "OK",
+          "detection_fps": 0.0,
+          "process_fps": 10.1
+        },
+        "6_motion_prefilter": {
+          "status": "OK",
+          "threshold": 10,
+          "contour_area": 30,
+          "frame_alpha": 0.4,
+          "delta_alpha": 0.5,
+          "improve_contrast": true,
+          "per_camera_override": true
+        },
+        "7_object_detection": {
+          "status": "OK",
+          "detectors": {
+            "onnx1": {
+              "type": null,
+              "device": null,
+              "inference_speed": 4.83
+            }
+          },
+          "model_path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+        },
+        "8_person_filter": {
+          "status": "OK",
+          "values": {
+            "min_area": 25,
+            "max_area": 800000,
+            "min_ratio": 0.2,
+            "max_ratio": 12.0,
+            "threshold": 0.1,
+            "min_score": 0.1
+          },
+          "missing": []
+        },
+        "9_zone_matching": {
+          "status": "OK",
+          "zones": [
+            {
+              "name": "prive",
+              "loitering_time_s": 0,
+              "inertia": 3,
+              "objects": [
+                "person",
+                "face"
+              ]
+            }
+          ],
+          "review_alerts_required_zones": [
+            "prive"
+          ],
+          "review_detections_required_zones": []
+        },
+        "10_event_lifecycle": {
+          "status": "OK",
+          "total_in_window": 1,
+          "window_hours": 1,
+          "alert_count": 0,
+          "detection_count": 0,
+          "score_distribution": {
+            "<0.30": 0,
+            "0.30-0.55": 0,
+            "0.55-0.70": 0,
+            ">=0.70": 1
+          },
+          "median_top_score": 0.977,
+          "last_event": {
+            "id": "1785697057.942166-sovvjt",
+            "start_ts": "2026-08-02T18:57:37Z",
+            "end_ts": "2026-08-02T18:58:31Z",
+            "label": "person",
+            "top_score": 0.9773606657981873,
+            "zones": [],
+            "has_clip": false,
+            "has_snapshot": true
+          },
+          "last_5_events": [
+            {
+              "id": "1785697057.942166-sovvjt",
+              "start_ts": "2026-08-02T18:57:37Z",
+              "end_ts": "2026-08-02T18:58:31Z",
+              "label": "person",
+              "top_score": 0.9773606657981873,
+              "zones": [],
+              "has_clip": false,
+              "has_snapshot": true,
+              "plus": null
+            }
+          ]
+        },
+        "11_mqtt_publish": {
+          "status": "OK",
+          "broker": "192.168.50.125:1883",
+          "rtt_ms": 0.3,
+          "last_event_ts_for_camera": "2026-08-02T18:57:37Z",
+          "caveat": "broker reachable; per-event publish verified only via /api/events (set has_clip / has_snapshot on stage 10)"
+        },
+        "12_recording": {
+          "status": "OK",
+          "events_with_clip_in_window": 0,
+          "events_total_in_window": 1,
+          "files_matched_on_disk": 0,
+          "size_mb_in_window": 0.0,
+          "rec_dir": "/mnt/nas/video/frigate_calypso/recordings"
+        },
+        "13_snapshots": {
+          "status": "OK",
+          "events_with_snapshot_in_window": 1,
+          "events_total_in_window": 1,
+          "newest_snapshot_ts": "2026-08-02T18:57:37Z",
+          "newest_event_id": "1785697057.942166-sovvjt"
+        },
+        "14_semantic_search": {
+          "status": "OK",
+          "model": null,
+          "image_embedding_speed_ms": 113.49,
+          "image_embedding_total": 0.0,
+          "events_for_camera": 1,
+          "caveat": "embedding count is GLOBAL (across all cameras); per-camera count not exposed by /api/stats"
+        }
+      }
+    }
+  ]
+}

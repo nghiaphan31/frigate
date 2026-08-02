@@ -1,0 +1,1067 @@
+{
+  "schema_version": 2,
+  "report_ts_utc": "2026-08-02T19:26:04Z",
+  "report_ts_epoch": 1785698764,
+  "report_ts_local": "2026-08-02T21:26:04+0200",
+  "host": "Calypso",
+  "frigate_url": "http://localhost:5000",
+  "go2rtc_url": "http://localhost:1984",
+  "mqtt_broker": "192.168.50.125:1883",
+  "media_path": "/mnt/nas/video/frigate_calypso",
+  "window_hours": 24,
+  "stats_api_status": "ok",
+  "mode": "walk",
+  "walk": {
+    "end_input_epoch": 1785698580.0,
+    "start_utc": "2026-08-02T19:18:00Z",
+    "end_utc": "2026-08-02T19:23:00Z",
+    "duration_s": 300.0,
+    "events_total": 7,
+    "events_per_camera": {
+      "allee_sur_le_cote": 2,
+      "jardin_devant": 3,
+      "vue_entree": 2
+    },
+    "events": [
+      {
+        "id": "1785698438.869584-fgzmc5",
+        "camera": "vue_entree",
+        "start_epoch": 1785698438.869584,
+        "start_utc": "2026-08-02T19:20:38Z",
+        "start_local": "2026-08-02T21:20:38+0200",
+        "end_epoch": 1785698496.515626,
+        "end_utc": "2026-08-02T19:21:36Z",
+        "end_local": "2026-08-02T21:21:36+0200",
+        "duration_s": 57.646,
+        "label": "person",
+        "top_score": 0.9709420502185822,
+        "zones": [],
+        "has_clip": false,
+        "has_snapshot": true,
+        "recording_path": null,
+        "recording_size_bytes": null,
+        "snapshot_url": "http://localhost:5000/api/events/1785698438.869584-fgzmc5/snapshot.jpg",
+        "trace": {
+          "motion": {
+            "threshold": 10,
+            "contour_area": 30,
+            "motion_region_norm": [
+              0.275,
+              0.40208333333333335,
+              0.4484375,
+              0.5979166666666667
+            ],
+            "verdict": "PASS",
+            "reason": "event was created => motion pre-filter fired with a region above threshold (the motion mask itself is not exposed via the REST API; the existence of the event is the proof)"
+          },
+          "detector": {
+            "model_path": {
+              "path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+            },
+            "verdict": "PASS",
+            "reason": "detector returned a bounding box (data.box present)",
+            "score_frame": 0.9285962581634521,
+            "score_event": 0.9709420502185822
+          },
+          "bbox": {
+            "norm": [
+              0.42734375,
+              0.525,
+              0.119140625,
+              0.4354166666666667
+            ],
+            "px": [
+              1094,
+              1008,
+              305,
+              836
+            ],
+            "area_px2": 254980,
+            "ratio": 0.365,
+            "centroid_norm": [
+              0.4869,
+              0.7427
+            ],
+            "verdict": "PASS",
+            "reason": "bbox extracted from detector output (area=254980 px\u00b2)"
+          },
+          "person_filter": {
+            "checks": {
+              "min_area": {
+                "bound": 25,
+                "actual": 254980,
+                "verdict": "PASS",
+                "reason": "254980 \u2265 25"
+              },
+              "max_area": {
+                "bound": 800000,
+                "actual": 254980,
+                "verdict": "PASS",
+                "reason": "254980 \u2264 800000"
+              },
+              "min_ratio": {
+                "bound": 0.2,
+                "actual": 0.365,
+                "verdict": "PASS",
+                "reason": "0.365 \u2265 0.2"
+              },
+              "max_ratio": {
+                "bound": 12.0,
+                "actual": 0.365,
+                "verdict": "PASS",
+                "reason": "0.365 \u2264 12.0"
+              },
+              "threshold": {
+                "bound": 0.1,
+                "actual": 0.9709,
+                "verdict": "PASS",
+                "reason": "0.9709 \u2265 0.1"
+              },
+              "min_score": {
+                "bound": 0.1,
+                "actual": 0.9709,
+                "verdict": "PASS",
+                "reason": "0.9709 \u2265 0.1"
+              }
+            },
+            "verdict": "PASS",
+            "reason": "all 6 checks passed"
+          },
+          "zones": {
+            "defined": [
+              "prive"
+            ],
+            "bbox_centroid_norm": [
+              0.4869,
+              0.7427
+            ],
+            "hit": [],
+            "verdict": "no zone hit"
+          },
+          "review_gate": {
+            "alerts_required_zones": [
+              "prive"
+            ],
+            "detections_required_zones": [],
+            "event_zones": [],
+            "frigate_max_severity": "detection",
+            "classification": "detection",
+            "verdict": "detection",
+            "reason": "event zones (none) \u2284 alerts_required_zones ['prive'] => detection"
+          },
+          "snapshot": {
+            "written": true,
+            "verdict": "WRITTEN",
+            "reason": "has_snapshot=True (best frame captured at peak score)"
+          },
+          "recording": {
+            "written": false,
+            "verdict": "NOT WRITTEN",
+            "reason": "has_clip=False (event in progress, or retention already pruned)"
+          },
+          "mqtt": {
+            "verdict": "LIKELY PUBLISHED",
+            "reason": "event lifecycle start/update/end was published on calypso_frigate/events; classification: detection"
+          }
+        }
+      },
+      {
+        "id": "1785698459.450121-0162z2",
+        "camera": "jardin_devant",
+        "start_epoch": 1785698459.450121,
+        "start_utc": "2026-08-02T19:20:59Z",
+        "start_local": "2026-08-02T21:20:59+0200",
+        "end_epoch": 1785698471.479045,
+        "end_utc": "2026-08-02T19:21:11Z",
+        "end_local": "2026-08-02T21:21:11+0200",
+        "duration_s": 12.029,
+        "label": "person",
+        "top_score": 0.9440137147903442,
+        "zones": [
+          "prive"
+        ],
+        "has_clip": false,
+        "has_snapshot": true,
+        "recording_path": null,
+        "recording_size_bytes": null,
+        "snapshot_url": "http://localhost:5000/api/events/1785698459.450121-0162z2/snapshot.jpg",
+        "trace": {
+          "motion": {
+            "threshold": 26,
+            "contour_area": 30,
+            "motion_region_norm": [
+              0.5305989583333334,
+              0.21296296296296297,
+              0.20833333333333334,
+              0.7407407407407407
+            ],
+            "verdict": "PASS",
+            "reason": "event was created => motion pre-filter fired with a region above threshold (the motion mask itself is not exposed via the REST API; the existence of the event is the proof)"
+          },
+          "detector": {
+            "model_path": {
+              "path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+            },
+            "verdict": "PASS",
+            "reason": "detector returned a bounding box (data.box present)",
+            "score_frame": 0.9451714158058167,
+            "score_event": 0.9440137147903442
+          },
+          "bbox": {
+            "norm": [
+              0.6061197916666666,
+              0.4861111111111111,
+              0.057291666666666664,
+              0.1875
+            ],
+            "px": [
+              931,
+              210,
+              88,
+              81
+            ],
+            "area_px2": 7128,
+            "ratio": 1.086,
+            "centroid_norm": [
+              0.6348,
+              0.5799
+            ],
+            "verdict": "PASS",
+            "reason": "bbox extracted from detector output (area=7128 px\u00b2)"
+          },
+          "person_filter": {
+            "checks": {
+              "min_area": {
+                "bound": 72,
+                "actual": 7128,
+                "verdict": "PASS",
+                "reason": "7128 \u2265 72"
+              },
+              "max_area": {
+                "bound": 13500,
+                "actual": 7128,
+                "verdict": "PASS",
+                "reason": "7128 \u2264 13500"
+              },
+              "min_ratio": {
+                "bound": 1.0,
+                "actual": 1.086,
+                "verdict": "PASS",
+                "reason": "1.086 \u2265 1.0"
+              },
+              "max_ratio": {
+                "bound": 4.0,
+                "actual": 1.086,
+                "verdict": "PASS",
+                "reason": "1.086 \u2264 4.0"
+              },
+              "threshold": {
+                "bound": 0.55,
+                "actual": 0.944,
+                "verdict": "PASS",
+                "reason": "0.9440 \u2265 0.55"
+              },
+              "min_score": {
+                "bound": 0.45,
+                "actual": 0.944,
+                "verdict": "PASS",
+                "reason": "0.9440 \u2265 0.45"
+              }
+            },
+            "verdict": "PASS",
+            "reason": "all 6 checks passed"
+          },
+          "zones": {
+            "defined": [
+              "prive",
+              "rodage"
+            ],
+            "bbox_centroid_norm": [
+              0.6348,
+              0.5799
+            ],
+            "hit": [
+              "prive"
+            ],
+            "verdict": "hit prive"
+          },
+          "review_gate": {
+            "alerts_required_zones": [
+              "prive"
+            ],
+            "detections_required_zones": [
+              "rodage"
+            ],
+            "event_zones": [
+              "prive"
+            ],
+            "frigate_max_severity": "alert",
+            "classification": "ALERT",
+            "verdict": "ALERT",
+            "reason": "event zones ['prive'] \u2208 alerts_required_zones ['prive'] => ALERT"
+          },
+          "snapshot": {
+            "written": true,
+            "verdict": "WRITTEN",
+            "reason": "has_snapshot=True (best frame captured at peak score)"
+          },
+          "recording": {
+            "written": false,
+            "verdict": "NOT WRITTEN",
+            "reason": "has_clip=False (event in progress, or retention already pruned)"
+          },
+          "mqtt": {
+            "verdict": "LIKELY PUBLISHED",
+            "reason": "event lifecycle start/update/end was published on calypso_frigate/events; classification: ALERT"
+          }
+        }
+      },
+      {
+        "id": "1785698472.399209-t119eu",
+        "camera": "jardin_devant",
+        "start_epoch": 1785698472.399209,
+        "start_utc": "2026-08-02T19:21:12Z",
+        "start_local": "2026-08-02T21:21:12+0200",
+        "end_epoch": 1785698476.844631,
+        "end_utc": "2026-08-02T19:21:16Z",
+        "end_local": "2026-08-02T21:21:16+0200",
+        "duration_s": 4.445,
+        "label": "person",
+        "top_score": 0.9447595477104187,
+        "zones": [
+          "prive"
+        ],
+        "has_clip": false,
+        "has_snapshot": true,
+        "recording_path": null,
+        "recording_size_bytes": null,
+        "snapshot_url": "http://localhost:5000/api/events/1785698472.399209-t119eu/snapshot.jpg",
+        "trace": {
+          "motion": {
+            "threshold": 26,
+            "contour_area": 30,
+            "motion_region_norm": [
+              0.5748697916666666,
+              0.2569444444444444,
+              0.20833333333333334,
+              0.7407407407407407
+            ],
+            "verdict": "PASS",
+            "reason": "event was created => motion pre-filter fired with a region above threshold (the motion mask itself is not exposed via the REST API; the existence of the event is the proof)"
+          },
+          "detector": {
+            "model_path": {
+              "path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+            },
+            "verdict": "PASS",
+            "reason": "detector returned a bounding box (data.box present)",
+            "score_frame": 0.7404641509056091,
+            "score_event": 0.9447595477104187
+          },
+          "bbox": {
+            "norm": [
+              0.6458333333333334,
+              0.5324074074074074,
+              0.080078125,
+              0.18055555555555555
+            ],
+            "px": [
+              992,
+              230,
+              123,
+              78
+            ],
+            "area_px2": 9594,
+            "ratio": 1.577,
+            "centroid_norm": [
+              0.6859,
+              0.6227
+            ],
+            "verdict": "PASS",
+            "reason": "bbox extracted from detector output (area=9594 px\u00b2)"
+          },
+          "person_filter": {
+            "checks": {
+              "min_area": {
+                "bound": 72,
+                "actual": 9594,
+                "verdict": "PASS",
+                "reason": "9594 \u2265 72"
+              },
+              "max_area": {
+                "bound": 13500,
+                "actual": 9594,
+                "verdict": "PASS",
+                "reason": "9594 \u2264 13500"
+              },
+              "min_ratio": {
+                "bound": 1.0,
+                "actual": 1.577,
+                "verdict": "PASS",
+                "reason": "1.577 \u2265 1.0"
+              },
+              "max_ratio": {
+                "bound": 4.0,
+                "actual": 1.577,
+                "verdict": "PASS",
+                "reason": "1.577 \u2264 4.0"
+              },
+              "threshold": {
+                "bound": 0.55,
+                "actual": 0.9448,
+                "verdict": "PASS",
+                "reason": "0.9448 \u2265 0.55"
+              },
+              "min_score": {
+                "bound": 0.45,
+                "actual": 0.9448,
+                "verdict": "PASS",
+                "reason": "0.9448 \u2265 0.45"
+              }
+            },
+            "verdict": "PASS",
+            "reason": "all 6 checks passed"
+          },
+          "zones": {
+            "defined": [
+              "prive",
+              "rodage"
+            ],
+            "bbox_centroid_norm": [
+              0.6859,
+              0.6227
+            ],
+            "hit": [
+              "prive"
+            ],
+            "verdict": "hit prive"
+          },
+          "review_gate": {
+            "alerts_required_zones": [
+              "prive"
+            ],
+            "detections_required_zones": [
+              "rodage"
+            ],
+            "event_zones": [
+              "prive"
+            ],
+            "frigate_max_severity": "alert",
+            "classification": "ALERT",
+            "verdict": "ALERT",
+            "reason": "event zones ['prive'] \u2208 alerts_required_zones ['prive'] => ALERT"
+          },
+          "snapshot": {
+            "written": true,
+            "verdict": "WRITTEN",
+            "reason": "has_snapshot=True (best frame captured at peak score)"
+          },
+          "recording": {
+            "written": false,
+            "verdict": "NOT WRITTEN",
+            "reason": "has_clip=False (event in progress, or retention already pruned)"
+          },
+          "mqtt": {
+            "verdict": "LIKELY PUBLISHED",
+            "reason": "event lifecycle start/update/end was published on calypso_frigate/events; classification: ALERT"
+          }
+        }
+      },
+      {
+        "id": "1785698477.413527-029y09",
+        "camera": "allee_sur_le_cote",
+        "start_epoch": 1785698477.413527,
+        "start_utc": "2026-08-02T19:21:17Z",
+        "start_local": "2026-08-02T21:21:17+0200",
+        "end_epoch": 1785698497.162376,
+        "end_utc": "2026-08-02T19:21:37Z",
+        "end_local": "2026-08-02T21:21:37+0200",
+        "duration_s": 19.749,
+        "label": "person",
+        "top_score": 0.9643168151378632,
+        "zones": [
+          "prive"
+        ],
+        "has_clip": false,
+        "has_snapshot": true,
+        "recording_path": null,
+        "recording_size_bytes": null,
+        "snapshot_url": "http://localhost:5000/api/events/1785698477.413527-029y09/snapshot.jpg",
+        "trace": {
+          "motion": {
+            "threshold": 26,
+            "contour_area": 30,
+            "motion_region_norm": [
+              0.24609375,
+              0.25925925925925924,
+              0.20833333333333334,
+              0.7407407407407407
+            ],
+            "verdict": "PASS",
+            "reason": "event was created => motion pre-filter fired with a region above threshold (the motion mask itself is not exposed via the REST API; the existence of the event is the proof)"
+          },
+          "detector": {
+            "model_path": {
+              "path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+            },
+            "verdict": "PASS",
+            "reason": "detector returned a bounding box (data.box present)",
+            "score_frame": 0.9455743432044983,
+            "score_event": 0.9643168151378632
+          },
+          "bbox": {
+            "norm": [
+              0.314453125,
+              0.4699074074074074,
+              0.103515625,
+              0.30787037037037035
+            ],
+            "px": [
+              483,
+              203,
+              159,
+              133
+            ],
+            "area_px2": 21147,
+            "ratio": 1.195,
+            "centroid_norm": [
+              0.3662,
+              0.6238
+            ],
+            "verdict": "PASS",
+            "reason": "bbox extracted from detector output (area=21147 px\u00b2)"
+          },
+          "person_filter": {
+            "checks": {
+              "min_area": {
+                "bound": 124,
+                "actual": 21147,
+                "verdict": "PASS",
+                "reason": "21147 \u2265 124"
+              },
+              "max_area": {
+                "bound": 22500,
+                "actual": 21147,
+                "verdict": "PASS",
+                "reason": "21147 \u2264 22500"
+              },
+              "min_ratio": {
+                "bound": 1.0,
+                "actual": 1.195,
+                "verdict": "PASS",
+                "reason": "1.195 \u2265 1.0"
+              },
+              "max_ratio": {
+                "bound": 4.0,
+                "actual": 1.195,
+                "verdict": "PASS",
+                "reason": "1.195 \u2264 4.0"
+              },
+              "threshold": {
+                "bound": 0.55,
+                "actual": 0.9643,
+                "verdict": "PASS",
+                "reason": "0.9643 \u2265 0.55"
+              },
+              "min_score": {
+                "bound": 0.45,
+                "actual": 0.9643,
+                "verdict": "PASS",
+                "reason": "0.9643 \u2265 0.45"
+              }
+            },
+            "verdict": "PASS",
+            "reason": "all 6 checks passed"
+          },
+          "zones": {
+            "defined": [
+              "prive",
+              "rodage"
+            ],
+            "bbox_centroid_norm": [
+              0.3662,
+              0.6238
+            ],
+            "hit": [
+              "prive"
+            ],
+            "verdict": "hit prive"
+          },
+          "review_gate": {
+            "alerts_required_zones": [
+              "prive"
+            ],
+            "detections_required_zones": [
+              "rodage"
+            ],
+            "event_zones": [
+              "prive"
+            ],
+            "frigate_max_severity": "alert",
+            "classification": "ALERT",
+            "verdict": "ALERT",
+            "reason": "event zones ['prive'] \u2208 alerts_required_zones ['prive'] => ALERT"
+          },
+          "snapshot": {
+            "written": true,
+            "verdict": "WRITTEN",
+            "reason": "has_snapshot=True (best frame captured at peak score)"
+          },
+          "recording": {
+            "written": false,
+            "verdict": "NOT WRITTEN",
+            "reason": "has_clip=False (event in progress, or retention already pruned)"
+          },
+          "mqtt": {
+            "verdict": "LIKELY PUBLISHED",
+            "reason": "event lifecycle start/update/end was published on calypso_frigate/events; classification: ALERT"
+          }
+        }
+      },
+      {
+        "id": "1785698495.253406-kvkrok",
+        "camera": "vue_entree",
+        "start_epoch": 1785698495.253406,
+        "start_utc": "2026-08-02T19:21:35Z",
+        "start_local": "2026-08-02T21:21:35+0200",
+        "end_epoch": 1785698520.96054,
+        "end_utc": "2026-08-02T19:22:00Z",
+        "end_local": "2026-08-02T21:22:00+0200",
+        "duration_s": 25.707,
+        "label": "person",
+        "top_score": 0.9684977233409882,
+        "zones": [],
+        "has_clip": false,
+        "has_snapshot": true,
+        "recording_path": null,
+        "recording_size_bytes": null,
+        "snapshot_url": "http://localhost:5000/api/events/1785698495.253406-kvkrok/snapshot.jpg",
+        "trace": {
+          "motion": {
+            "threshold": 10,
+            "contour_area": 30,
+            "motion_region_norm": [
+              0.04140625,
+              0.12083333333333333,
+              0.659375,
+              0.8791666666666667
+            ],
+            "verdict": "PASS",
+            "reason": "event was created => motion pre-filter fired with a region above threshold (the motion mask itself is not exposed via the REST API; the existence of the event is the proof)"
+          },
+          "detector": {
+            "model_path": {
+              "path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+            },
+            "verdict": "PASS",
+            "reason": "detector returned a bounding box (data.box present)",
+            "score_frame": 0.9329270720481873,
+            "score_event": 0.9684977233409882
+          },
+          "bbox": {
+            "norm": [
+              0.314453125,
+              0.5322916666666667,
+              0.104296875,
+              0.3958333333333333
+            ],
+            "px": [
+              805,
+              1022,
+              267,
+              760
+            ],
+            "area_px2": 202920,
+            "ratio": 0.351,
+            "centroid_norm": [
+              0.3666,
+              0.7302
+            ],
+            "verdict": "PASS",
+            "reason": "bbox extracted from detector output (area=202920 px\u00b2)"
+          },
+          "person_filter": {
+            "checks": {
+              "min_area": {
+                "bound": 25,
+                "actual": 202920,
+                "verdict": "PASS",
+                "reason": "202920 \u2265 25"
+              },
+              "max_area": {
+                "bound": 800000,
+                "actual": 202920,
+                "verdict": "PASS",
+                "reason": "202920 \u2264 800000"
+              },
+              "min_ratio": {
+                "bound": 0.2,
+                "actual": 0.351,
+                "verdict": "PASS",
+                "reason": "0.351 \u2265 0.2"
+              },
+              "max_ratio": {
+                "bound": 12.0,
+                "actual": 0.351,
+                "verdict": "PASS",
+                "reason": "0.351 \u2264 12.0"
+              },
+              "threshold": {
+                "bound": 0.1,
+                "actual": 0.9685,
+                "verdict": "PASS",
+                "reason": "0.9685 \u2265 0.1"
+              },
+              "min_score": {
+                "bound": 0.1,
+                "actual": 0.9685,
+                "verdict": "PASS",
+                "reason": "0.9685 \u2265 0.1"
+              }
+            },
+            "verdict": "PASS",
+            "reason": "all 6 checks passed"
+          },
+          "zones": {
+            "defined": [
+              "prive"
+            ],
+            "bbox_centroid_norm": [
+              0.3666,
+              0.7302
+            ],
+            "hit": [],
+            "verdict": "no zone hit"
+          },
+          "review_gate": {
+            "alerts_required_zones": [
+              "prive"
+            ],
+            "detections_required_zones": [],
+            "event_zones": [],
+            "frigate_max_severity": "detection",
+            "classification": "detection",
+            "verdict": "detection",
+            "reason": "event zones (none) \u2284 alerts_required_zones ['prive'] => detection"
+          },
+          "snapshot": {
+            "written": true,
+            "verdict": "WRITTEN",
+            "reason": "has_snapshot=True (best frame captured at peak score)"
+          },
+          "recording": {
+            "written": false,
+            "verdict": "NOT WRITTEN",
+            "reason": "has_clip=False (event in progress, or retention already pruned)"
+          },
+          "mqtt": {
+            "verdict": "LIKELY PUBLISHED",
+            "reason": "event lifecycle start/update/end was published on calypso_frigate/events; classification: detection"
+          }
+        }
+      },
+      {
+        "id": "1785698498.71638-j7bdm6",
+        "camera": "allee_sur_le_cote",
+        "start_epoch": 1785698498.71638,
+        "start_utc": "2026-08-02T19:21:38Z",
+        "start_local": "2026-08-02T21:21:38+0200",
+        "end_epoch": 1785698510.932148,
+        "end_utc": "2026-08-02T19:21:50Z",
+        "end_local": "2026-08-02T21:21:50+0200",
+        "duration_s": 12.216,
+        "label": "person",
+        "top_score": 0.9562504887580872,
+        "zones": [
+          "prive"
+        ],
+        "has_clip": false,
+        "has_snapshot": true,
+        "recording_path": null,
+        "recording_size_bytes": null,
+        "snapshot_url": "http://localhost:5000/api/events/1785698498.71638-j7bdm6/snapshot.jpg",
+        "trace": {
+          "motion": {
+            "threshold": 26,
+            "contour_area": 30,
+            "motion_region_norm": [
+              0.22721354166666666,
+              0.24537037037037038,
+              0.20833333333333334,
+              0.7407407407407407
+            ],
+            "verdict": "PASS",
+            "reason": "event was created => motion pre-filter fired with a region above threshold (the motion mask itself is not exposed via the REST API; the existence of the event is the proof)"
+          },
+          "detector": {
+            "model_path": {
+              "path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+            },
+            "verdict": "PASS",
+            "reason": "detector returned a bounding box (data.box present)",
+            "score_frame": 0.9500625729560852,
+            "score_event": 0.9562504887580872
+          },
+          "bbox": {
+            "norm": [
+              0.2643229166666667,
+              0.47685185185185186,
+              0.109375,
+              0.2916666666666667
+            ],
+            "px": [
+              406,
+              206,
+              168,
+              126
+            ],
+            "area_px2": 21168,
+            "ratio": 1.333,
+            "centroid_norm": [
+              0.319,
+              0.6227
+            ],
+            "verdict": "PASS",
+            "reason": "bbox extracted from detector output (area=21168 px\u00b2)"
+          },
+          "person_filter": {
+            "checks": {
+              "min_area": {
+                "bound": 124,
+                "actual": 21168,
+                "verdict": "PASS",
+                "reason": "21168 \u2265 124"
+              },
+              "max_area": {
+                "bound": 22500,
+                "actual": 21168,
+                "verdict": "PASS",
+                "reason": "21168 \u2264 22500"
+              },
+              "min_ratio": {
+                "bound": 1.0,
+                "actual": 1.333,
+                "verdict": "PASS",
+                "reason": "1.333 \u2265 1.0"
+              },
+              "max_ratio": {
+                "bound": 4.0,
+                "actual": 1.333,
+                "verdict": "PASS",
+                "reason": "1.333 \u2264 4.0"
+              },
+              "threshold": {
+                "bound": 0.55,
+                "actual": 0.9563,
+                "verdict": "PASS",
+                "reason": "0.9563 \u2265 0.55"
+              },
+              "min_score": {
+                "bound": 0.45,
+                "actual": 0.9563,
+                "verdict": "PASS",
+                "reason": "0.9563 \u2265 0.45"
+              }
+            },
+            "verdict": "PASS",
+            "reason": "all 6 checks passed"
+          },
+          "zones": {
+            "defined": [
+              "prive",
+              "rodage"
+            ],
+            "bbox_centroid_norm": [
+              0.319,
+              0.6227
+            ],
+            "hit": [
+              "prive"
+            ],
+            "verdict": "hit prive"
+          },
+          "review_gate": {
+            "alerts_required_zones": [
+              "prive"
+            ],
+            "detections_required_zones": [
+              "rodage"
+            ],
+            "event_zones": [
+              "prive"
+            ],
+            "frigate_max_severity": "alert",
+            "classification": "ALERT",
+            "verdict": "ALERT",
+            "reason": "event zones ['prive'] \u2208 alerts_required_zones ['prive'] => ALERT"
+          },
+          "snapshot": {
+            "written": true,
+            "verdict": "WRITTEN",
+            "reason": "has_snapshot=True (best frame captured at peak score)"
+          },
+          "recording": {
+            "written": false,
+            "verdict": "NOT WRITTEN",
+            "reason": "has_clip=False (event in progress, or retention already pruned)"
+          },
+          "mqtt": {
+            "verdict": "LIKELY PUBLISHED",
+            "reason": "event lifecycle start/update/end was published on calypso_frigate/events; classification: ALERT"
+          }
+        }
+      },
+      {
+        "id": "1785698507.21758-wy91cb",
+        "camera": "jardin_devant",
+        "start_epoch": 1785698507.21758,
+        "start_utc": "2026-08-02T19:21:47Z",
+        "start_local": "2026-08-02T21:21:47+0200",
+        "end_epoch": 1785698510.458626,
+        "end_utc": "2026-08-02T19:21:50Z",
+        "end_local": "2026-08-02T21:21:50+0200",
+        "duration_s": 3.241,
+        "label": "person",
+        "top_score": 0.6511498093605042,
+        "zones": [
+          "prive"
+        ],
+        "has_clip": false,
+        "has_snapshot": true,
+        "recording_path": null,
+        "recording_size_bytes": null,
+        "snapshot_url": "http://localhost:5000/api/events/1785698507.21758-wy91cb/snapshot.jpg",
+        "trace": {
+          "motion": {
+            "threshold": 26,
+            "contour_area": 30,
+            "motion_region_norm": [
+              0.55859375,
+              0.23842592592592593,
+              0.20833333333333334,
+              0.7407407407407407
+            ],
+            "verdict": "PASS",
+            "reason": "event was created => motion pre-filter fired with a region above threshold (the motion mask itself is not exposed via the REST API; the existence of the event is the proof)"
+          },
+          "detector": {
+            "model_path": {
+              "path": "plus://c1aa04320f389aa6c7702bf9ddd3fe6d"
+            },
+            "verdict": "PASS",
+            "reason": "detector returned a bounding box (data.box present)",
+            "score_frame": 0.753738284111023,
+            "score_event": 0.6511498093605042
+          },
+          "bbox": {
+            "norm": [
+              0.609375,
+              0.5462962962962963,
+              0.060546875,
+              0.1597222222222222
+            ],
+            "px": [
+              936,
+              236,
+              93,
+              69
+            ],
+            "area_px2": 6417,
+            "ratio": 1.348,
+            "centroid_norm": [
+              0.6396,
+              0.6262
+            ],
+            "verdict": "PASS",
+            "reason": "bbox extracted from detector output (area=6417 px\u00b2)"
+          },
+          "person_filter": {
+            "checks": {
+              "min_area": {
+                "bound": 72,
+                "actual": 6417,
+                "verdict": "PASS",
+                "reason": "6417 \u2265 72"
+              },
+              "max_area": {
+                "bound": 13500,
+                "actual": 6417,
+                "verdict": "PASS",
+                "reason": "6417 \u2264 13500"
+              },
+              "min_ratio": {
+                "bound": 1.0,
+                "actual": 1.348,
+                "verdict": "PASS",
+                "reason": "1.348 \u2265 1.0"
+              },
+              "max_ratio": {
+                "bound": 4.0,
+                "actual": 1.348,
+                "verdict": "PASS",
+                "reason": "1.348 \u2264 4.0"
+              },
+              "threshold": {
+                "bound": 0.55,
+                "actual": 0.6511,
+                "verdict": "PASS",
+                "reason": "0.6511 \u2265 0.55"
+              },
+              "min_score": {
+                "bound": 0.45,
+                "actual": 0.6511,
+                "verdict": "PASS",
+                "reason": "0.6511 \u2265 0.45"
+              }
+            },
+            "verdict": "PASS",
+            "reason": "all 6 checks passed"
+          },
+          "zones": {
+            "defined": [
+              "prive",
+              "rodage"
+            ],
+            "bbox_centroid_norm": [
+              0.6396,
+              0.6262
+            ],
+            "hit": [
+              "prive"
+            ],
+            "verdict": "hit prive"
+          },
+          "review_gate": {
+            "alerts_required_zones": [
+              "prive"
+            ],
+            "detections_required_zones": [
+              "rodage"
+            ],
+            "event_zones": [
+              "prive"
+            ],
+            "frigate_max_severity": "alert",
+            "classification": "ALERT",
+            "verdict": "ALERT",
+            "reason": "event zones ['prive'] \u2208 alerts_required_zones ['prive'] => ALERT"
+          },
+          "snapshot": {
+            "written": true,
+            "verdict": "WRITTEN",
+            "reason": "has_snapshot=True (best frame captured at peak score)"
+          },
+          "recording": {
+            "written": false,
+            "verdict": "NOT WRITTEN",
+            "reason": "has_clip=False (event in progress, or retention already pruned)"
+          },
+          "mqtt": {
+            "verdict": "LIKELY PUBLISHED",
+            "reason": "event lifecycle start/update/end was published on calypso_frigate/events; classification: ALERT"
+          }
+        }
+      }
+    ]
+  }
+}
