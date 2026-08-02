@@ -38,6 +38,8 @@ SHELL := /bin/bash
 
 .PHONY: help test test-bringup test-config test-math test-bringup-only list-cameras baseline \
         evaluate \
+        pipeline-report pipeline-report-snapshot pipeline-report-diff \
+        walk walk-snapshot \
         iter0-show iter0-diff iter0-diff-all iter0-revert iter0-revert-all iter0-revert-y
 
 help:
@@ -51,6 +53,19 @@ help:
 	@echo "  make list-cameras        print camera names from config.yml"
 	@echo "  make baseline            regenerate tests/baselines/snapshot.json"
 	@echo "  make evaluate            per-camera Frigate+ training-need verdict (live, requires Frigate)"
+	@echo ""
+	@echo "  Pipeline current-state report (per camera, live; see tests/pipeline-report.sh):"
+	@echo "  make pipeline-report                       per-camera report, text + JSON to stdout"
+	@echo "  make pipeline-report-snapshot SNAPSHOT_PATH=path.json   save JSON to file"
+	@echo "  PIPELINE_REPORT_WINDOW_HOURS=48 make pipeline-report    widen the event window"
+	@echo "  make pipeline-report-diff BASE=path.json    diff current vs a prior run (exit 1 on drift)"
+	@echo ""
+	@echo "  Test-walk event log (chronological, sorted by motion-event start_time):"
+	@echo "  make walk WALK_MINUTES=30                  chronological event log for the last 30 min"
+	@echo "  make walk WALK_START=2026-08-02T15:00:00Z WALK_END=...   exact walk window"
+	@echo "  make walk-snapshot WALK_MINUTES=30 OUT=path.json           save JSON to file"
+	@echo "  The walk view shows every event that fired in the window, sorted by"
+	@echo "  event start_time (= motion detection), with exact epoch + ISO ms timestamps, recording path, and snapshot URL.
 	@echo ""
 	@echo "  Iter0 default manager (tests/iter0.py, spec = tests/camera_spec.py):"
 	@echo "  make iter0-show CAM=<name>     show the iter0 spec for one camera"
@@ -140,3 +155,84 @@ iter0-revert-all:
 
 iter0-revert-y:
 	@python3 tests/iter0.py revert --yes $(CAM)
+
+# ------------------------------------------------------------------------------
+# pipeline-report — per-camera CURRENT PIPELINE STATE assessment (live)
+# ------------------------------------------------------------------------------
+# For each camera in config.yml, walks the 14-stage Frigate pipeline (see
+# ARCHITECTURE.md §3-4) from physical RTSP source through to MQTT event
+# publication, and produces a timestamped, human-readable report + a
+# machine-readable JSON snapshot.
+#
+#   make pipeline-report                                  # text + JSON to stdout
+#   make pipeline-report-snapshot SNAPSHOT_PATH=path.json # text + JSON to file
+#   make pipeline-report-diff BASE=path.json              # diff vs prior run
+#                                                          (exit 0 on match, 1 on drift)
+#   PIPELINE_REPORT_WINDOW_HOURS=48 make pipeline-report  # widen the window
+#   make pipeline-report CAM=allee_sur_le_cote            # one camera
+#
+# Dependencies: python3 + PyYAML (same as the rest of the test harness).
+# The script hits the live Frigate API; for a stack that is not yet up,
+# the per-stage status reads NA with a reason — the script does NOT
+# modify any state.  See tests/pipeline-report.sh --help for the full CLI.
+# ------------------------------------------------------------------------------
+CAM_OPT ?= $(if $(CAM),--camera=$(CAM),)
+
+pipeline-report:
+	@tests/pipeline-report.sh --window-hours=$(PIPELINE_REPORT_WINDOW_HOURS) $(CAM_OPT)
+
+pipeline-report-snapshot:
+	@if [ -z "$(SNAPSHOT_PATH)" ]; then \
+	    echo "ERROR: SNAPSHOT_PATH=<path> is required (e.g. make pipeline-report-snapshot SNAPSHOT_PATH=tests/baselines/pipeline-run.json)"; \
+	    exit 2; \
+	fi
+	@mkdir -p $$(dirname "$(SNAPSHOT_PATH)")
+	@tests/pipeline-report.sh --window-hours=$(PIPELINE_REPORT_WINDOW_HOURS) $(CAM_OPT) --json="$(SNAPSHOT_PATH)"
+
+pipeline-report-diff:
+	@if [ -z "$(BASE)" ]; then \
+	    echo "ERROR: BASE=<path.json> is required (e.g. make pipeline-report-diff BASE=tests/baselines/pipeline-run.json)"; \
+	    exit 2; \
+	fi
+	@tests/pipeline-report.sh --window-hours=$(PIPELINE_REPORT_WINDOW_HOURS) $(CAM_OPT) --diff="$(BASE)"
+
+# ------------------------------------------------------------------------------
+# walk / walk-snapshot — chronological TEST WALK event log (live, live-sorted)
+# ------------------------------------------------------------------------------
+# Use case: do a physical test walk in front of one or more cameras, then run
+#   make walk WALK_MINUTES=10
+# to get a chronological table of every event that fired in the last 10
+# minutes — sorted by event start_time (the closest proxy for motion
+# detection that Frigate exposes), with exact epoch + ISO millisecond
+# timestamps, the recording file path on the NAS, and a snapshot URL.
+#
+# Variables:
+#   WALK_START      ISO 8601 or epoch; start of the walk window
+#   WALK_END        ISO 8601 or epoch; end of the walk window (default: now)
+#   WALK_MINUTES    end - start; convenience when WALK_START is omitted
+#   CAM             restrict to a single camera (default: all)
+#   OUT             JSON output path (walk-snapshot only)
+#
+#   make walk WALK_MINUTES=30
+#   make walk WALK_START=2026-08-02T15:00:00Z WALK_END=2026-08-02T15:10:00Z
+#   make walk WALK_START=2026-08-02T15:00:00Z
+#   make walk-snapshot WALK_MINUTES=30 OUT=tests/baselines/walk-2026-08-02.json
+#
+# The walk view is a DIFFERENT report from `make pipeline-report`: the state
+# report answers "is the system healthy right now?"; the walk report
+# answers "what happened during my test walk?". See tests/README.md
+# "Test-walk event log" for the full schema.
+# ------------------------------------------------------------------------------
+WALK_PY_ARGS := $(if $(WALK_START),--walk-start=$(WALK_START)) $(if $(WALK_END),--walk-end=$(WALK_END)) $(if $(WALK_MINUTES),--walk-minutes=$(WALK_MINUTES)) $(if $(CAM),--camera=$(CAM))
+
+walk:
+	@tests/pipeline-report.sh $(WALK_PY_ARGS)
+
+walk-snapshot:
+	@if [ -z "$(OUT)" ]; then \
+	    echo "ERROR: OUT=<path.json> is required (e.g. make walk-snapshot WALK_MINUTES=30 OUT=tests/baselines/walk.json)"; \
+	    exit 2; \
+	fi
+	@mkdir -p $$(dirname "$(OUT)")
+	@tests/pipeline-report.sh $(WALK_PY_ARGS) --json="$(OUT)"
+
