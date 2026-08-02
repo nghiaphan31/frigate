@@ -431,10 +431,14 @@ cameras:
   #   Applied filter values (with safety margins):
   #     min_area   = 248 × 0.50   = 124     (50% of smallest expected)
   #     max_area   = 15,000 × 1.50 = 22,500  (150% of largest expected)
-  #     min_ratio  = 2.0 × 0.50   = 1.0     (50% of expected aspect)
+  #     min_ratio  = 2.0 × 0.50   = 1.0     (50% of expected aspect, iter0)
   #     max_ratio  = 2.0 × 2.00   = 4.0     (200% of expected aspect)
   #     threshold  = 0.55         (model default + 0.10)
   #     min_score  = 0.45         (model default + 0.05)
+  #
+  #   ACTUAL APPLIED min_ratio: 0.5 (2026-08-02, loosened from iter0 1.0
+  #     for the 50° tilt side-3/4 view at 0-20 m, to accept crouching,
+  #     arms-spread, and bike-pushing poses)
   #
   # ZONES (zone filters mirror camera-level filter, no per-zone override)
   #   prive  — private driveway, immediate alert on entry
@@ -465,7 +469,7 @@ cameras:
         person:
           min_area: 124
           max_area: 22500
-          min_ratio: 1.0
+          min_ratio: 0.5
           max_ratio: 4.0
           threshold: 0.55
           min_score: 0.45
@@ -485,7 +489,7 @@ cameras:
           person:
             threshold: 0.55
             min_area: 124
-            min_ratio: 1.0
+            min_ratio: 0.5
             max_ratio: 4.0
       rodage:
         coordinates: 0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
@@ -496,7 +500,7 @@ cameras:
           person:
             threshold: 0.55
             min_area: 124
-            min_ratio: 1.0
+            min_ratio: 0.5
             max_ratio: 4.0
     review:
       alerts:
@@ -520,7 +524,7 @@ cameras:
   #   H-FOV:         87°  (RLC-810A 4.0 mm lens)
   #   V-FOV:         44°
   #   Max walkable:  20 m (person at ground level)
-  #   Min walkable:  5 m  (close-range, larger pixels)
+  #   Min walkable:  0 m  (close-range, larger pixels)
   #
   # STREAMS (main = 4K UHD for detect + record; sub = 640×360 for live)
   #   main: 3840×2160  (rtsp://.../h264Preview_01_main)  [detect + record + audio]
@@ -559,10 +563,15 @@ cameras:
   #   Applied filter values (iter0 — noise-floor on min, conservative on max):
   #     min_area   = 14 016 × 0.022 = 308     (noise floor: catches ~3 m person on 4K)
   #     max_area   = 190 838 × 0.61 = 116 411  (rejects anything bigger than a person at 5 m)
-  #     min_ratio  = 2.0 × 0.50   = 1.0       (50% of expected aspect)
+  #     min_ratio  = 2.0 × 0.50   = 1.0       (50% of expected aspect, iter0)
   #     max_ratio  = 2.0 × 2.00   = 4.0       (200% of expected aspect)
   #     threshold  = 0.55                     (model default + 0.10)
   #     min_score  = 0.45                     (model default + 0.05)
+  #
+  #   ACTUAL APPLIED min_ratio: 0.4 (2026-08-02, the prive zone mirrors
+  #     the camera-level training-collection value; the iter0 1.0 was
+  #     too restrictive and rejected crouching/lying children in the
+  #     play area + shed)
   #
   # ZONES (zone filters mirror camera-level filter, no per-zone override)
   #   prive  — play area + shed, immediate alert on entry
@@ -687,7 +696,7 @@ cameras:
             # 2.2 m mount, 10° tilt, 87° H-FOV, 5-20 m walkable).
             threshold: 0.55
             min_area: 500
-            min_ratio: 1.0
+            min_ratio: 0.4
             max_ratio: 4.0
           face:
             # Mirror the prive filter so the missing model.labelmap
@@ -695,7 +704,7 @@ cameras:
             # the prive gate either.
             threshold: 0.55
             min_area: 500
-            min_ratio: 1.0
+            min_ratio: 0.4
             max_ratio: 4.0
     review:
       alerts:
@@ -719,7 +728,7 @@ cameras:
   #   H-FOV:         135°  (Doorbell POE wide-angle lens)
   #   V-FOV:         100°
   #   Max walkable:  20 m (person at ground level, ~3 m to door)
-  #   Min walkable:  3 m  (close-range at the doorstep)
+  #   Min walkable:  0 m  (close-range at the doorstep)
   #
   # STREAMS (main = 2560×1920 4:3 for detect + record; sub = 640×480 for live)
   #   main: 2560×1920  (rtsp://.../h264Preview_01_main)  [detect + record + audio]
@@ -760,10 +769,16 @@ cameras:
   #   Applied filter values (iter0 — noise floor + conservative upper):
   #     min_area   = 2 377 × 0.126 = 300     (noise floor: catches ~3 m person on 4:3 main)
   #     max_area   = 80 340 × 1.79 = 143 808 (rejects anything bigger than a person at 3 m)
-  #     min_ratio  = 2.0 × 0.50   = 1.0      (50% of expected aspect)
+  #     min_ratio  = 2.0 × 0.50   = 1.0      (50% of expected aspect, iter0)
   #     max_ratio  = 2.0 × 2.00   = 4.0      (200% of expected aspect)
   #     threshold  = 0.55                     (model default + 0.10)
   #     min_score  = 0.45                     (model default + 0.05)
+  #
+  #   ACTUAL APPLIED min_ratio (face filter in prive zone): 0.2 (2026-08-02,
+  #     the doorbell is at face level; 1.0 systematically rejected
+  #     tilted-head and partial-face views at the doorstep — confirmed by
+  #     the vue_entree no-alert diagnosis). The person filter stays at
+  #     the camera-level 0.2 (no change).
   #
   # ZONES (zone filters mirror camera-level filter, no per-zone override)
   #   prive  — entry walkway + doorstep, immediate alert on entry
@@ -922,7 +937,7 @@ cameras:
             # the prive gate either.
             threshold: 0.55
             min_area: 500
-            min_ratio: 1.0
+            min_ratio: 0.2
             max_ratio: 4.0
     review:
       # UPDATED 2026-06-05: was `required_zones: []` (every detection
@@ -1001,10 +1016,16 @@ cameras:
   #   Applied filter values (iter0):
   #     min_area   = 522 × 0.138 = 72      (noise floor)
   #     max_area   = 3 906 × 3.46 = 13 514 (rejects anything bigger than a person at 3 m)
-  #     min_ratio  = 2.0 × 0.50   = 1.0    (50% of expected aspect)
+  #     min_ratio  = 2.0 × 0.50   = 1.0    (50% of expected aspect, iter0)
   #     max_ratio  = 2.0 × 2.00   = 4.0    (200% of expected aspect)
   #     threshold  = 0.55                   (model default + 0.10)
   #     min_score  = 0.45                   (model default + 0.05)
+  #
+  #   ACTUAL APPLIED min_ratio: 0.5 (2026-08-02, loosened from iter0 1.0
+  #     for the 6 m + 50° tilt top-down view, where a standing person's
+  #     bbox is ~0.7-1.0:1 from above; 1.0 systematically rejected
+  #     most standing persons in the FOV — the most impactful change
+  #     in this batch)
   #
   # ZONES (zone filters mirror camera-level filter, no per-zone override)
   #   prive  — front garden, immediate alert on entry
@@ -1036,11 +1057,11 @@ cameras:
           # iter0: physics-based — 160cm person at 15m on 1536×432 sub-stream
           min_area: 72
           max_area: 13500
-          min_ratio: 1.0
+          min_ratio: 0.5
           max_ratio: 4.0
           threshold: 0.55
           min_score: 0.45
-      mask: 
+      mask:
         0,0.523,0.233,0.822,0.285,0.224,0.641,0.29,0.655,0.245,0.743,0.305,0.757,0.245,0.829,0.825,0.998,0.61,0.997,0.006,0.003,0.006
     snapshots:
       enabled: true
@@ -1060,7 +1081,7 @@ cameras:
             # iter0: physics-based — matches camera-level filter
             threshold: 0.55
             min_area: 72
-            min_ratio: 1.0
+            min_ratio: 0.5
             max_ratio: 4.0
       rodage:
         # Fence line — alert only after 10 s loitering
@@ -1074,7 +1095,7 @@ cameras:
             # iter0: physics-based — matches camera-level filter
             threshold: 0.55
             min_area: 72
-            min_ratio: 1.0
+            min_ratio: 0.5
             max_ratio: 4.0
     review:
       alerts:
@@ -1098,7 +1119,7 @@ cameras:
   #   H-FOV:         180°  (full panoramic)
   #   V-FOV:         55°
   #   Max walkable:  20 m (person at ground level, pool + garden)
-  #   Min walkable:  5 m  (close-range, larger pixels)
+  #   Min walkable:  0 m  (close-range, larger pixels)
   #
   # STREAMS (sub only for THIS camera; main is reserved for future
   # _left/_right half-crop cameras and is currently unused here)
@@ -1142,10 +1163,16 @@ cameras:
   #   Applied filter values (iter0):
   #     min_area   =   396 × 0.399 = 158     (very low noise floor: wide FOV, shallow tilt)
   #     max_area   = 2 886 × 9.36  = 27 014  (very loose upper: person at 5 m is large in pixels)
-  #     min_ratio  = 2.0 × 0.50   = 1.0      (50% of expected aspect)
+  #     min_ratio  = 2.0 × 0.50   = 1.0      (50% of expected aspect, iter0)
   #     max_ratio  = 2.0 × 2.00   = 4.0      (200% of expected aspect)
   #     threshold  = 0.55                    (model default + 0.10)
   #     min_score  = 0.45                    (model default + 0.05)
+  #
+  #   ACTUAL APPLIED min_ratio: 0.5 (already correct since the
+  #     2026-06-04 training-collection relaxation; the 6 m + 25° tilt
+  #     3/4 top-down view requires this value — confirmed by the
+  #     2026-08-02 review as the only outdoor camera where the iter0
+  #     1.0 was already loosened appropriately)
   #
   # ZONES (zone filters mirror camera-level filter, no per-zone override)
   #   prive  — pool + garden, immediate alert on entry
