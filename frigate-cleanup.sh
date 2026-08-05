@@ -80,6 +80,13 @@ USAGE_GATE_PCT="${USAGE_GATE_PCT:-75}"   # skip if usage is below this %
 CRON_SCHEDULE="${CRON_SCHEDULE:-17 3 * * *}"   # 03:17 daily
 CRON_USER="${CRON_USER:-root}"
 
+# MQTT credentials (override via /etc/frigate-cleanup.env or env vars).
+# These default to the Frigate Calypso local Mosquitto user created in
+# config.yml (migrated from .env at install time). Override them on
+# the cron line or in /etc/frigate-cleanup.env for any other broker.
+MQTT_USER="${MQTT_USER:-mosquitto}"
+MQTT_PASS="${MQTT_PASS:-mosquitto}"
+
 # ----------------------------------------------------------------------------
 # Plumbing
 # ----------------------------------------------------------------------------
@@ -113,11 +120,56 @@ log() {
     echo "$msg" | tee -a "$LOG_FILE" >&2
 }
 
+# Build a standardized MQTT payload. Every action (apply, skip, install,
+# status) carries the same 4 baseline fields so the HA automation can
+# rely on the schema:
+#   ts           ISO 8601 timestamp (always)
+#   action       "apply" | "skip" | "install" | "status"
+#   freed_bytes  bytes deleted in this run (0 if none)
+#   usage_pct    NAS % used AFTER the run (omitted if unknown)
+# Extra fields (e.g. "reason=usage_gate" or "cron=17 3 * * *") can be
+# passed as positional args after the baseline; they become additional
+# top-level JSON keys. Always pass via this builder — never hand-roll a
+# JSON string inline, that's how we ended up with 3 inconsistent
+# payload shapes before the fix.
+build_payload() {
+    local action="$1"
+    local freed_bytes="${2:-0}"
+    local usage_pct="${3:-}"
+    shift 3
+    local extra_pairs=("$@")
+    local ts
+    ts=$(date -Iseconds)
+    local payload="{\"ts\":\"$ts\",\"action\":\"$action\",\"freed_bytes\":${freed_bytes:-0}"
+    if [ -n "$usage_pct" ]; then
+        payload+=",\"usage_pct\":$usage_pct"
+    fi
+    local i
+    for ((i=0; i<${#extra_pairs[@]}; i+=2)); do
+        payload+=",\"${extra_pairs[i]}\":\"${extra_pairs[i+1]}\""
+    done
+    payload+="}"
+    printf '%s' "$payload"
+}
+
+# Publish via mosquitto_pub. The previous 2>/dev/null || true was a
+# footgun (we lost every publish failure silently for days before the
+# user spotted "Connection Refused" with no log trail). Now we pass
+# credentials explicitly AND log every failure with mosquitto_pub's
+# stderr. We never fail the whole script on a publish error — the
+# cleanup itself is more important than the heartbeat.
 mqtt_publish() {
     local payload="$1"
-    if command -v mosquitto_pub >/dev/null 2>&1; then
-        mosquitto_pub -h "$MQTT_HOST" -t "$MQTT_TOPIC" -m "$payload" -r 2>/dev/null || true
+    if ! command -v mosquitto_pub >/dev/null 2>&1; then
+        log "WARN: mosquitto_pub not in PATH; skipping MQTT publish"
+        return 0
     fi
+    local mqtt_err
+    mqtt_err=$(mosquitto_pub -h "$MQTT_HOST" -u "$MQTT_USER" -P "$MQTT_PASS" \
+                       -t "$MQTT_TOPIC" -m "$payload" -r 2>&1 >/dev/null) || {
+        log "WARN: MQTT publish failed: ${mqtt_err:-no stderr}"
+        return 0
+    }
 }
 
 bytes_human() {
@@ -150,7 +202,7 @@ usage_gate_check() {
     usage_pct=$(df "$NAS_DIR" | tail -1 | awk '{print $5}' | tr -d '%')
     if [ "$usage_pct" -lt "$USAGE_GATE_PCT" ] && [ "$FORCE" -eq 0 ]; then
         log "skip: NAS ${usage_pct}% < gate ${USAGE_GATE_PCT}% (use --force to override)"
-        mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"action\":\"skip\",\"reason\":\"usage_gate\",\"usage_pct\":$usage_pct}"
+        mqtt_publish "$(build_payload skip 0 "$usage_pct" reason usage_gate)"
         exit 0
     fi
     log "proceed: NAS ${usage_pct}% >= gate ${USAGE_GATE_PCT}%"
@@ -202,7 +254,11 @@ $CRON_SCHEDULE $CRON_USER $0 --apply >> $LOG_FILE 2>&1
 EOF
     chmod 644 /etc/cron.d/frigate-cleanup
     log "Install complete. Verify with: cat /etc/cron.d/frigate-cleanup"
-    mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"action\":\"install\",\"cron\":\"$CRON_SCHEDULE\"}"
+    # --install doesn't delete anything, but report live NAS usage so
+    # the HA automation sees the same 4-field schema on all 3 actions.
+    local install_usage
+    install_usage=$(df "$NAS_DIR" 2>/dev/null | tail -1 | awk '{print $5}' | tr -d '%')
+    mqtt_publish "$(build_payload install 0 "$install_usage" cron "$CRON_SCHEDULE")"
     exit 0
 fi
 
@@ -263,4 +319,4 @@ USAGE_AFTER=$(df "$NAS_DIR" | tail -1 | awk '{print $5}' | tr -d '%')
 log "=== frigate-cleanup END (mode=$MODE, freed=$(bytes_human "$TOTAL_FREED"), NAS now ${USAGE_AFTER}%) ==="
 rm -f /tmp/.frigate_cleanup_last_freed
 
-mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"action\":\"$MODE\",\"freed_bytes\":$TOTAL_FREED,\"usage_pct\":$USAGE_AFTER}"
+mqtt_publish "$(build_payload "$MODE" "$TOTAL_FREED" "$USAGE_AFTER")"
