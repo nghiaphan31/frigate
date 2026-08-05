@@ -17,6 +17,11 @@
 # Uninstall:
 #   sudo rm -f /etc/sudoers.d/nghia-phan-frigate
 # ==============================================================================
+# Extended 2026-08-05: added frigate-cleanup.sh install + cron + logrotate
+# commands (see frigate-cleanup.sh in repo root). The install paths are
+# pinned to specific files (no wildcards beyond the path); new commands
+# can be appended below as the deployment surface grows.
+# ==============================================================================
 Cmnd_Alias FRIGATE_AGENT_CMDS = \
     /usr/bin/systemctl reset-failed mnt-nas-video.mount, \
     /usr/bin/systemctl start mnt-nas-video.mount, \
@@ -38,6 +43,14 @@ Cmnd_Alias FRIGATE_AGENT_CMDS = \
     /usr/bin/journalctl -u frigate-stack-watchdog.service *, \
     /usr/bin/journalctl -u mnt-nas-video.mount *, \
     /usr/bin/mount /mnt/nas/video, \
-    /usr/bin/umount /mnt/nas/video
+    /usr/bin/umount /mnt/nas/video, \
+    /usr/bin/install -m 0755 /home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/frigate-cleanup.sh /usr/local/bin/frigate-cleanup.sh, \
+    /usr/bin/tee /etc/cron.d/frigate-cleanup, \
+    /usr/bin/tee /etc/logrotate.d/frigate-cleanup, \
+    /usr/bin/chmod 644 /etc/cron.d/frigate-cleanup, \
+    /usr/bin/chmod 644 /etc/logrotate.d/frigate-cleanup, \
+    /usr/bin/chown root\:root /etc/cron.d/frigate-cleanup, \
+    /usr/bin/chown root\:root /etc/logrotate.d/frigate-cleanup, \
+    /usr/sbin/visudo -c -f /etc/sudoers.d/nghia-phan-frigate
 
 nghia-phan ALL=(root) NOPASSWD: FRIGATE_AGENT_CMDS
