@@ -208,26 +208,11 @@ do_recovery() {
         modprobe nvidia-modeset 2>/dev/null || true
         sleep 2
 
-        # Check if nvidia-smi works
-        if ! nvidia-smi > /dev/null 2>&1; then
-            log "WARN: nvidia-smi failed after first modprobe, attempting PCI remove/rescan cycle..."
-            if [ -w "/sys/bus/pci/devices/$PCI_DEV/remove" ] && [ -w "/sys/bus/pci/rescan" ]; then
-                echo 1 > "/sys/bus/pci/devices/$PCI_DEV/remove" 2>/dev/null || true
-                sleep 2
-                echo 1 > "/sys/bus/pci/rescan" 2>/dev/null || true
-                sleep 2
-                modprobe nvidia 2>/dev/null || true
-                modprobe nvidia-uvm 2>/dev/null || true
-                modprobe nvidia-modeset 2>/dev/null || true
-                sleep 2
-            fi
-        fi
-
         # Final check
         if ! nvidia-smi > /dev/null 2>&1; then
-            log "FATAL: nvidia-smi failed after modprobe — REBOOT REQUIRED"
-            mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"event\":\"recovery_failed\",\"reason\":\"modprobe_failed\"}"
-            audit_log "recovery_failed" "modprobe_failed"
+            log "FATAL: nvidia-smi failed after modprobe — hardware wedged at PCIe level, REBOOT REQUIRED"
+            mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"event\":\"recovery_failed\",\"reason\":\"modprobe_failed_reboot_required\"}"
+            audit_log "recovery_failed" "modprobe_failed_reboot_required"
             return 1
         fi
         log "  nvidia-smi OK after modprobe"
