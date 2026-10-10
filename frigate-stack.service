@@ -13,6 +13,10 @@ RemainAfterExit=yes
 WorkingDirectory=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate
 ExecStart=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/bring-up.sh
 EnvironmentFile=/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/.env
+EnvironmentFile=-/etc/calypso-gpu.env
+Nice=-10
+ExecStartPost=-/usr/local/bin/gpu-usage-logger.sh start frigate
+ExecStopPost=-/usr/local/bin/gpu-usage-logger.sh stop frigate
 StandardOutput=journal
 StandardError=journal
 # Strict success policy: only exit 0 from bring-up.sh (all 14 pipeline

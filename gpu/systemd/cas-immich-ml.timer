@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Immich ML during off-peak hours
+Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/plans/gpu-shared-management.md
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+OnCalendar=*-*-* 14:00:00
+AccuracySec=5min
+Unit=cas-immich-ml.service
+
+[Install]
+WantedBy=timers.target

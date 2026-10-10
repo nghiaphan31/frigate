@@ -1,0 +1,12 @@
+[Unit]
+Description=Run CAS Core OCR during off-peak hours
+Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/plans/gpu-shared-management.md
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+OnCalendar=*-*-* 14:30:00
+AccuracySec=5min
+Unit=cas-core.service
+
+[Install]
+WantedBy=timers.target

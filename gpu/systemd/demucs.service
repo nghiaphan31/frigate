@@ -1,0 +1,19 @@
+[Unit]
+Description=Demucs — audio separation (GPU P3, manual trigger)
+After=docker.service frigate-stack.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-/etc/calypso-gpu.env
+ExecStartPre=-/usr/local/bin/gpu-usage-logger.sh check demucs ${GPU_DEMUCS_BUDGET_MB}
+ExecStart=/usr/bin/docker start demucs
+ExecStartPost=-/usr/local/bin/gpu-usage-logger.sh start demucs
+ExecStop=/usr/bin/docker stop demucs
+ExecStopPost=-/usr/local/bin/gpu-usage-logger.sh stop demucs
+Nice=10
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=300
+Restart=no
+# No [Install] section: manual trigger only via `sudo systemctl start demucs.service`

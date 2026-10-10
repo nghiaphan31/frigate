@@ -1,0 +1,12 @@
+[Unit]
+Description=Run GPU health watchdog every 2 min
+Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/plans/gpu-shared-management.md
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=10s
+Unit=gpu-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,22 @@
+# /etc/logrotate.d/gpu-audit — Log rotation for Calypso GPU audit & recovery logs
+/var/log/gpu-audit.jsonl {
+    daily
+    rotate 90
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y%m%d
+}
+
+/var/log/gpu-recovery.log {
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Calypso GPU health watchdog
+After=nvidia-persistenced.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gpu-watchdog.sh
+EnvironmentFile=-/etc/calypso-gpu.env
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=60

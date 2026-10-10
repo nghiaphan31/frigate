@@ -1,0 +1,50 @@
+# ==============================================================================
+# Passwordless sudo for nghia-phan — Calypso GPU Recovery & Management
+# ==============================================================================
+# Install:
+#   sudo install -m 0440 -o root -g root \
+#     /home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/sudoers/nghia-phan-gpu \
+#     /etc/sudoers.d/nghia-phan-gpu
+#   sudo visudo -c -f /etc/sudoers.d/nghia-phan-gpu
+# ==============================================================================
+Cmnd_Alias GPU_MGMT_CMDS = \
+    /sbin/rmmod nvidia_drm, \
+    /sbin/rmmod nvidia_modeset, \
+    /sbin/rmmod nvidia_uvm, \
+    /sbin/rmmod nvidia, \
+    /sbin/modprobe nvidia, \
+    /sbin/modprobe nvidia-uvm, \
+    /sbin/modprobe nvidia-modeset, \
+    /sbin/modprobe nvidia-uvm-tools, \
+    /usr/bin/systemctl stop gdm.service, \
+    /usr/bin/systemctl start gdm.service, \
+    /usr/bin/systemctl set-default multi-user.target, \
+    /usr/bin/systemctl set-default graphical.target, \
+    /usr/bin/systemctl restart gpu-watchdog.service, \
+    /usr/bin/systemctl start gpu-watchdog.service, \
+    /usr/bin/systemctl stop gpu-watchdog.service, \
+    /usr/bin/systemctl status gpu-watchdog.service, \
+    /usr/bin/systemctl start gpu-watchdog.timer, \
+    /usr/bin/systemctl stop gpu-watchdog.timer, \
+    /usr/bin/systemctl restart gpu-watchdog.timer, \
+    /usr/bin/systemctl status gpu-watchdog.timer, \
+    /usr/bin/systemctl enable gpu-watchdog.timer, \
+    /usr/bin/systemctl disable gpu-watchdog.timer, \
+    /usr/bin/systemctl start cas-immich-ml.service, \
+    /usr/bin/systemctl stop cas-immich-ml.service, \
+    /usr/bin/systemctl restart cas-immich-ml.service, \
+    /usr/bin/systemctl status cas-immich-ml.service, \
+    /usr/bin/systemctl start cas-core.service, \
+    /usr/bin/systemctl stop cas-core.service, \
+    /usr/bin/systemctl restart cas-core.service, \
+    /usr/bin/systemctl status cas-core.service, \
+    /usr/bin/systemctl start demucs.service, \
+    /usr/bin/systemctl stop demucs.service, \
+    /usr/bin/systemctl restart demucs.service, \
+    /usr/bin/systemctl status demucs.service, \
+    /usr/local/bin/gpu-recovery.sh *, \
+    /usr/local/bin/gpu-watchdog.sh *, \
+    /usr/local/bin/gpu-usage-logger.sh *, \
+    /usr/local/bin/gpu-throttle.sh *
+
+nghia-phan ALL=(root) NOPASSWD: GPU_MGMT_CMDS

@@ -484,7 +484,31 @@ preflight() {
     command -v timeout      >/dev/null 2>&1 || fatal "timeout not in PATH" 2
     command -v mountpoint   >/dev/null 2>&1 || fatal "mountpoint not in PATH" 2
 
-    nvidia-smi >/dev/null 2>&1 || fatal "nvidia-smi failed (driver not loaded?)" 2
+    # GPU health gate: detect wedged state or driver failure before launching container
+    local smi_ok=1 cu_rc
+    nvidia-smi >/dev/null 2>&1 || smi_ok=0
+    cu_rc=$(python3 -c "import ctypes; cuda=ctypes.CDLL('libcuda.so.1'); print(cuda.cuInit(0))" 2>/dev/null || echo "1")
+
+    if [ "$smi_ok" -eq 0 ] || [ "$cu_rc" != "0" ]; then
+        log "${RED}GPU WEDGED or driver failed in preflight (nvidia-smi=$smi_ok, cuInit=$cu_rc)${NC}"
+        mqtt_state "FATAL_GPU_WEDGED" \
+            "{\"state\":\"FATAL_GPU_WEDGED\",\"reason\":\"gpu_unhealthy\",\"smi_ok\":$smi_ok,\"cu_rc\":\"$cu_rc\",\"action\":\"gpu_recovery\"}"
+        if [ -x /usr/local/bin/gpu-recovery.sh ]; then
+            log "Triggering /usr/local/bin/gpu-recovery.sh --apply..."
+            if /usr/local/bin/gpu-recovery.sh --apply; then
+                cu_rc=$(python3 -c "import ctypes; cuda=ctypes.CDLL('libcuda.so.1'); print(cuda.cuInit(0))" 2>/dev/null || echo "1")
+                if nvidia-smi >/dev/null 2>&1 && [ "$cu_rc" = "0" ]; then
+                    log "${GRN}GPU recovered successfully${NC}"
+                else
+                    fatal "GPU still wedged after recovery (cuInit=$cu_rc) — reboot required" 2
+                fi
+            else
+                fatal "gpu-recovery.sh failed — manual intervention or reboot required" 2
+            fi
+        else
+            fatal "GPU is wedged (smi_ok=$smi_ok, cuInit=$cu_rc) and /usr/local/bin/gpu-recovery.sh not installed" 2
+        fi
+    fi
 
     for d in nvidia0 nvidiactl nvidia-modeset nvidia-uvm nvidia-uvm-tools; do
         [ -e "/dev/$d" ] || fatal "/dev/$d missing (load nvidia modules)" 2
@@ -719,16 +743,20 @@ status_report() {
     if [ "$FIRST_FAIL_STEP" -gt 0 ]; then
         report_skip "1/14  NVIDIA GPU" "prereq (see above) failed"
     else
-        local gpu_line
+        local gpu_line cu_rc
+        cu_rc=$(python3 -c "import ctypes; cuda=ctypes.CDLL('libcuda.so.1'); print(cuda.cuInit(0))" 2>/dev/null || echo "1")
         gpu_line=$(nvidia-smi --query-gpu=driver_version,name,utilization.gpu,memory.used,memory.total \
             --format=csv,noheader,nounits 2>/dev/null | head -1)
-        if [ -n "$gpu_line" ]; then
+        if [ "$cu_rc" != "0" ]; then
+            report "1/14  NVIDIA GPU" "FAIL" "cuInit failed (rc=$cu_rc) — GPU WEDGED" \
+                "sudo /usr/local/bin/gpu-recovery.sh --apply  # reset GPU modules"
+        elif [ -n "$gpu_line" ]; then
             IFS=',' read -r drv name util memu memt <<< "$gpu_line"
             drv=$(echo "$drv" | tr -d ' '); name=$(echo "$name" | sed 's/^ *//')
-            report "1/14  NVIDIA GPU" "OK" "driver=$drv, $name, util=${util}%, mem=${memu}/${memt} MiB"
+            report "1/14  NVIDIA GPU" "OK" "driver=$drv, $name, util=${util}%, mem=${memu}/${memt} MiB, cuInit=OK"
         else
             report "1/14  NVIDIA GPU" "FAIL" "nvidia-smi returned no data" \
-                "sudo modprobe nvidia nvidia-uvm nvidia-modeset nvidia-uvm-tools  # then re-run"
+                "sudo /usr/local/bin/gpu-recovery.sh --apply  # reset GPU modules"
         fi
     fi
 

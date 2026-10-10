@@ -1,0 +1,24 @@
+[Unit]
+Description=CAS Core — OCR pipeline (GPU P2)
+After=docker.service frigate-stack.service
+Wants=frigate-stack.service
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-/etc/calypso-gpu.env
+ExecStartPre=-/usr/local/bin/gpu-usage-logger.sh check cas-core ${GPU_CAS_CORE_BUDGET_MB}
+ExecStart=/usr/bin/docker start cas-core
+ExecStartPost=-/usr/local/bin/gpu-usage-logger.sh start cas-core
+ExecStop=/usr/bin/docker stop cas-core
+ExecStopPost=-/usr/local/bin/gpu-usage-logger.sh stop cas-core
+Nice=0
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=300
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -10,6 +10,9 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: all
       PLUS_API_KEY: ${FRIGATE_PLUS_API_KEY}
       FRIGATE_LOG_LEVEL: warning
+      # GPU memory & CUDA allocator isolation (Calypso shared GPU management)
+      PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:512,expandable_segments:False"
+      CUDA_VISIBLE_DEVICES: "0"
       # Run the bind-mounted init script once, before s6-rc starts the
       # `frigate` service. Replaces the legacy `command:` block below, which
       # used to end in `exec python3 -u -m frigate` and created a duplicate
