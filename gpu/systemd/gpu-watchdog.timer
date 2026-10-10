@@ -10,3 +10,4 @@ Unit=gpu-watchdog.service
 
 [Install]
 WantedBy=timers.target
+

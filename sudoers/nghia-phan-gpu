@@ -41,10 +41,20 @@ Cmnd_Alias GPU_MGMT_CMDS = \
     /usr/bin/systemctl start demucs.service, \
     /usr/bin/systemctl stop demucs.service, \
     /usr/bin/systemctl restart demucs.service, \
-    /usr/bin/systemctl status demucs.service, \
+    /bin/loginctl terminate-user *, \
+    /usr/bin/loginctl terminate-user *, \
+    /bin/pkill *, \
+    /usr/bin/pkill *, \
+    /usr/bin/fuser *, \
+    /usr/bin/install -m 0755 * /usr/local/bin/*, \
+    /usr/bin/install -m 0644 * /etc/calypso-gpu.env, \
+    /usr/bin/install -m 0644 * /etc/systemd/system/*, \
+    /usr/bin/install -m 0440 * /etc/sudoers.d/nghia-phan-gpu, \
+    /usr/sbin/visudo -c -f /etc/sudoers.d/nghia-phan-gpu, \
     /usr/local/bin/gpu-recovery.sh *, \
     /usr/local/bin/gpu-watchdog.sh *, \
     /usr/local/bin/gpu-usage-logger.sh *, \
     /usr/local/bin/gpu-throttle.sh *
 
 nghia-phan ALL=(root) NOPASSWD: GPU_MGMT_CMDS
+

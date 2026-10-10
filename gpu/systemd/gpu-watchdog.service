@@ -9,3 +9,4 @@ EnvironmentFile=-/etc/calypso-gpu.env
 StandardOutput=journal
 StandardError=journal
 TimeoutStartSec=60
+

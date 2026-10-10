@@ -73,3 +73,4 @@ systemctl status gpu-watchdog.timer --no-pager
 echo
 echo "To trigger manual recovery if GPU is currently wedged:"
 echo "  sudo /usr/local/bin/gpu-recovery.sh --apply"
+

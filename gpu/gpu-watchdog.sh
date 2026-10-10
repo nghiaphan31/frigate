@@ -40,14 +40,31 @@ audit() {
         "$(date -Iseconds)" "$event" "$detail" >> "$audit_file" 2>/dev/null || true
 }
 
+trigger_recovery() {
+    local reason="$1"
+    local now
+    now=$(date +%s)
+    local last_file="/run/gpu-watchdog-last-recovery"
+    if [ -f "$last_file" ]; then
+        local last_ts
+        read -r last_ts < "$last_file" 2>/dev/null || last_ts=0
+        if [ $((now - last_ts)) -lt 300 ]; then
+            log "Recovery was already attempted < 5 min ago — waiting before retry"
+            return 0
+        fi
+    fi
+    echo "$now" > "$last_file" 2>/dev/null || true
+    if [ -x /usr/local/bin/gpu-recovery.sh ]; then
+        /usr/local/bin/gpu-recovery.sh --apply || true
+    fi
+}
+
 # 1. nvidia-smi alive check
 if ! timeout 10 nvidia-smi > /dev/null 2>&1; then
     log "CRITICAL: nvidia-smi failed or timed out — GPU wedged"
     mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"state\":\"wedged\",\"reason\":\"nvidia_smi_failed\"}"
     audit "gpu_wedged" "nvidia_smi_failed"
-    if [ -x /usr/local/bin/gpu-recovery.sh ]; then
-        /usr/local/bin/gpu-recovery.sh --apply || true
-    fi
+    trigger_recovery "nvidia_smi_failed"
     exit 0
 fi
 
@@ -57,9 +74,7 @@ if [ "$CU_RC" != "0" ]; then
     log "CRITICAL: cuInit failed (return code $CU_RC) — GPU wedged"
     mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"state\":\"wedged\",\"reason\":\"cuInit_failed\",\"cu_rc\":\"$CU_RC\"}"
     audit "gpu_wedged" "cuInit_rc=$CU_RC"
-    if [ -x /usr/local/bin/gpu-recovery.sh ]; then
-        /usr/local/bin/gpu-recovery.sh --apply || true
-    fi
+    trigger_recovery "cuInit_failed"
     exit 0
 fi
 

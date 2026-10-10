@@ -10,3 +10,4 @@ Unit=cas-immich-ml.service
 
 [Install]
 WantedBy=timers.target
+

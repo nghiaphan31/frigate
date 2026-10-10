@@ -61,3 +61,4 @@ elif [ "${MIN_FPS_INT:-0}" -ge 5 ] 2>/dev/null; then
     done
     mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"action\":\"resume\",\"reason\":\"detection_fps_ok\",\"fps\":$MIN_FPS}"
 fi
+
