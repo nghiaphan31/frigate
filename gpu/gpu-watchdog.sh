@@ -112,8 +112,9 @@ if [ -n "$MEM_FREE" ] && [[ "$MEM_FREE" =~ ^[0-9]+$ ]]; then
 fi
 
 # 5. Xid errors in dmesg (last 200 lines)
-XID_COUNT=$(dmesg 2>/dev/null | tail -200 | grep -c "NVRM: Xid" || echo "0")
-if [ "$XID_COUNT" -gt 0 ]; then
+XID_COUNT=$(dmesg 2>/dev/null | tail -200 | grep -c "NVRM: Xid" || true)
+XID_COUNT=$(echo "${XID_COUNT:-0}" | head -1 | tr -d '[:space:]')
+if [ -n "$XID_COUNT" ] && [[ "$XID_COUNT" =~ ^[0-9]+$ ]] && [ "$XID_COUNT" -gt 0 ]; then
     log "WARN: $XID_COUNT Xid errors in recent dmesg"
     mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"state\":\"xid_errors\",\"count\":$XID_COUNT}"
     audit "xid_errors" "count=$XID_COUNT"

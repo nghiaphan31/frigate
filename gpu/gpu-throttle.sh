@@ -39,22 +39,25 @@ if [ "$MIN_FPS" = "-1" ]; then
     exit 0
 fi
 
-MIN_FPS_INT=${MIN_FPS%.*}
+# Ignore negative/invalid FPS (e.g. during startup or when no camera stats available)
+if [ "${MIN_FPS_INT:- -1}" -lt 0 ] 2>/dev/null; then
+    exit 0
+fi
 
-if [ "${MIN_FPS_INT:-0}" -lt 3 ] 2>/dev/null; then
-    echo "[gpu-throttle] detection_fps=$MIN_FPS < 3 — pausing P2/P3"
-    mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"action\":\"pause\",\"reason\":\"detection_fps_low\",\"fps\":$MIN_FPS}"
+if [ "${MIN_FPS_INT:-0}" -lt 1 ] 2>/dev/null; then
+    echo "[gpu-throttle] detection_fps=$MIN_FPS < 1 (stuck) — pausing P2/P3"
+    mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"action\":\"pause\",\"reason\":\"detection_fps_stuck\",\"fps\":$MIN_FPS}"
     for ctn in cas-immich-ml cas-core demucs; do
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${ctn}$"; then
             docker pause "$ctn" 2>/dev/null || true
         fi
     done
-elif [ "${MIN_FPS_INT:-0}" -ge 5 ] 2>/dev/null; then
+elif [ "${MIN_FPS_INT:-0}" -ge 2 ] 2>/dev/null; then
     for ctn in cas-immich-ml cas-core demucs; do
         if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${ctn}$"; then
             state=$(docker inspect --format '{{.State.Paused}}' "$ctn" 2>/dev/null || echo "false")
             if [ "$state" = "true" ]; then
-                echo "[gpu-throttle] detection_fps=$MIN_FPS >= 5 — unpausing $ctn"
+                echo "[gpu-throttle] detection_fps=$MIN_FPS >= 2 — unpausing $ctn"
                 docker unpause "$ctn" 2>/dev/null || true
             fi
         fi
