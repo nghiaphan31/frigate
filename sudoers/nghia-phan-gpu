@@ -54,7 +54,19 @@ Cmnd_Alias GPU_MGMT_CMDS = \
     /usr/local/bin/gpu-recovery.sh *, \
     /usr/local/bin/gpu-watchdog.sh *, \
     /usr/local/bin/gpu-usage-logger.sh *, \
-    /usr/local/bin/gpu-throttle.sh *
+    /usr/local/bin/gpu-throttle.sh *, \
+    /usr/local/bin/gpu-power-tune.sh *, \
+    /usr/bin/nvidia-smi *, \
+    /usr/bin/systemctl start ollama.service, \
+    /usr/bin/systemctl stop ollama.service, \
+    /usr/bin/systemctl restart ollama.service, \
+    /usr/bin/systemctl status ollama.service, \
+    /usr/bin/systemctl start gpu-power-tune.service, \
+    /usr/bin/systemctl stop gpu-power-tune.service, \
+    /usr/bin/systemctl restart gpu-power-tune.service, \
+    /usr/bin/systemctl status gpu-power-tune.service, \
+    /usr/bin/systemctl enable gpu-power-tune.service, \
+    /usr/bin/systemctl disable gpu-power-tune.service
 
 nghia-phan ALL=(root) NOPASSWD: GPU_MGMT_CMDS
 

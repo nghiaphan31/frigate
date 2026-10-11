@@ -1,0 +1,27 @@
+[Unit]
+Description=Ollama Service
+After=network-online.target gpu-power-tune.service
+Wants=gpu-power-tune.service
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+User=ollama
+Group=ollama
+Restart=always
+RestartSec=3
+Environment="PATH=/home/nghia-phan/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+EnvironmentFile=-/etc/calypso-gpu.env
+
+# LLM VRAM & Concurrency smoothing
+Environment="OLLAMA_MAX_LOADED_MODELS=1"
+Environment="OLLAMA_NUM_PARALLEL=1"
+Environment="OLLAMA_KEEP_ALIVE=1m"
+Environment="CUDA_MODULE_LOADING=LAZY"
+
+# Lower scheduling priority relative to real-time Frigate
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+
+[Install]
+WantedBy=default.target

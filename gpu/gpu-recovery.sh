@@ -274,6 +274,11 @@ do_recovery() {
             return 1
         fi
         log "  nvidia-smi OK after modprobe"
+
+        # Re-apply power & clock tuning and persistence mode after module reload
+        if [ -x /usr/local/bin/gpu-power-tune.sh ]; then
+            /usr/local/bin/gpu-power-tune.sh 2>&1 | while read -r pt_line; do log "  $pt_line"; done
+        fi
     fi
 
     # Step 5: Restart containers in priority order (P1 first, wait, then P2)

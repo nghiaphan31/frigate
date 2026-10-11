@@ -1,0 +1,15 @@
+[Unit]
+Description=GPU Power & Frequency Tuning for Calypso (RTX 5060 Ti)
+Documentation=file:///home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/frigate/plans/gpu-shared-management.md
+After=nvidia-persistenced.service
+Wants=nvidia-persistenced.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/gpu-power-tune.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
