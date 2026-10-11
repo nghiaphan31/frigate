@@ -22,3 +22,4 @@ fi
 
 echo "[gpu-power-tune] Power tuning applied successfully:"
 nvidia-smi --query-gpu=persistence_mode,power.limit,clocks.current.graphics,temperature.gpu --format=csv
+
