@@ -17,6 +17,8 @@ MQTT_USER="${MQTT_USER:-mosquitto}"
 MQTT_PASS="${MQTT_PASS:-mosquitto}"
 MQTT_TOPIC="${GPU_MQTT_STATE_TOPIC:-calypso_frigate/maintenance/gpu-state}"
 
+REBOOT_FLAG_FILE="/run/gpu-reboot-required"
+
 [ -w "$(dirname "$LOG_FILE")" ] 2>/dev/null || LOG_FILE="$HOME/.gpu-recovery.log"
 touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/tmp/gpu-recovery.log"
 
@@ -40,8 +42,37 @@ audit() {
         "$(date -Iseconds)" "$event" "$detail" >> "$audit_file" 2>/dev/null || true
 }
 
+check_unrecoverable_xid() {
+    if dmesg 2>/dev/null | tail -100 | grep -qiE "Xid.*(79|154|92)|fallen off the bus"; then
+        return 0
+    fi
+    if journalctl -k -n 100 2>/dev/null | grep -qiE "Xid.*(79|154|92)|fallen off the bus"; then
+        return 0
+    fi
+    return 1
+}
+
+# If a reboot is already flagged and the GPU is still down, suppress repeated recovery attempts
+if [ -f "$REBOOT_FLAG_FILE" ] || [ -f "/tmp/gpu-reboot-required" ]; then
+    if ! timeout 10 nvidia-smi > /dev/null 2>&1; then
+        log "CRITICAL: GPU is wedged and requires reboot (flagged). Online recovery suppressed to prevent kernel deadlock."
+        mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"state\":\"reboot_required\",\"reason\":\"flagged_gpu_fallen_off_bus\"}"
+        exit 0
+    fi
+fi
+
 trigger_recovery() {
     local reason="$1"
+
+    # Guard: if fatal Xid detected (e.g. Xid 79: fallen off bus), online recovery is impossible and deadlocks
+    if check_unrecoverable_xid; then
+        log "CRITICAL: GPU has fallen off the bus (Xid 79/154). Flagging reboot-required and suppressing online recovery."
+        touch "$REBOOT_FLAG_FILE" 2>/dev/null || touch "/tmp/gpu-reboot-required" 2>/dev/null || true
+        mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"state\":\"reboot_required\",\"reason\":\"gpu_fallen_off_bus\"}"
+        audit "reboot_required" "gpu_fallen_off_bus"
+        return 0
+    fi
+
     local now
     now=$(date +%s)
     local last_file="/run/gpu-watchdog-last-recovery"
@@ -121,6 +152,7 @@ if [ -n "$XID_COUNT" ] && [[ "$XID_COUNT" =~ ^[0-9]+$ ]] && [ "$XID_COUNT" -gt 0
 fi
 
 # 6. Publish healthy heartbeat
+rm -f "$REBOOT_FLAG_FILE" /tmp/gpu-reboot-required 2>/dev/null || true
 UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 || echo "0")
 UTIL="${UTIL// /}"
 mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"state\":\"healthy\",\"temp\":${TEMP:-0},\"mem_free_mb\":${MEM_FREE:-0},\"mem_used_mb\":${MEM_USED:-0},\"util_pct\":${UTIL:-0}}"

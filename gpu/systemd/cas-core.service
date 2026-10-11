@@ -8,10 +8,10 @@ StartLimitBurst=3
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-EnvironmentFile=-/etc/calypso-gpu.env
-ExecStartPre=-/usr/local/bin/gpu-usage-logger.sh check cas-core ${GPU_CAS_CORE_BUDGET_MB}
-ExecStart=/usr/bin/docker start cas-core
-ExecStartPost=-/usr/local/bin/gpu-usage-logger.sh start cas-core
+# DISABLED by user request: cas-core startup disabled
+# ExecStartPre=-/usr/local/bin/gpu-usage-logger.sh check cas-core ${GPU_CAS_CORE_BUDGET_MB}
+# ExecStart=/usr/bin/docker start cas-core
+# ExecStartPost=-/usr/local/bin/gpu-usage-logger.sh start cas-core
 ExecStop=/usr/bin/docker stop cas-core
 ExecStopPost=-/usr/local/bin/gpu-usage-logger.sh stop cas-core
 Nice=0
@@ -20,6 +20,6 @@ StandardError=journal
 TimeoutStartSec=300
 Restart=no
 
-[Install]
-WantedBy=multi-user.target
+# [Install]
+# WantedBy=multi-user.target
 

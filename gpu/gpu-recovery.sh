@@ -22,6 +22,7 @@ MQTT_TOPIC="calypso_frigate/maintenance/gpu-recovery"
 MQTT_USER="${MQTT_USER:-mosquitto}"
 MQTT_PASS="${MQTT_PASS:-mosquitto}"
 RECOVERY_STATE_FILE="/var/run/gpu-recovery-count"
+REBOOT_FLAG_FILE="/run/gpu-reboot-required"
 MAX_RECOVERIES_PER_HOUR=3
 PCI_DEV="0000:2b:00.0"
 
@@ -32,8 +33,8 @@ for arg in "$@"; do
         --dry-run) MODE="--dry-run" ;;
         --force) FORCE=1 ;;
         --reset-rate-limit)
-            rm -f "$RECOVERY_STATE_FILE" /run/gpu-recovery-count /tmp/gpu-recovery-count 2>/dev/null || true
-            echo "Rate limit counter reset."
+            rm -f "$RECOVERY_STATE_FILE" /run/gpu-recovery-count /tmp/gpu-recovery-count "$REBOOT_FLAG_FILE" /tmp/gpu-reboot-required 2>/dev/null || true
+            echo "Rate limit counter and reboot-required flag reset."
             exit 0
             ;;
         -h|--help)
@@ -138,10 +139,59 @@ check_gpu_health() {
     return 0
 }
 
+check_pcie_bus() {
+    local vendor_file="/sys/bus/pci/devices/$PCI_DEV/vendor"
+    if [ ! -r "$vendor_file" ]; then
+        return 1
+    fi
+    local vendor
+    vendor=$(cat "$vendor_file" 2>/dev/null || echo "")
+    if [ "$vendor" != "0x10de" ]; then
+        return 1
+    fi
+    return 0
+}
+
+check_unrecoverable_xid() {
+    # Check recent dmesg or journalctl kernel logs for fatal bus-drop Xids
+    # Xid 79  = GPU has fallen off the bus
+    # Xid 154 = GPU recovery action changed to Node Reboot Required
+    # Xid 92  = High-severity unrecoverable PCIe error
+    if dmesg 2>/dev/null | tail -100 | grep -qiE "Xid.*(79|154|92)|fallen off the bus"; then
+        return 0
+    fi
+    if journalctl -k -n 100 2>/dev/null | grep -qiE "Xid.*(79|154|92)|fallen off the bus"; then
+        return 0
+    fi
+    return 1
+}
+
+flag_reboot_required() {
+    local reason="$1"
+    touch "$REBOOT_FLAG_FILE" 2>/dev/null || touch "/tmp/gpu-reboot-required" 2>/dev/null || true
+    log "FATAL: GPU hardware unrecoverable online ($reason). System reboot is REQUIRED."
+    mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"event\":\"reboot_required\",\"reason\":\"$reason\"}"
+    audit_log "reboot_required" "reason=$reason"
+}
+
 do_recovery() {
     log "=== RECOVERY START (mode=$MODE) ==="
     audit_log "recovery_start" "mode=$MODE"
     mqtt_publish "{\"ts\":\"$(date -Iseconds)\",\"event\":\"recovery_start\"}"
+
+    # Guard 1: check if GPU physically fell off the bus
+    if ! check_pcie_bus; then
+        flag_reboot_required "pcie_bus_missing"
+        log "PCIe device $PCI_DEV is missing or non-responsive on bus. Aborting module reload to prevent kernel deadlock."
+        return 4
+    fi
+
+    # Guard 2: check if fatal unrecoverable Xid is logged
+    if check_unrecoverable_xid; then
+        flag_reboot_required "fatal_xid_detected"
+        log "Fatal Xid (79/154/92) detected in kernel log. Online module reload will deadlock the kernel. Aborting."
+        return 4
+    fi
 
     # Step 1: Stop ALL GPU containers (reverse priority order)
     log "Step 1: Stopping GPU containers..."
@@ -173,9 +223,17 @@ do_recovery() {
             local retries=5
             while lsmod | grep -q "^${mod}" && [ "$retries" -gt 0 ]; do
                 log "  rmmod $mod (attempt $retries)"
-                if rmmod "$mod" 2>/dev/null; then
+                # Guard: timeout rmmod at 10s to prevent kernel deadlock / spinning loop
+                if timeout 10 rmmod "$mod" 2>/dev/null; then
                     break
                 fi
+                local rmmod_rc=$?
+                if [ $rmmod_rc -eq 124 ]; then
+                    log "  CRITICAL: rmmod $mod timed out (10s) — kernel locked on device teardown!"
+                    flag_reboot_required "rmmod_${mod}_timeout"
+                    return 4
+                fi
+
                 # Find holders and force kill
                 local holders
                 holders=$(lsof /dev/nvidia* /dev/dri/* 2>/dev/null | grep -v "^COMMAND" | awk '{print $1, $2}' | sort -u || echo "")
@@ -236,12 +294,13 @@ do_recovery() {
     log "Step 6: Waiting 30s before starting P2 workloads..."
     if [ "$MODE" = "--apply" ]; then
         sleep 30
-        for svc in cas-immich-ml.service cas-core.service; do
-            if systemctl list-unit-files "$svc" >/dev/null 2>&1; then
-                log "  starting $svc"
-                systemctl start "$svc" 2>/dev/null || log "  WARN: $svc start failed"
-            fi
-        done
+        # DISABLED by user request: cas-core and cas-immich startups disabled
+        # for svc in cas-immich-ml.service cas-core.service; do
+        #     if systemctl list-unit-files "$svc" >/dev/null 2>&1; then
+        #         log "  starting $svc"
+        #         systemctl start "$svc" 2>/dev/null || log "  WARN: $svc start failed"
+        #     fi
+        # done
     fi
 
     log "=== RECOVERY COMPLETE ==="
