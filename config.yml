@@ -315,6 +315,8 @@ go2rtc:
       - 192.168.50.150:8555
       - stun:8555
   streams:
+    allee_sur_le_cote_main:
+      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
     allee_sur_le_cote_sub:
       - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
 
@@ -447,8 +449,10 @@ cameras:
   allee_sur_le_cote:
     ffmpeg:
       inputs:
+        - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_main
+          roles: [record]
         - path: rtsp://127.0.0.1:8554/allee_sur_le_cote_sub
-          roles: [detect, record, audio]
+          roles: [detect, audio]
     live:
       streams:
         Allée côté (panoramique): allee_sur_le_cote_sub
@@ -787,7 +791,9 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/vue_entree_main
-          roles: [detect, record, audio]
+          roles: [record, audio]
+        - path: rtsp://127.0.0.1:8554/vue_entree_sub
+          roles: [detect]
     live:
       streams:
         Vue entrée: vue_entree_sub
@@ -799,70 +805,26 @@ cameras:
       bounding_box: true
       crop: false
     detect:
-      width: 2560
-      height: 1920
-      # Bumped from 7 to 10 fps (2026-06-04, follow-up to the
-      # training-collection relaxation). At 7 fps and 1.4 m/s walking
-      # speed, the motion pre-filter gets ~5 chances per second to
-      # fire on a 7 m distant walker — borderline. At 10 fps that's
-      # ~7 chances per second (~40 % more samples), which combined
-      # with the lower motion threshold and improved noise detection
-      # should reliably catch walkers at 5-15 m range on the
-      # doorbell. Cost: ~40 % more detector calls per minute on
-      # vue_entree (~3 M inference ops/min for the YOLOv9s TRT
-      # engine on a 2560×1920 input); trivial for the RTX 5060 Ti.
-      fps: 10
-    # ---------------------------------------------------------------------
-    # TRAINING-COLLECTION MODE (branch feat/frigate-plus-training-collection-
-    # vue-entree, 2026-06-04): the iter0 contract is over-conservative for
-    # the doorbell — see discussion in commit message. Relaxed to capture
-    # the edge cases the Frigate+ model is currently bad at:
-    #   * IR-mode at 0 lux: scores 0.30-0.50 (well below iter0 0.55)
-    #   * head-and-shoulders views at 1.7 m / 0° tilt: class 20 (face) crops
-    #   * face-fills-frame at the doorstep: bbox > 144 000 px²
-    #   * side / crouching / arms-spread body poses
-    # Expected effect: 5-10x more events on vue_entree, 30-50% FP rate
-    # (temporary). Revert to iter0 once Frigate+ has been retrained on the
-    # accumulated data and a new plus://<hash> is issued. Re-evaluation
-    # of all 8 cameras is automated by `make evaluate` (see Makefile and
-    # tests/wait-and-evaluate.sh).
-    # ---------------------------------------------------------------------
+      width: 640
+      height: 480
+      fps: 5
     objects:
-      # Track BOTH person AND face. The global model.labelmap at
-      # config.yml:246 still rewrites face→person for the user-facing UI
-      # (so the user sees `person` events), but the raw class-20 bounding
-      # box is preserved in the snapshot+thumbnail for Frigate+ to learn
-      # from — this is the single highest-value Frigate+ training sample
-      # the doorbell can produce.
       track: [person, face]
       filters:
         person:
-          # DIAGNOSTIC 2026-06-04: ultra-permissive to test whether the
-          # YOLOv9s model can SEE a person at 15-20 m on the 2560×1920
-          # main stream at all. The model internally downscales to
-          # 320×320, so a person at 20 m is ~11×3 model-pixels — at the
-          # edge of the model's minimum-detectable-size. If the user
-          # walks at distance and STILL sees no event, the answer is
-          # "this camera + this model can't see at this distance" and
-          # we need a different approach (digital zoom, smaller crop,
-          # etc.). If the user DOES see events, the model is fine and
-          # we tighten back up.
-          #
-          # Was (training-collection): 150/800000/0.4/8.0/0.4/0.3
-          min_area: 25              # 50 % of the smallest expected 20 m footprint
-          max_area: 800000
-          min_ratio: 0.2            # accept any aspect (head, side, etc.)
-          max_ratio: 12.0
-          threshold: 0.10           # accept very low confidence
-          min_score: 0.10
+          min_area: 50
+          max_area: 120000
+          min_ratio: 0.3
+          max_ratio: 5.0
+          threshold: 0.50
+          min_score: 0.40
         face:
-          # Match the permissive person filter
           min_area: 0
-          max_area: 800000
+          max_area: 120000
           min_ratio: 0.0
-          max_ratio: 12.0
-          threshold: 0.10
-          min_score: 0.10
+          max_ratio: 5.0
+          threshold: 0.50
+          min_score: 0.40
       mask: 0.806,0.142,0.864,0.449,0.927,0.444,0.876,0.219
     snapshots:
       enabled: true
@@ -920,23 +882,14 @@ cameras:
         objects: [person, face]
         filters:
           person:
-            # TIGHTERED 2026-06-05: while the user is away with the
-            # alarm armed_away, only high-confidence in-prive events
-            # should become a zone hit. The camera-level filter above
-            # stays ultra-permissive (0.10) so passersby outside the
-            # prive zone still trigger detection events for Frigate+
-            # training (see review.detections below). Iter0-style
-            # thresholds for the prive zone itself.
+            # Calibrated for 640x480 sub-stream
             threshold: 0.55
-            min_area: 500
+            min_area: 50
             min_ratio: 0.2
             max_ratio: 4.0
           face:
-            # Mirror the prive filter so the missing model.labelmap
-            # (see commit-message note) doesn't sneak face FPs past
-            # the prive gate either.
             threshold: 0.55
-            min_area: 500
+            min_area: 0
             min_ratio: 0.2
             max_ratio: 4.0
     review:
@@ -1034,8 +987,10 @@ cameras:
   jardin_devant:
     ffmpeg:
       inputs:
+        - path: rtsp://127.0.0.1:8554/jardin_devant_main
+          roles: [record]
         - path: rtsp://127.0.0.1:8554/jardin_devant_sub
-          roles: [detect, record]  # unified: same stream for both roles
+          roles: [detect]
     live:
       streams:
         Jardin devant (panoramique): jardin_devant_sub
@@ -1180,8 +1135,10 @@ cameras:
   piscine_vue_toit:
     ffmpeg:
       inputs:
+        - path: rtsp://127.0.0.1:8554/piscine_vue_toit_main
+          roles: [record]
         - path: rtsp://127.0.0.1:8554/piscine_vue_toit_sub
-          roles: [detect, record, audio]  # unified: same stream for all roles
+          roles: [detect, audio]
     live:
       streams:
         Piscine toit (panoramique): piscine_vue_toit_sub
@@ -1232,16 +1189,16 @@ cameras:
           max_area: 27000
           min_ratio: 0.5        # accept aspect variants (head-only, side)
           max_ratio: 8.0
-          threshold: 0.30
-          min_score: 0.25
+          threshold: 0.45
+          min_score: 0.35
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
           max_area: 27000
           min_ratio: 0.0
           max_ratio: 8.0
-          threshold: 0.30
-          min_score: 0.25
+          threshold: 0.45
+          min_score: 0.35
       mask:
         - 0.002,0.991,0,0.003,0.295,0.006,0.23,0.172,0.247,0.381,0.094,0.991
         - 0.371,0,0.792,0.012,0.713,0.589,0.67,0.429,0.645,0.432,0.599,0.278,0.538,0.094,0.495,0.018,0.404,0.018,0.399,0.054,0.374,0.051
@@ -1279,13 +1236,13 @@ cameras:
         objects: [person, face]
         filters:
           person:
-            # Match the relaxed camera-level filter
-            threshold: 0.30
+            # Calibrated to 0.45 to eliminate water-reflection false positives
+            threshold: 0.45
             min_area: 72
             min_ratio: 0.5
             max_ratio: 8.0
           face:
-            threshold: 0.30
+            threshold: 0.45
             min_area: 0
             min_ratio: 0.0
             max_ratio: 8.0
@@ -1345,6 +1302,7 @@ cameras:
   #   PTZ-aware detection model. NOT in scope for this branch.
   # ============================================================================
   salon:
+    enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/tapo_c210_salon_main
@@ -1416,6 +1374,7 @@ cameras:
   # (the person is above the optical axis when seated at the desk).
   # ============================================================================
   buro:
+    enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/tapo_c210_buro_main

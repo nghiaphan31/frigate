@@ -231,47 +231,28 @@ CAMERAS = {
         "tilt_deg":      0.0,
         "v_fov_deg":   100.0,
         "h_fov_deg":   135.0,
-        "stream_w_px": 2560,
-        "stream_h_px": 1920,
+        "stream_w_px":  640,
+        "stream_h_px":  480,
         "near_m":        3.0,
         # ────────────────────────────────────────────────────────────
-        # TRAINING-COLLECTION MODE (branch
-        # feat/frigate-plus-training-collection-vue-entree, 2026-06-04).
-        # The expected_* values below are STILL the iter0 contract for
-        # documentation/geometry-derivation purposes, but the camera is
-        # INTENTIONALLY not running with those values — see the comment
-        # block in config.yml:713-732. The training_collection_mode flag
-        # tells tests/test-math.sh to skip the spec-vs-actual match
-        # assertions (sections 1 + 2) for this camera, while still
-        # running the geometry derivation (section 3) so the spec stays
-        # self-consistent. The test-bringup.sh L3 report still runs
-        # normally on vue_entree.
-        #
-        # To revert to iter0: change config.yml back to the
-        # expected_* values below, set training_collection_mode to
-        # False (or remove the key), and re-run `make test`.
+        # Phase 4 Optimization: detect runs on 640x480 sub-stream,
+        # recording runs on 5MP main stream.
         # ────────────────────────────────────────────────────────────
         "training_collection_mode": True,
-        "expected_min_area":   300,
-        "expected_max_area": 144000,
-        "expected_min_ratio":  1.0,
-        "expected_max_ratio":  4.0,
-        "expected_threshold":  0.55,
-        "expected_min_score":  0.45,
-        # Bumped from 7 to 10 fps (2026-06-04, follow-up to the
-        # training-collection relaxation). At 10 fps the motion
-        # pre-filter gets ~40 % more chances per second to fire on
-        # distant walkers, which combined with the lower motion
-        # threshold (10/255) and improved_noise_detection closes the
-        # 5-15 m distance gap that the previous 7 fps config missed.
-        "expected_fps":         10,
-        "detect_enabled":    True,
+        "expected_min_area":    50,
+        "expected_max_area": 120000,
+        "expected_min_ratio":   0.3,
+        "expected_max_ratio":   5.0,
+        "expected_threshold":   0.50,
+        "expected_min_score":   0.40,
+        "expected_fps":          5,
+        "detect_enabled":     True,
         "expected_zones": {
-            "prive":  {"threshold": 0.55, "min_area": 300, "min_ratio": 1.0, "max_ratio": 4.0},
+            "prive":  {"threshold": 0.55, "min_area": 50, "min_ratio": 0.2, "max_ratio": 4.0},
         },
         "min_area_margin":     0.126,
         "max_area_margin":     1.79,
-        "detect_stream": "vue_entree_main",
+        "detect_stream": "vue_entree_sub",
         "live_stream":   "vue_entree_sub",
         "zones": ["prive"],
     },
