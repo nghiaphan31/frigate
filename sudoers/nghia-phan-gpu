@@ -66,7 +66,8 @@ Cmnd_Alias GPU_MGMT_CMDS = \
     /usr/bin/systemctl restart gpu-power-tune.service, \
     /usr/bin/systemctl status gpu-power-tune.service, \
     /usr/bin/systemctl enable gpu-power-tune.service, \
-    /usr/bin/systemctl disable gpu-power-tune.service
+    /usr/bin/systemctl disable gpu-power-tune.service, \
+    /usr/bin/etckeeper *
 
 nghia-phan ALL=(root) NOPASSWD: GPU_MGMT_CMDS
 
