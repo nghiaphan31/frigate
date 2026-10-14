@@ -177,6 +177,7 @@ iter0-revert-y:
 # modify any state.  See tests/pipeline-report.sh --help for the full CLI.
 # ------------------------------------------------------------------------------
 CAM_OPT ?= $(if $(CAM),--camera=$(CAM),)
+PIPELINE_REPORT_WINDOW_HOURS ?= 24
 
 pipeline-report:
 	@tests/pipeline-report.sh --window-hours=$(PIPELINE_REPORT_WINDOW_HOURS) $(CAM_OPT)
