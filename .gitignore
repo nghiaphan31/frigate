@@ -22,6 +22,7 @@ trt-cache/tensorrt/
 # Previous (now-superseded) model: 6ea1f38db36e21f44a1eb1071d9958ed (28 MB)
 # Sibling .json file is KEPT (documents the model hash for reproducibility).
 trt-cache/c1aa04320f389aa6c7702bf9ddd3fe6d
+trt-cache/8c0ee150a2bb8bf165cdbf9f1cb9f475
 
 # ============================================================================
 # SEMANTIC SEARCH ONNX MODELS — 84 MB vision + 262 MB text, downloaded once.
