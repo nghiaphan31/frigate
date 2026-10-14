@@ -626,13 +626,13 @@ cameras:
       track: [person, face]
       filters:
         person:
-          # Training-collection relaxation (was iter0: 300/117000/1.0/4.0/0.55/0.45)
+          # Production values (was training-collection relaxation 150/117000/0.4/8.0/0.4/0.3)
           min_area: 150
           max_area: 117000
-          min_ratio: 0.4
-          max_ratio: 8.0
-          threshold: 0.4
-          min_score: 0.3
+          min_ratio: 1.2
+          max_ratio: 4.0
+          threshold: 0.68
+          min_score: 0.50
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
@@ -701,9 +701,9 @@ cameras:
             # matches the camera-level iter0 derivation at
             # config.yml:560-565 (16:9 main stream 3840×2160,
             # 2.2 m mount, 10° tilt, 87° H-FOV, 5-20 m walkable).
-            threshold: 0.55
+            threshold: 0.68
             min_area: 500
-            min_ratio: 0.4
+            min_ratio: 1.2
             max_ratio: 4.0
           face:
             # Mirror the prive filter so the missing model.labelmap
