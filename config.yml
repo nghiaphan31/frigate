@@ -230,7 +230,7 @@ detectors:
 #       panoramic sub stream.
 # ----------------------------------------------------------------------------
 model:
-  path: plus://8c0ee150a2bb8bf165cdbf9f1cb9f475
+  path: plus://39b585299f7ab184352f285cb8f32c1a
 
 # ----------------------------------------------------------------------------
 # motion — pre-filter thresholds (see ARCHITECTURE.md §4.6)
