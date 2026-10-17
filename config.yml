@@ -1198,7 +1198,9 @@ cameras:
           max_ratio: 8.0
           threshold: 0.45
           min_score: 0.35
-          mask: 0.517,0.332,0.519,0.517,0.55,0.518,0.553,0.317
+          mask:
+            - 0.51,0.342,0.512,0.522,0.55,0.518,0.553,0.317
+            - 0.7,0.372,0.686,0.503,0.707,0.563,0.727,0.412
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
