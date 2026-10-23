@@ -337,12 +337,13 @@ CAMERAS = {
         "detect_enabled":    True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area": 158, "min_ratio": 1.0, "max_ratio": 4.0},
+            "toit":   {"threshold": 0.60, "min_area": 8000, "min_ratio": 0.8, "max_ratio": 8.0},
         },
         "min_area_margin":     0.399,
         "max_area_margin":     9.36,
         "detect_stream": "piscine_vue_toit_sub",
         "live_stream":   "piscine_vue_toit_sub",
-        "zones": ["prive"],
+        "zones": ["prive", "toit"],
     },
 
     # ===================================================================
