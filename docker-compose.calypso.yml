@@ -20,11 +20,11 @@ services:
       # crashed the container on shutdown.
       S6_STAGE2_HOOK: /etc/s6-overlay/scripts/frigate-init.sh
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request,json; r=urllib.request.urlopen('http://localhost:5000/api/stats', timeout=3); d=json.loads(r.read()); exit(0 if d.get('cameras', {}).get('allee_sur_le_cote', {}).get('detection_fps', 0) > 0 else 1)\""]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/api/stats | jq -e '(.detectors.onnx1.pid > 0) and ((.service.uptime // .uptime // 0) > 0)' > /dev/null"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 240s
+      start_period: 60s
     volumes:
       - ./config.yml:/config/config.yml
       - ${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}:/media/frigate
