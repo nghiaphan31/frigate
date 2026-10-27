@@ -67,6 +67,25 @@ Cmnd_Alias GPU_MGMT_CMDS = \
     /usr/bin/systemctl status gpu-power-tune.service, \
     /usr/bin/systemctl enable gpu-power-tune.service, \
     /usr/bin/systemctl disable gpu-power-tune.service, \
+    /usr/bin/systemctl start calypso-sentinel.service, \
+    /usr/bin/systemctl stop calypso-sentinel.service, \
+    /usr/bin/systemctl restart calypso-sentinel.service, \
+    /usr/bin/systemctl status calypso-sentinel.service, \
+    /usr/bin/systemctl enable calypso-sentinel.service, \
+    /usr/bin/systemctl disable calypso-sentinel.service, \
+    /usr/bin/systemctl is-active calypso-sentinel.service, \
+    /usr/bin/systemctl start mnt-nas-video.automount, \
+    /usr/bin/systemctl stop mnt-nas-video.automount, \
+    /usr/bin/systemctl restart mnt-nas-video.automount, \
+    /usr/bin/systemctl enable mnt-nas-video.automount, \
+    /usr/bin/systemctl disable mnt-nas-video.automount, \
+    /usr/bin/systemctl status mnt-nas-video.automount, \
+    /usr/bin/systemctl is-active mnt-nas-video.automount, \
+    /usr/bin/systemctl restart docker, \
+    /usr/bin/mkdir -p /var/lib/calypso-watchdog, \
+    /usr/bin/chmod 0750 /var/lib/calypso-watchdog, \
+    /usr/bin/chown root\:root /var/lib/calypso-watchdog, \
+    /usr/bin/install -m 0644 * /etc/docker/daemon.json, \
     /usr/bin/etckeeper *
 
 nghia-phan ALL=(root) NOPASSWD: GPU_MGMT_CMDS
