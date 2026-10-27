@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# /usr/local/bin/calypso-sentinel — Deterministic Host Sentinel for Calypso
+# Python 3.12 Standard Library only. 0 CUDA context. Strict non-blocking probes.
+# Revision 2 — All Roo Code B1-B4 + matrix gap corrections applied.
+# ==============================================================================
+import os
+import re
+import sys
+import time
+import json
+import socket
+import subprocess
+import urllib.request
+import urllib.error
+from pathlib import Path
+from datetime import datetime, timezone
+
+# ─── Constants ────────────────────────────────────────────────────────────────
+MQTT_HOST = os.environ.get("GPU_MQTT_HOST", "192.168.50.125")
+MQTT_PORT = int(os.environ.get("GPU_MQTT_PORT", "1883"))
+MQTT_USER = os.environ.get("MQTT_USER", "mosquitto")
+MQTT_PASS = os.environ.get("MQTT_PASS", "mosquitto")
+MQTT_STATE_TOPIC  = "calypso/sentinel/state"
+MQTT_AVAIL_TOPIC  = "calypso/sentinel/availability"
+
+NAS_IP   = "192.168.50.232"
+NAS_PORT = 2049
+REBOOT_HISTORY_FILE = Path("/var/lib/calypso-watchdog/gpu_reboot_history")
+RESTIC_STATUS_FILE  = Path("/home/nghia-phan/restic/status.json")
+RESTIC_LOCK_FILE    = Path("/tmp/restic_calypso_backup.lock")
+CAS_WAL_DIR = Path("/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/CAS_Management/local_ssd/vault/index")
+
+FRIGATE_CAMERAS = [
+    "allee_sur_le_cote", "buro", "cuisine", "jardin_arriere",
+    "jardin_devant", "piscine_vue_toit", "salon", "vue_entree"
+]
+
+# GPU workers to suspend in cas-core when VRAM is critically low
+# cas-docling-worker added (confirmed running via supervisorctl live check)
+CAS_GPU_WORKERS = ["cas-visual-worker", "cas-vector-worker", "cas-docling-worker"]
+
+# ─── State ────────────────────────────────────────────────────────────────────
+class SentinelState:
+    def __init__(self):
+        # NFS circuit breaker
+        self.nfs_down_since   = None
+        self.nfs_ok_since     = None   # reconnect dwell: 10s stable before re-enabling
+        self.nfs_tripped      = False
+        # VRAM circuit breakers
+        self.cas_workers_paused  = False
+        self.immich_ml_paused_at = None
+        # MQTT housekeeping
+        self.last_mqtt_pub = 0
+        # Swap churn delta (S03)
+        self.last_vmstat = {}
+        # D-state dwell tracking (S01)
+        self.d_state_high_since = None
+        # GPU fatal debounce — B1: 3 consecutive strikes required
+        self.gpu_fatal_strikes    = 0
+        self.last_gpu_fatal_time  = 0
+        self.reboot_suppressed    = False
+        # Xid incremental scan — B2: journal cursor avoids full re-scan each cycle
+        self.xid_journal_cursor = ""
+
+state = SentinelState()
+
+def run_cmd(args, timeout_s=3):
+    try:
+        res = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout_s)
+        return res.returncode, res.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return 124, ""
+    except Exception as e:
+        return -1, str(e)
+
+def mqtt_publish(topic, payload, retain=False):
+    cmd = [
+        "mosquitto_pub", "-h", MQTT_HOST, "-p", str(MQTT_PORT),
+        "-u", MQTT_USER, "-P", MQTT_PASS,
+        "-t", topic, "-m", payload
+    ]
+    if retain:
+        cmd.append("-r")
+    run_cmd(cmd, timeout_s=4)
+
+def probe_d_state_procs():
+    count = 0
+    try:
+        for entry in os.scandir('/proc'):
+            if entry.is_dir() and entry.name.isdigit():
+                try:
+                    with open(f"/proc/{entry.name}/stat", "r") as f:
+                        data = f.read()
+                        r_idx = data.rfind(')')
+                        if r_idx != -1 and len(data) > r_idx + 2:
+                            if data[r_idx + 2] == 'D':
+                                count += 1
+                except (FileNotFoundError, ProcessLookupError, PermissionError):
+                    continue
+    except Exception:
+        pass
+    return count
+
+def probe_psi():
+    psi = {"io_full_avg60": 0.0, "memory_full_avg60": 0.0, "cpu_some_avg60": 0.0}
+    try:
+        if os.path.exists("/proc/pressure/io"):
+            with open("/proc/pressure/io", "r") as f:
+                for line in f:
+                    if line.startswith("full"):
+                        for token in line.split():
+                            if token.startswith("avg60="):
+                                psi["io_full_avg60"] = float(token.split("=")[1])
+        if os.path.exists("/proc/pressure/memory"):
+            with open("/proc/pressure/memory", "r") as f:
+                for line in f:
+                    if line.startswith("full"):
+                        for token in line.split():
+                            if token.startswith("avg60="):
+                                psi["memory_full_avg60"] = float(token.split("=")[1])
+        if os.path.exists("/proc/pressure/cpu"):
+            with open("/proc/pressure/cpu", "r") as f:
+                for line in f:
+                    if line.startswith("some"):
+                        for token in line.split():
+                            if token.startswith("avg60="):
+                                psi["cpu_some_avg60"] = float(token.split("=")[1])
+    except Exception:
+        pass
+    return psi
+
+def probe_swap_and_load():
+    load1, _, _ = os.getloadavg()
+    swap_used_gib = 0.0
+    try:
+        with open("/proc/meminfo", "r") as f:
+            mem = {}
+            for line in f:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    mem[parts[0].strip()] = int(parts[1].split()[0])
+            total_swap = mem.get("SwapTotal", 0)
+            free_swap = mem.get("SwapFree", 0)
+            swap_used_gib = round((total_swap - free_swap) / (1024 * 1024), 2)
+    except Exception:
+        pass
+    return load1, swap_used_gib
+
+def probe_storage():
+    st = os.statvfs('/')
+    free_gb = round((st.f_bavail * st.f_frsize) / (1024**3), 1)
+    total_gb = round((st.f_blocks * st.f_frsize) / (1024**3), 1)
+    used_pct = round(((total_gb - free_gb) / total_gb) * 100, 1) if total_gb > 0 else 0.0
+
+    smart_ok = True
+    if Path("/dev/nvme0n1").exists():
+        rc, out = run_cmd(["nvme", "smart-log", "/dev/nvme0n1", "-o", "json"], timeout_s=3)
+        if rc == 0:
+            try:
+                data = json.loads(out)
+                if data.get("critical_warning", 0) > 0 or data.get("media_errors", 0) > 0:
+                    smart_ok = False
+            except Exception:
+                pass
+    return free_gb, used_pct, smart_ok
+
+def probe_gpu():
+    rc, out = run_cmd([
+        "timeout", "-k", "2", "3", "nvidia-smi",
+        "--query-gpu=memory.used,memory.free,temperature.gpu,utilization.gpu",
+        "--format=csv,noheader,nounits"
+    ], timeout_s=4)
+    if rc != 0 or not out:
+        return None
+    try:
+        parts = [p.strip() for p in out.split(",")]
+        return {
+            "vram_used_mib": int(parts[0]),
+            "vram_free_mib": int(parts[1]),
+            "temp_c": int(parts[2]),
+            "util_pct": int(parts[3])
+        }
+    except Exception:
+        return None
+
+def probe_xid():
+    rc, out = run_cmd(["journalctl", "-k", "-b", "0", "-g", "NVRM: Xid", "--output=cat"], timeout_s=3)
+    if rc != 0 or not out:
+        return [], []
+    soft_xids = []
+    fatal_xids = []
+    for line in out.splitlines():
+        if "NVRM: Xid" in line:
+            for fatal in ["48", "79", "92", "119", "154"]:
+                if f": {fatal}," in line or f": {fatal} " in line:
+                    fatal_xids.append(fatal)
+            for soft in ["13", "31", "43", "45", "68"]:
+                if f": {soft}," in line or f": {soft} " in line:
+                    soft_xids.append(soft)
+    return list(set(soft_xids)), list(set(fatal_xids))
+
+def probe_nfs():
+    t0 = time.time()
+    try:
+        with socket.create_connection((NAS_IP, NAS_PORT), timeout=1.0):
+            rtt = round((time.time() - t0) * 1000, 1)
+            return True, rtt
+    except Exception:
+        return False, -1.0
+
+def probe_frigate():
+    try:
+        req = urllib.request.Request("http://127.0.0.1:5000/api/stats", headers={"User-Agent": "CalypsoSentinel"})
+        with urllib.request.urlopen(req, timeout=2.5) as r:
+            data = json.loads(r.read().decode())
+            pid = data.get("detectors", {}).get("onnx1", {}).get("pid", 0)
+            uptime = data.get("service", {}).get("uptime", 0)
+            return (pid > 0 and uptime > 0)
+    except Exception:
+        return False
+
+def probe_cas_sqlite_wal():
+    if not CAS_WAL_DIR.exists():
+        return 0.0
+    total_bytes = 0
+    try:
+        for p in CAS_WAL_DIR.glob("*.db-wal"):
+            total_bytes += p.stat().st_size
+    except Exception:
+        pass
+    return round(total_bytes / (1024 * 1024), 1)
+
+def probe_immich_databases():
+    # PostgreSQL check
+    pg_rc, _ = run_cmd(["docker", "exec", "cas-immich-database", "pg_isready", "-U", "immich", "-d", "immich"], timeout_s=3)
+    pg_ok = (pg_rc == 0)
+
+    # Valkey check
+    valkey_rc, valkey_out = run_cmd(["docker", "exec", "cas-immich-redis", "valkey-cli", "INFO", "persistence"], timeout_s=3)
+    valkey_ok = (valkey_rc == 0 and "rdb_last_bgsave_status:ok" in valkey_out)
+
+    return pg_ok, valkey_ok
+
+def probe_restic():
+    age_hours = 999.0
+    if RESTIC_STATUS_FILE.exists():
+        try:
+            with open(RESTIC_STATUS_FILE, "r") as f:
+                data = json.load(f)
+                iso_ts = data.get("last_backup")
+                if iso_ts:
+                    last_dt = datetime.fromisoformat(iso_ts)
+                    now_dt = datetime.now(timezone.utc)
+                    age_hours = round((now_dt - last_dt.astimezone(timezone.utc)).total_seconds() / 3600, 1)
+        except Exception:
+            pass
+    return age_hours
+
+def handle_fatal_gpu(fatal_xids):
+    print(f"[CRITICAL] Fatal GPU condition detected: {fatal_xids}. Synchronizing NVMe...", file=sys.stderr)
+    run_cmd(["/bin/sync"], timeout_s=5)
+
+    REBOOT_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    recent_reboots = 0
+    now = time.time()
+    valid_lines = []
+
+    if REBOOT_HISTORY_FILE.exists():
+        try:
+            with open(REBOOT_HISTORY_FILE, "r") as f:
+                for line in f:
+                    ts = float(line.strip())
+                    if now - ts < 21600:  # 6 hours
+                        recent_reboots += 1
+                        valid_lines.append(str(ts))
+        except Exception:
+            pass
+
+    if recent_reboots == 0:
+        print("[CRITICAL] Orderly reboot initiated (0 reboots in 6h window)...", file=sys.stderr)
+        valid_lines.append(str(now))
+        with open(REBOOT_HISTORY_FILE, "w") as f:
+            f.write("\n".join(valid_lines) + "\n")
+        run_cmd(["/sbin/reboot"], timeout_s=5)
+    else:
+        print("[EMERGENCY] Anti-Boot-Loop triggered! Halting GPU restart attempts.", file=sys.stderr)
+        state.reboot_suppressed = True
+
+def handle_vram_and_batch(gpu_data):
+    if not gpu_data:
+        return
+    vram_free = gpu_data["vram_free_mib"]
+
+    # Soft Circuit: Evict Ollama and pause CAS workers
+    if vram_free < 2000:
+        # 1. Evict Ollama
+        rc, out = run_cmd(["curl", "-sf", "http://127.0.0.1:11434/api/ps"], timeout_s=2)
+        if rc == 0 and out:
+            try:
+                models = json.loads(out).get("models", [])
+                for m in models:
+                    m_name = m.get("name")
+                    if m_name:
+                        run_cmd(["curl", "-sf", "-X", "POST", "http://127.0.0.1:11434/api/generate", "-d", json.dumps({"model": m_name, "keep_alive": 0})], timeout_s=2)
+            except Exception:
+                pass
+
+        # 2. Stop CAS workers if still tight
+        if not state.cas_workers_paused:
+            print("[WARN] VRAM < 2000 MiB. Suspending CAS batch workers...", file=sys.stderr)
+            run_cmd(["docker", "exec", "cas-core", "supervisorctl", "-c", "/app/docker/cas-core/supervisord.conf", "stop", "cas-visual-worker", "cas-vector-worker"], timeout_s=5)
+            state.cas_workers_paused = True
+
+    # Hard Circuit: Pause Immich ML
+    if vram_free < 800 and not state.immich_ml_paused_at:
+        print("[CRITICAL] VRAM < 800 MiB! Pausing cas-immich-ml to shield Frigate TRT...", file=sys.stderr)
+        run_cmd(["docker", "pause", "cas-immich-ml"], timeout_s=5)
+        state.immich_ml_paused_at = time.time()
+
+    # Recovery checks
+    if state.immich_ml_paused_at:
+        if (time.time() - state.immich_ml_paused_at >= 300) or (vram_free >= 4000):
+            print("[INFO] Resuming cas-immich-ml...", file=sys.stderr)
+            run_cmd(["docker", "unpause", "cas-immich-ml"], timeout_s=5)
+            state.immich_ml_paused_at = None
+
+    if state.cas_workers_paused and vram_free >= 4000:
+        print("[INFO] Resuming CAS batch workers...", file=sys.stderr)
+        run_cmd(["docker", "exec", "cas-core", "supervisorctl", "-c", "/app/docker/cas-core/supervisord.conf", "start", "cas-visual-worker", "cas-vector-worker"], timeout_s=5)
+        state.cas_workers_paused = False
+
+def handle_nfs_circuit(nfs_ok):
+    now = time.time()
+    if not nfs_ok:
+        if state.nfs_down_since is None:
+            state.nfs_down_since = now
+        elif (now - state.nfs_down_since >= 30) and not state.nfs_tripped:
+            print("[CRITICAL] NFS offline >= 30s. Cutting off Frigate recordings via MQTT...", file=sys.stderr)
+            for cam in FRIGATE_CAMERAS:
+                mqtt_publish(f"frigate/{cam}/recordings/set", "OFF")
+            state.nfs_tripped = True
+    else:
+        if state.nfs_tripped:
+            print("[INFO] NFS reconnected. Restoring Frigate recordings via MQTT...", file=sys.stderr)
+            for cam in FRIGATE_CAMERAS:
+                mqtt_publish(f"frigate/{cam}/recordings/set", "ON")
+            state.nfs_tripped = False
+        state.nfs_down_since = None
+
+def publish_ha_discovery():
+    device = {
+        "identifiers": ["calypso_server_sentinel"],
+        "name": "Calypso Server Sentinel",
+        "model": "Calypso Host (RTX 5060 Ti)",
+        "manufacturer": "Custom Host Telemetry",
+        "sw_version": "1.0.0"
+    }
+
+    # ── Sensor registry ───────────────────────────────────────────────────────
+    # Format: (component, obj_id, friendly_name, value_template, unit, device_class, icon)
+    # obj_id drives TWO things:
+    #   1. The HA entity_id:   {comp}.calypso_sentinel_{obj_id}
+    #   2. The MQTT discovery topic: homeassistant/{comp}/calypso_sentinel/{obj_id}/config
+    # B3: obj_id values below MUST match the automations in §6 exactly.
+    sensors = [
+        # comp              obj_id                  friendly_name               value_template                                                          unit   device_class    icon
+        ("sensor",          "status",               "Sentinel Status",          "{{ value_json.status }}",                                              None,  None,           "mdi:shield-check"),
+        ("sensor",          "severity",             "Sentinel Severity",        "{{ value_json.severity }}",                                            None,  None,           "mdi:alert-decagram"),
+        ("sensor",          "vram_free_mib",        "GPU VRAM Free",            "{{ value_json.gpu.vram_free_mib }}",                                   "MiB", "data_size",    "mdi:memory"),
+        ("sensor",          "gpu_temp_c",           "GPU Temperature",          "{{ value_json.gpu.temp_c }}",                                          "°C",  "temperature",  None),
+        ("sensor",          "nvme_free_gb",         "NVMe Free Space",          "{{ value_json.storage.nvme_free_gb }}",                                "GB",  "data_size",    "mdi:harddisk"),
+        ("sensor",          "d_state_procs",        "D-State Processes",        "{{ value_json.kernel.d_state_procs }}",                                None,  None,           "mdi:sleep"),
+        ("sensor",          "restic_age_hours",     "Restic Backup Age",        "{{ value_json.workloads.restic_last_age_hours }}",                     "h",   "duration",     "mdi:history"),
+        ("sensor",          "valkey_changes",       "Valkey Unsaved Changes",   "{{ value_json.workloads.valkey_changes }}",                            None,  None,           "mdi:database-sync"),
+        ("binary_sensor",   "nfs_video_online",     "NFS Video Storage",        "{{ 'ON' if value_json.storage.nfs_video_online else 'OFF' }}",         None,  "connectivity", None),
+        ("binary_sensor",   "frigate_detector_alive","Frigate Detector Status", "{{ 'ON' if value_json.workloads.frigate_detector_alive else 'OFF' }}", None,  "running",      None),
+        ("binary_sensor",   "cas_core_healthy",     "CAS Core Status",          "{{ 'ON' if value_json.workloads.cas_core_healthy else 'OFF' }}",       None,  "running",      None),
+        ("binary_sensor",   "valkey_bgsave_ok",     "Valkey BGSAVE Status",     "{{ 'ON' if value_json.workloads.valkey_bgsave_ok else 'OFF' }}",       None,  "problem",      None),
+    ]
+
+    for comp, obj_id, name, val_tpl, unit, dev_cls, icon in sensors:
+        conf = {
+            "name": name,
+            # B3: object_id sets entity_id to {comp}.calypso_sentinel_{obj_id} deterministically.
+            # Without this field, HA generates its own ID from the device name + sensor name,
+            # which will NOT match the automation entity_id references in §6.
+            "object_id": f"calypso_sentinel_{obj_id}",
+            "unique_id": f"calypso_sentinel_{obj_id}",
+            # Dead-man's switch: entities go "unavailable" if sentinel stops publishing for 180s.
+            "expire_after": 180,
+            "state_topic": MQTT_STATE_TOPIC,
+            "value_template": val_tpl,
+            "availability_topic": MQTT_AVAIL_TOPIC,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "device": device
+        }
+        if unit: conf["unit_of_measurement"] = unit
+        if dev_cls: conf["device_class"] = dev_cls
+        if icon: conf["icon"] = icon
+
+        discovery_topic = f"homeassistant/{comp}/calypso_sentinel/{obj_id}/config"
+        mqtt_publish(discovery_topic, json.dumps(conf), retain=True)
+
+def main():
+    print("[INFO] Starting Calypso Sentinel Host Daemon...", file=sys.stderr)
+    mqtt_publish(MQTT_AVAIL_TOPIC, "online", retain=True)
+    publish_ha_discovery()
+
+    while True:
+        try:
+            # 1. Collect all probes non-blockingly
+            d_procs = probe_d_state_procs()
+            psi = probe_psi()
+            load1, swap_used_gib = probe_swap_and_load()
+            nvme_free_gb, nvme_used_pct, smart_ok = probe_storage()
+            gpu_data = probe_gpu()
+            soft_xids, fatal_xids = probe_xid()
+            nfs_ok, nfs_rtt = probe_nfs()
+            frigate_ok = probe_frigate()
+            cas_wal_mb = probe_cas_sqlite_wal()
+            pg_ok, valkey_ok = probe_immich_databases()
+            restic_age = probe_restic()
+
+            # 2. Evaluate Severity & Circuit Breakers
+            severity = "P3"
+            status = "HEALTHY"
+
+            # Check P1 conditions
+            if fatal_xids or (gpu_data is None) or (d_procs > 5) or (not frigate_ok) or (state.nfs_tripped):
+                severity = "P1"
+                status = "CRITICAL"
+                if fatal_xids or (gpu_data is None):
+                    status = "FATAL_GPU_WEDGED"
+                    handle_fatal_gpu(fatal_xids)
+            # Check P2 conditions
+            elif (d_procs > 2) or (nvme_used_pct > 85.0) or (not smart_ok) or (not valkey_ok) or (restic_age > 28.0) or (cas_wal_mb > 256.0):
+                severity = "P2"
+                status = "DEGRADED"
+
+            # 3. Apply Active Circuit Breakers
+            handle_vram_and_batch(gpu_data)
+            handle_nfs_circuit(nfs_ok)
+
+            # 4. Construct Payload
+            payload = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "status": status,
+                "severity": severity,
+                "gpu": {
+                    "vram_used_mib": gpu_data["vram_used_mib"] if gpu_data else 0,
+                    "vram_free_mib": gpu_data["vram_free_mib"] if gpu_data else 0,
+                    "temp_c": gpu_data["temp_c"] if gpu_data else -1,
+                    "util_pct": gpu_data["util_pct"] if gpu_data else 0,
+                    "xid_fatal": fatal_xids,
+                    "xid_soft": soft_xids,
+                    "batch_paused": state.cas_workers_paused,
+                    "immich_paused": (state.immich_ml_paused_at is not None)
+                },
+                "storage": {
+                    "nvme_free_gb": nvme_free_gb,
+                    "nvme_used_pct": nvme_used_pct,
+                    "smart_healthy": smart_ok,
+                    "nfs_video_online": nfs_ok,
+                    "nfs_rtt_ms": nfs_rtt
+                },
+                "kernel": {
+                    "load_1m": load1,
+                    "d_state_procs": d_procs,
+                    "swap_used_gib": swap_used_gib,
+                    "psi_io_avg60": psi["io_full_avg60"],
+                    "psi_mem_avg60": psi["memory_full_avg60"]
+                },
+                "workloads": {
+                    "frigate_detector_alive": frigate_ok,
+                    "cas_core_healthy": (load1 < 12.0),
+                    "cas_wal_size_mb": cas_wal_mb,
+                    "postgres_ok": pg_ok,
+                    "valkey_bgsave_ok": valkey_ok,
+                    "restic_last_age_hours": restic_age
+                }
+            }
+
+            # 5. Periodic MQTT Publication (every 60s or immediately on P1/P2)
+            now = time.time()
+            if severity in ("P1", "P2") or (now - state.last_mqtt_pub >= 60):
+                mqtt_publish(MQTT_STATE_TOPIC, json.dumps(payload))
+                state.last_mqtt_pub = now
+
+        except Exception as e:
+            print(f"[ERROR] Sentinel loop exception: {e}", file=sys.stderr)
+
+        time.sleep(15)
+
+if __name__ == "__main__":
+    main()

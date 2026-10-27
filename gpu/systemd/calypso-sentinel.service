@@ -1,0 +1,23 @@
+[Unit]
+Description=Calypso Deterministic Host Sentinel & Health Monitoring (Plan 1)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/calypso-sentinel
+EnvironmentFile=-/etc/calypso-gpu.env
+StateDirectory=calypso-watchdog
+Restart=always
+RestartSec=5s
+User=root
+StandardOutput=journal
+StandardError=journal
+
+# Sandboxing & Resource constraints
+MemoryMax=64M
+MemoryHigh=48M
+CPUWeight=100
+
+[Install]
+WantedBy=multi-user.target
