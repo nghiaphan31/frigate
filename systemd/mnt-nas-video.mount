@@ -1,0 +1,13 @@
+[Unit]
+Description=DS420+ NFS /volume1/video on /mnt/nas/video (RW)
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=192.168.50.232:/volume1/video
+Where=/mnt/nas/video
+Type=nfs4
+Options=rw,soft,timeo=150,retrans=3,actimeo=30,noatime,_netdev,nconnect=4,rsize=1048576,wsize=1048576
+
+[Install]
+WantedBy=multi-user.target

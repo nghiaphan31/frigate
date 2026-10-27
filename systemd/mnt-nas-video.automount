@@ -1,0 +1,9 @@
+[Unit]
+Description=Automount for DS420+ NFS /volume1/video on /mnt/nas/video
+
+[Automount]
+Where=/mnt/nas/video
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=multi-user.target
