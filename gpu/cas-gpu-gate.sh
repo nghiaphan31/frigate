@@ -48,3 +48,4 @@ fi
 
 echo "GPU Gate: Clear to proceed (VRAM free: ${VRAM_FREE} MiB, Temp: ${TEMP_C}°C)"
 exit 0
+

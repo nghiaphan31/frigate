@@ -33,3 +33,4 @@ if [ -d "$WAL_DIR" ]; then
 fi
 
 exit 0
+
