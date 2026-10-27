@@ -54,8 +54,9 @@ class SentinelState:
         self.last_mqtt_pub = 0
         # Swap churn delta (S03)
         self.last_vmstat = {}
-        # D-state dwell tracking (S01)
-        self.d_state_high_since = None
+        # D-state dwell tracking (S01: P2 > 2 procs for > 60s, P1 > 5 procs for > 120s)
+        self.d_procs_gt2_since = None
+        self.d_procs_gt5_since = None
         # GPU fatal debounce — B1: 3 consecutive strikes required
         self.gpu_fatal_strikes    = 0
         self.last_gpu_fatal_time  = 0
@@ -427,15 +428,32 @@ def main():
             severity = "P3"
             status = "HEALTHY"
 
+            # D-state dwell tracking (S01: P2 > 2 procs for > 60s, P1 > 5 procs for > 120s)
+            now_ts = time.time()
+            if d_procs > 5:
+                if state.d_procs_gt5_since is None:
+                    state.d_procs_gt5_since = now_ts
+            else:
+                state.d_procs_gt5_since = None
+
+            if d_procs > 2:
+                if state.d_procs_gt2_since is None:
+                    state.d_procs_gt2_since = now_ts
+            else:
+                state.d_procs_gt2_since = None
+
+            d_procs_p1 = (state.d_procs_gt5_since is not None and (now_ts - state.d_procs_gt5_since >= 120))
+            d_procs_p2 = (state.d_procs_gt2_since is not None and (now_ts - state.d_procs_gt2_since >= 60))
+
             # Check P1 conditions
-            if fatal_xids or (gpu_data is None) or (d_procs > 5) or (not frigate_ok) or (state.nfs_tripped):
+            if fatal_xids or (gpu_data is None) or d_procs_p1 or (not frigate_ok) or (state.nfs_tripped):
                 severity = "P1"
                 status = "CRITICAL"
                 if fatal_xids or (gpu_data is None):
                     status = "FATAL_GPU_WEDGED"
                     handle_fatal_gpu(fatal_xids)
             # Check P2 conditions
-            elif (d_procs > 2) or (nvme_used_pct > 85.0) or (not smart_ok) or (not valkey_ok) or (restic_age > 28.0) or (cas_wal_mb > 256.0):
+            elif d_procs_p2 or (nvme_used_pct > 85.0) or (not smart_ok) or (not valkey_ok) or (restic_age > 28.0) or (cas_wal_mb > 256.0):
                 severity = "P2"
                 status = "DEGRADED"
 
