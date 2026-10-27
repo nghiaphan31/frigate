@@ -8,6 +8,7 @@ StartLimitBurst=3
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+ExecCondition=/usr/local/bin/cas-container-ready.sh cas-immich-ml 12.0
 EnvironmentFile=-/etc/calypso-gpu.env
 ExecStartPre=/usr/local/bin/gpu-usage-logger.sh check cas-immich-ml ${GPU_IMMICH_BUDGET_MB}
 ExecStart=/usr/bin/docker start cas-immich-ml

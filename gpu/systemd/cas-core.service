@@ -8,6 +8,7 @@ StartLimitBurst=3
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+ExecCondition=/usr/local/bin/cas-container-ready.sh cas-core 12.0
 # DISABLED by user request: cas-core startup disabled
 # ExecStartPre=-/usr/local/bin/gpu-usage-logger.sh check cas-core ${GPU_CAS_CORE_BUDGET_MB}
 # ExecStart=/usr/bin/docker start cas-core
