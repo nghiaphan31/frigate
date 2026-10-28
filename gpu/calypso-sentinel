@@ -52,6 +52,8 @@ class SentinelState:
         self.immich_ml_paused_at = None
         # MQTT housekeeping
         self.last_mqtt_pub = 0
+        self.last_nfs_online = True
+        self.last_severity = "P3"
         # Swap churn delta (S03)
         self.last_vmstat = {}
         # D-state dwell tracking (S01: P2 > 2 procs for > 60s, P1 > 5 procs for > 120s)
@@ -202,13 +204,18 @@ def probe_xid():
     return list(set(soft_xids)), list(set(fatal_xids))
 
 def probe_nfs():
-    t0 = time.time()
-    try:
-        with socket.create_connection((NAS_IP, NAS_PORT), timeout=1.0):
-            rtt = round((time.time() - t0) * 1000, 1)
-            return True, rtt
-    except Exception:
-        return False, -1.0
+    # Debounced probe: retry up to 2 times with a 2.0s timeout to absorb transient LAN jitter/NAS spikes.
+    # Non-blocking socket avoids blocking in D-state on stale mounts.
+    for attempt in range(2):
+        t0 = time.time()
+        try:
+            with socket.create_connection((NAS_IP, NAS_PORT), timeout=2.0):
+                rtt = round((time.time() - t0) * 1000, 1)
+                return True, rtt
+        except Exception:
+            if attempt == 0:
+                time.sleep(0.5)
+    return False, -1.0
 
 def probe_frigate():
     try:
@@ -500,11 +507,14 @@ def main():
                 }
             }
 
-            # 5. Periodic MQTT Publication (every 60s or immediately on P1/P2)
+            # 5. Periodic MQTT Publication (every 60s or immediately on state changes / P1/P2)
             now = time.time()
-            if severity in ("P1", "P2") or (now - state.last_mqtt_pub >= 60):
+            state_changed = (nfs_ok != state.last_nfs_online) or (severity != state.last_severity)
+            if state_changed or severity in ("P1", "P2") or (now - state.last_mqtt_pub >= 60):
                 mqtt_publish(MQTT_STATE_TOPIC, json.dumps(payload))
                 state.last_mqtt_pub = now
+                state.last_nfs_online = nfs_ok
+                state.last_severity = severity
 
         except Exception as e:
             print(f"[ERROR] Sentinel loop exception: {e}", file=sys.stderr)
