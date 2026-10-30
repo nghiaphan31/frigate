@@ -105,7 +105,7 @@ if [ -f .env ]; then
     . ./.env
     set -u
 fi
-MEDIA_PATH="${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"
+MEDIA_PATH="${FRIGATE_MEDIA_PATH:-/mnt/storage/media/video_archive/frigate_calypso}"
 
 # ------------------------------------------------------------------------------
 # Resolve the right `docker compose` invocation. Prefer v2 (`docker compose`

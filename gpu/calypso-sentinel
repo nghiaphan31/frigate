@@ -24,8 +24,7 @@ MQTT_PASS = os.environ.get("MQTT_PASS", "mosquitto")
 MQTT_STATE_TOPIC  = "calypso/sentinel/state"
 MQTT_AVAIL_TOPIC  = "calypso/sentinel/availability"
 
-NAS_IP   = "192.168.50.232"
-NAS_PORT = 2049
+STORAGE_MOUNT_PATH = Path("/mnt/storage")
 REBOOT_HISTORY_FILE = Path("/var/lib/calypso-watchdog/gpu_reboot_history")
 RESTIC_STATUS_FILE  = Path("/home/nghia-phan/restic/status.json")
 RESTIC_LOCK_FILE    = Path("/tmp/restic_calypso_backup.lock")
@@ -204,18 +203,27 @@ def probe_xid():
     return list(set(soft_xids)), list(set(fatal_xids))
 
 def probe_nfs():
-    # Debounced probe: retry up to 2 times with a 2.0s timeout to absorb transient LAN jitter/NAS spikes.
-    # Non-blocking socket avoids blocking in D-state on stale mounts.
-    for attempt in range(2):
-        t0 = time.time()
-        try:
-            with socket.create_connection((NAS_IP, NAS_PORT), timeout=2.0):
-                rtt = round((time.time() - t0) * 1000, 1)
-                return True, rtt
-        except Exception:
-            if attempt == 0:
-                time.sleep(0.5)
-    return False, -1.0
+    """
+    Probe local canonical storage health on /mnt/storage (formerly remote NFS probe).
+    Maintains signature (bool, float) and compatibility with MQTT/HA telemetry.
+    """
+    t0 = time.time()
+    try:
+        if not os.path.ismount(str(STORAGE_MOUNT_PATH)):
+            return False, -1.0
+        # Fast non-blocking check
+        os.stat(str(STORAGE_MOUNT_PATH))
+        # Check mdstat if RAID array present
+        mdstat = Path("/proc/mdstat")
+        if mdstat.exists():
+            content = mdstat.read_text()
+            if "_" in content:
+                print("[WARNING] mdstat indicates degraded RAID array", file=sys.stderr)
+        rtt = round((time.time() - t0) * 1000, 1)
+        return True, rtt
+    except Exception as e:
+        print(f"[ERROR] Storage probe failed: {e}", file=sys.stderr)
+        return False, -1.0
 
 def probe_frigate():
     try:
@@ -344,13 +352,13 @@ def handle_nfs_circuit(nfs_ok):
         if state.nfs_down_since is None:
             state.nfs_down_since = now
         elif (now - state.nfs_down_since >= 30) and not state.nfs_tripped:
-            print("[CRITICAL] NFS offline >= 30s. Cutting off Frigate recordings via MQTT...", file=sys.stderr)
+            print("[CRITICAL] Storage /mnt/storage offline >= 30s. Cutting off Frigate recordings via MQTT...", file=sys.stderr)
             for cam in FRIGATE_CAMERAS:
                 mqtt_publish(f"frigate/{cam}/recordings/set", "OFF")
             state.nfs_tripped = True
     else:
         if state.nfs_tripped:
-            print("[INFO] NFS reconnected. Restoring Frigate recordings via MQTT...", file=sys.stderr)
+            print("[INFO] Storage /mnt/storage healthy. Restoring Frigate recordings via MQTT...", file=sys.stderr)
             for cam in FRIGATE_CAMERAS:
                 mqtt_publish(f"frigate/{cam}/recordings/set", "ON")
             state.nfs_tripped = False
@@ -487,6 +495,7 @@ def main():
                     "nvme_free_gb": nvme_free_gb,
                     "nvme_used_pct": nvme_used_pct,
                     "smart_healthy": smart_ok,
+                    "storage_video_online": nfs_ok,
                     "nfs_video_online": nfs_ok,
                     "nfs_rtt_ms": nfs_rtt
                 },

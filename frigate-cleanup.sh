@@ -60,7 +60,7 @@ set -euo pipefail
 # ----------------------------------------------------------------------------
 # NAS_DIR precedence: explicit NAS_DIR env > FRIGATE_MEDIA_PATH env > hardcoded default.
 # The /etc/default override below can still win.
-NAS_DIR="${NAS_DIR:-${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate_calypso}}"
+NAS_DIR="${NAS_DIR:-${FRIGATE_MEDIA_PATH:-/mnt/storage/media/video_archive/frigate_calypso}}"
 LOG_FILE="${CLEANUP_LOG:-/var/log/frigate-cleanup.log}"
 MQTT_HOST="${MQTT_HOST:-192.168.50.125}"
 MQTT_TOPIC="${MQTT_TOPIC:-calypso_frigate/maintenance/cleanup}"

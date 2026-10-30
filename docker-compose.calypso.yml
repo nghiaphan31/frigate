@@ -27,7 +27,7 @@ services:
       start_period: 60s
     volumes:
       - ./config.yml:/config/config.yml
-      - ${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}:/media/frigate
+      - ${FRIGATE_MEDIA_PATH:-/mnt/storage/media/video_archive/frigate_calypso}:/media/frigate
       - ./trt-cache:/config/model_cache  # TRT engine cache — persists across recreations (~65s build on first run)
       - ./trt-libs:/trt-libs:ro          # TRT 10.9.0 runtime libs for SM 120 (Blackwell GB206) support
       - ./frigate-init.sh:/etc/s6-overlay/scripts/frigate-init.sh:ro  # one-shot init (TRT ld cache + ffmpeg symlink) wired via S6_STAGE2_HOOK
