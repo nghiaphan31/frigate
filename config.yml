@@ -318,7 +318,7 @@ go2rtc:
     allee_sur_le_cote_main:
       - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_main
     allee_sur_le_cote_sub:
-      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.129:8554/h264Preview_01_sub#backchannel=0
 
     # ── Jardin arrière — Reolink RLC-810A single-lens (192.168.50.207) ─────
     # Main stream:  3840×2160  (4K UHD, used for detection + recording)
@@ -326,7 +326,7 @@ go2rtc:
     jardin_arriere_main:
       - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_main
     jardin_arriere_sub:
-      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.207:8554/h264Preview_01_sub#backchannel=0
 
     # ── Vue entrée — Reolink Doorbell POE (192.168.50.222) ─────────────
     # Main stream:  2560×1920  (4:3, used for detection + recording)
@@ -334,7 +334,7 @@ go2rtc:
     vue_entree_main:
       - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_main
     vue_entree_sub:
-      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.222:8554/h264Preview_01_sub#backchannel=0
 
     # ── Jardin devant — Reolink Duo 3 (192.168.50.18) ─────────────────
     # Main stream:  4096×1152  (panoramic, 3.5:1) — used for recording
@@ -344,7 +344,7 @@ go2rtc:
     jardin_devant_main:
       - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_main
     jardin_devant_sub:
-      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.18:8554/h264Preview_01_sub#backchannel=0
 
     # ── Piscine vue toit — Reolink Duo 3 (192.168.50.7) ────────────────
     # Main stream:  4096×1152  (panoramic, 3.5:1) — record + audio only
@@ -354,7 +354,7 @@ go2rtc:
     piscine_vue_toit_main:
       - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_main
     piscine_vue_toit_sub:
-      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub
+      - rtsp://admin:fG-56lui@192.168.50.7:8554/h264Preview_01_sub#backchannel=0
 
     # ── TP-Link Tapo C210 2K indoor cameras (added 2026-06-03) ────────────
     # Standard RTSP on port 554 (/stream1 = 2304×1296 main, /stream2 = 640×360 sub).
