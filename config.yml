@@ -547,6 +547,18 @@ cameras:
             min_area: 124
             min_ratio: 0.5
             max_ratio: 4.0
+      overlap_jardin_arriere:
+        coordinates: 
+          0.975,0.603,0.996,0.568,0.999,0.287,0.965,0.256,0.936,0.307,0.945,0.347
+        loitering_time: 0
+      overlap_piscine_vue_toit:
+        coordinates: 
+          0.653,0,0.683,0.513,0.864,0.518,0.896,0.744,0.998,0.573,0.998,-0.005
+        loitering_time: 0
+      overlap_vue_entree:
+        coordinates: 
+          0.042,0.584,0.12,0.253,0.318,0,0.653,-0.003,0.771,0.09,0.845,0.197,0.885,0.24,0.929,0.295,0.878,0,1,0.018,0.998,0.276,0.946,0.34,0.853,0.532,0.823,0.626,0.448,0.895,0.224,0.997
+        loitering_time: 0
     review:
       alerts:
         required_zones: prive
