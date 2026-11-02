@@ -110,6 +110,9 @@ class SentinelState:
         self.last_cas_worker_restart_ts = 0.0
         self.last_container_restart_ts = 0.0
         self.last_systemd_restart_ts = 0.0
+        # HA Cross-Watchdog (Point 13)
+        self.ha_down_since = None
+        self.last_ha_restart_ts = 0.0
 
 state = SentinelState()
 
@@ -482,6 +485,54 @@ def probe_systemd_services():
 
     return (len(unhealthy) == 0), unhealthy
 
+def probe_ha_cross_watchdog():
+    """
+    Point 13: Probe Home Assistant Core (:8123) and Mosquitto (:1883) on 192.168.50.125.
+    If HA is down >= 180s while Asus router (192.168.50.1) responds to ping, record failure and
+    attempt emergency restart via SSH (cooldown 6h).
+    """
+    ha_http_ok = False
+    ha_mqtt_ok = False
+    now = time.time()
+
+    # 1. HTTP Probe to HA Core /manifest.json
+    try:
+        req = urllib.request.Request("http://192.168.50.125:8123/manifest.json", headers={"User-Agent": "CalypsoSentinel"})
+        with urllib.request.urlopen(req, timeout=3.0) as r:
+            ha_http_ok = (r.status == 200)
+    except Exception:
+        ha_http_ok = False
+
+    # 2. TCP Probe to Mosquitto :1883
+    try:
+        with socket.create_connection(("192.168.50.125", 1883), timeout=3.0):
+            ha_mqtt_ok = True
+    except Exception:
+        ha_mqtt_ok = False
+
+    ha_alive = ha_http_ok and ha_mqtt_ok
+
+    if not ha_alive:
+        # Check router ping to differentiate local LAN failure from HA failure
+        rc_ping, _ = run_cmd(["ping", "-c", "1", "-W", "1", "192.168.50.1"], timeout_s=2)
+        router_alive = (rc_ping == 0)
+
+        if router_alive:
+            if state.ha_down_since is None:
+                state.ha_down_since = now
+            elif now - state.ha_down_since >= 180:
+                # HA down >= 3 min while router is healthy
+                if now - state.last_ha_restart_ts >= 21600:  # 6 hours cooldown
+                    print("[CRITICAL] HA Core down >= 180s. Attempting emergency restart via SSH...", file=sys.stderr)
+                    run_cmd(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "root@192.168.50.125", "ha", "core", "restart"], timeout_s=15)
+                    state.last_ha_restart_ts = now
+        else:
+            state.ha_down_since = None
+    else:
+        state.ha_down_since = None
+
+    return ha_alive, ha_http_ok, ha_mqtt_ok
+
 def handle_fatal_gpu(fatal_xids):
     print(f"[CRITICAL] Fatal GPU condition detected: {fatal_xids}. Synchronizing NVMe...", file=sys.stderr)
     run_cmd(["/bin/sync"], timeout_s=5)
@@ -605,6 +656,7 @@ def publish_ha_discovery():
         ("binary_sensor",   "docker_containers_ok", "Docker Containers Status", "{{ 'ON' if value_json.workloads.docker_containers_ok else 'OFF' }}",   None,  "running",      "mdi:docker"),
         ("binary_sensor",   "systemd_services_ok",  "Systemd Services Status",  "{{ 'ON' if value_json.workloads.systemd_services_ok else 'OFF' }}",    None,  "running",      "mdi:cog-Sync"),
         ("binary_sensor",   "backups_and_timers_ok","Backups & Timers Status",  "{{ 'ON' if value_json.workloads.backups_and_timers_ok else 'OFF' }}",  None,  "running",      "mdi:database-check"),
+        ("binary_sensor",   "ha_cross_watchdog",    "HA Cross Watchdog",        "{{ 'ON' if value_json.workloads.ha_cross_watchdog_ok else 'OFF' }}",   None,  "connectivity", "mdi:home-assistant"),
     ]
 
     for comp, obj_id, name, val_tpl, unit, dev_cls, icon in sensors:
@@ -660,6 +712,7 @@ def main():
             cas_core_ok, cas_unhealthy_workers = probe_cas_core_deep()
             containers_ok, unhealthy_containers = probe_all_docker_containers()
             systemd_ok, unhealthy_services = probe_systemd_services()
+            ha_cross_ok, ha_http_ok, ha_mqtt_ok = probe_ha_cross_watchdog()
 
             # Frigate self-healing via frigate-stack-watchdog.service (Point 1)
             now_ts = time.time()
@@ -692,8 +745,10 @@ def main():
             d_procs_p1 = (state.d_procs_gt5_since is not None and (now_ts - state.d_procs_gt5_since >= 120))
             d_procs_p2 = (state.d_procs_gt2_since is not None and (now_ts - state.d_procs_gt2_since >= 60))
 
+            ha_down_p1 = (state.ha_down_since is not None and (now_ts - state.ha_down_since >= 180))
+
             # Check P1 conditions
-            if fatal_xids or (gpu_data is None) or d_procs_p1 or (not frigate_ok) or (state.nfs_tripped):
+            if fatal_xids or (gpu_data is None) or d_procs_p1 or (not frigate_ok) or (state.nfs_tripped) or ha_down_p1:
                 severity = "P1"
                 status = "CRITICAL"
                 if fatal_xids or (gpu_data is None):
@@ -712,6 +767,7 @@ def main():
                 or (not cas_core_ok)
                 or (not containers_ok)
                 or (not systemd_ok)
+                or (not ha_cross_ok)
             ):
                 severity = "P2"
                 status = "DEGRADED"
@@ -765,7 +821,10 @@ def main():
                     "cas_wal_size_mb": cas_wal_mb,
                     "postgres_ok": pg_ok,
                     "valkey_bgsave_ok": valkey_ok,
-                    "restic_last_age_hours": restic_age
+                    "restic_last_age_hours": restic_age,
+                    "ha_cross_watchdog_ok": ha_cross_ok,
+                    "ha_http_ok": ha_http_ok,
+                    "ha_mqtt_ok": ha_mqtt_ok
                 }
             }
 
