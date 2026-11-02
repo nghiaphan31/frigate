@@ -1122,6 +1122,14 @@ cameras:
             min_area: 72
             min_ratio: 0.5
             max_ratio: 4.0
+      jardin_devant_overlap_vue_entree:
+        coordinates: 
+          0,1,0,0.384,0.109,0.524,0.168,0,0.781,0.003,0.843,0.655,0.997,0.447,0.998,0.99
+        loitering_time: 0
+      jardin_devant_overlap_allee_sur_cote:
+        coordinates: 
+          0.647,0.74,0.61,0.358,0.593,0,0.864,0.003,0.897,0.813,0.79,0.913
+        loitering_time: 0
     review:
       alerts:
         required_zones: prive
