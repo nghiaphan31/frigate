@@ -1351,6 +1351,18 @@ cameras:
             min_area: 0
             min_ratio: 0.0
             max_ratio: 8.0
+      piscine_vue_toit_overlap_allee_sur_cote:
+        coordinates: 
+          0.019,0.99,0.017,0.579,0.23,0.003,0.382,-0.003,0.336,0.616,0.286,0.645,0.223,0.99
+        loitering_time: 0
+      piscine_vue_toit_overlap_jardin_arriere:
+        coordinates: 
+          0.255,0,0.145,0.295,0.193,0.429,0.252,0.424,0.159,0.824,0.119,0.99,1,1,1,0,0.738,0.018,0.707,0.308,0.609,0.003
+        loitering_time: 0
+      piscine_vue_toit_overlap_vue_entree:
+        coordinates: 
+          0,0.634,0.228,0.018,0.275,0.008,0.266,0.284,0.29,0.584,0.207,0.992,0.002,0.99
+        loitering_time: 0
     review:
       alerts:
         required_zones:
