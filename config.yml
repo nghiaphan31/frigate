@@ -271,17 +271,55 @@ motion:
 # ----------------------------------------------------------------------------
 # audio — audio-event detection (see ARCHITECTURE.md §4.16)
 # ----------------------------------------------------------------------------
-# enabled: enable audio detection on the sub stream's audio track.
-# min_volume: 0-32768 raw PCM threshold. 350 is just above the
-#           sub stream's noise floor (camera's built-in mic, some
-#           mains hum from the gate motor at ~340). Lower than 300
-#           triggers on the fridge compressor in the kitchen
-#           (out of FOV but the mic picks it up). Higher than 400
-#           misses quiet speech at 20 m.
+# Model: Google YAMNet (TFLite, 521 AudioSet classes, 0.04 cores CPU load)
+# Strategy: Observational acoustic telemetry for multi-modal intruder detection.
+#   - Telemetry-only phase: publishes MQTT events to Home Assistant for testing
+#     and soak observation. No sirens or critical alarms are triggered.
+#   - min_volume: 350 raw PCM threshold (0-32768 scale). Calibrated above the
+#     sub stream noise floor (~340 gate motor / mains hum).
+#   - listen: Explicit intrusion signatures (physical breach, access tampering,
+#     covert communication, foot traffic).
+#   - filters: Conservative confidence thresholds (0.60-0.70) to prevent
+#     outdoor false positives from wind gusts, foliage, and distant traffic.
 # ----------------------------------------------------------------------------
 audio:
   enabled: true
   min_volume: 350
+  listen:
+    - speech
+    - whispering
+    - yell
+    - footsteps
+    - knock
+    - door
+    - sliding_door
+    - glass
+    - breaking
+    - shatter
+    - bang
+  filters:
+    speech:
+      threshold: 0.65
+    whispering:
+      threshold: 0.60
+    yell:
+      threshold: 0.65
+    footsteps:
+      threshold: 0.70
+    knock:
+      threshold: 0.65
+    door:
+      threshold: 0.65
+    sliding_door:
+      threshold: 0.65
+    glass:
+      threshold: 0.65
+    breaking:
+      threshold: 0.65
+    shatter:
+      threshold: 0.65
+    bang:
+      threshold: 0.70
 
 # ----------------------------------------------------------------------------
 # go2rtc — internal re-streamer (see ARCHITECTURE.md §4.2)
