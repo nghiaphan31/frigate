@@ -156,7 +156,7 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
-        "expected_fps":          5,
+        "expected_fps":         10,
         "detect_enabled":    True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area": 124, "min_ratio": 1.0, "max_ratio": 4.0},
@@ -245,7 +245,7 @@ CAMERAS = {
         "expected_max_ratio":   5.0,
         "expected_threshold":   0.50,
         "expected_min_score":   0.40,
-        "expected_fps":          5,
+        "expected_fps":          10,
         "detect_enabled":     True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area": 50, "min_ratio": 0.2, "max_ratio": 4.0},
@@ -272,7 +272,7 @@ CAMERAS = {
         "expected_max_ratio":  4.0,
         "expected_threshold":  0.55,
         "expected_min_score":  0.45,
-        "expected_fps":          5,
+        "expected_fps":         10,
         "detect_enabled":    True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area":  72, "min_ratio": 1.0, "max_ratio": 4.0},
@@ -331,9 +331,12 @@ CAMERAS = {
         # (detection_fps=34.4 vs process_fps=10.1), driving
         # process CPU to 45%. Halving to 5 fps halves the
         # detector invocations regardless of motion region
-        # count. The 1.4 m/s walker still gets ~3-4 chances/sec
-        # at 5 fps (sufficient for the 20 m max walkable).
-        "expected_fps":          5,
+        # count.
+        #
+        # Restored to 10 fps (2026-11-02): With the RTX 5060 Ti TensorRT EP
+        # running at 5.02 ms per inference, multi-region crops are absorbed
+        # effortlessly by the GPU without CPU saturation.
+        "expected_fps":         10,
         "detect_enabled":    True,
         "expected_zones": {
             "prive":  {"threshold": 0.55, "min_area": 158, "min_ratio": 1.0, "max_ratio": 4.0},

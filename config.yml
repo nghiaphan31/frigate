@@ -466,7 +466,7 @@ cameras:
     detect:
       width: 1536
       height: 432
-      fps: 5
+      fps: 10
     objects:
       track: [person]
       filters:
@@ -812,7 +812,7 @@ cameras:
     detect:
       width: 640
       height: 480
-      fps: 5
+      fps: 10
     objects:
       track: [person, face]
       filters:
@@ -1011,7 +1011,7 @@ cameras:
     detect:
       width: 1536
       height: 432
-      fps: 5
+      fps: 10
     objects:
       track: [person]
       filters:
@@ -1166,17 +1166,11 @@ cameras:
       # (5/255 below) closes the distance gap the iter0 contract
       # missed on this panoramic sub stream.
       #
-      # Reduced 10 → 5 fps (2026-06-22, CPU fix). The 180°
-      # panoramic sub stream has persistent noise (clouds, tree
-      # branches, heat shimmer) that the motion pre-filter can't
-      # reject by threshold alone — at 10 fps the detector was
-      # invoked 3.4× per frame (detection_fps=34.4 vs
-      # process_fps=10.1), driving process CPU to 45%. Halving
-      # to 5 fps halves the detector invocations regardless of
-      # motion region count. The 1.4 m/s walker still gets ~3-4
-      # chances/sec at 5 fps (sufficient for the 20 m max
-      # walkable distance).
-      fps: 5
+      # Reduced 10 → 5 fps (2026-06-22, CPU fix) when detector was CPU-bound.
+      # Restored to 10 fps (2026-11-02): With RTX 5060 Ti TensorRT EP running at
+      # 5.02 ms per inference, the GPU easily handles the multi-region crops,
+      # maximizing catch probability across the 180° traversal zone.
+      fps: 10
     objects:
       # Track BOTH person AND face (training-collection mode,
       # 2026-06-04). The global model.labelmap still rewrites
