@@ -28,6 +28,7 @@ STORAGE_MOUNT_PATH = Path("/mnt/storage")
 REBOOT_HISTORY_FILE = Path("/var/lib/calypso-watchdog/gpu_reboot_history")
 RESTIC_STATUS_FILE  = Path("/home/nghia-phan/restic/status.json")
 RESTIC_LOCK_FILE    = Path("/tmp/restic_calypso_backup.lock")
+IMMICH_SQL_STATUS_FILE = Path("/mnt/storage/backups/hosts/calypso/immich_sql/status.json")
 CAS_WAL_DIR = Path("/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/CAS_Management/local_ssd/vault/index")
 
 FRIGATE_CAMERAS = [
@@ -318,6 +319,40 @@ def probe_restic():
             pass
     return age_hours
 
+def probe_immich_sql_backup():
+    """
+    Point 10a: Verify nightly Immich PostgreSQL dump (/mnt/storage/backups/hosts/calypso/immich_sql/status.json)
+    succeeded and is < 28 hours old.
+    """
+    if not IMMICH_SQL_STATUS_FILE.exists():
+        return False, 999.0
+    try:
+        data = json.loads(IMMICH_SQL_STATUS_FILE.read_text(encoding="utf-8"))
+        st = data.get("status", "")
+        iso_ts = data.get("timestamp", "")
+        if not iso_ts:
+            return False, 999.0
+        last_dt = datetime.fromisoformat(iso_ts)
+        age_hours = round((datetime.now(timezone.utc) - last_dt.astimezone(timezone.utc)).total_seconds() / 3600, 1)
+        ok = (st == "success") and (age_hours <= 28.0) and (data.get("size_bytes", 0) > 1024)
+        return ok, age_hours
+    except Exception:
+        return False, 999.0
+
+def probe_failed_systemd_units():
+    """
+    Point 10b: Verify 0 systemd system units are in `failed` state (catches any failed timer job).
+    """
+    rc, out = run_cmd(["systemctl", "list-units", "--state=failed", "--no-legend", "--plain"], timeout_s=3)
+    if rc != 0 or not out:
+        return []
+    failed = []
+    for line in out.splitlines():
+        parts = line.split()
+        if parts:
+            failed.append(parts[0])
+    return failed
+
 def probe_cas_core_deep():
     """
     Point 7: Deep probe of cas-core Docker health + all 11 internal supervisord workers.
@@ -569,6 +604,7 @@ def publish_ha_discovery():
         ("binary_sensor",   "valkey_bgsave_ok",     "Valkey BGSAVE Status",     "{{ 'ON' if value_json.workloads.valkey_bgsave_ok else 'OFF' }}",       None,  "problem",      None),
         ("binary_sensor",   "docker_containers_ok", "Docker Containers Status", "{{ 'ON' if value_json.workloads.docker_containers_ok else 'OFF' }}",   None,  "running",      "mdi:docker"),
         ("binary_sensor",   "systemd_services_ok",  "Systemd Services Status",  "{{ 'ON' if value_json.workloads.systemd_services_ok else 'OFF' }}",    None,  "running",      "mdi:cog-Sync"),
+        ("binary_sensor",   "backups_and_timers_ok","Backups & Timers Status",  "{{ 'ON' if value_json.workloads.backups_and_timers_ok else 'OFF' }}",  None,  "running",      "mdi:database-check"),
     ]
 
     for comp, obj_id, name, val_tpl, unit, dev_cls, icon in sensors:
@@ -618,6 +654,9 @@ def main():
             cas_wal_mb = probe_cas_sqlite_wal()
             pg_ok, valkey_ok = probe_immich_databases()
             restic_age = probe_restic()
+            immich_sql_ok, immich_sql_age = probe_immich_sql_backup()
+            failed_systemd_units = probe_failed_systemd_units()
+            backups_and_timers_ok = (restic_age <= 28.0) and immich_sql_ok and (len(failed_systemd_units) == 0)
             cas_core_ok, cas_unhealthy_workers = probe_cas_core_deep()
             containers_ok, unhealthy_containers = probe_all_docker_containers()
             systemd_ok, unhealthy_services = probe_systemd_services()
@@ -667,6 +706,8 @@ def main():
                 or (not smart_ok)
                 or (not valkey_ok)
                 or (restic_age > 28.0)
+                or (not immich_sql_ok)
+                or (len(failed_systemd_units) > 0)
                 or (cas_wal_mb > 256.0)
                 or (not cas_core_ok)
                 or (not containers_ok)
@@ -717,6 +758,10 @@ def main():
                     "unhealthy_containers": unhealthy_containers,
                     "systemd_services_ok": systemd_ok,
                     "unhealthy_services": unhealthy_services,
+                    "backups_and_timers_ok": backups_and_timers_ok,
+                    "immich_sql_backup_ok": immich_sql_ok,
+                    "immich_sql_age_hours": immich_sql_age,
+                    "failed_systemd_units": failed_systemd_units,
                     "cas_wal_size_mb": cas_wal_mb,
                     "postgres_ok": pg_ok,
                     "valkey_bgsave_ok": valkey_ok,
