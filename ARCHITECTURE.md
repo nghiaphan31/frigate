@@ -625,3 +625,41 @@ automation:
 - **MQTT bring-up state** is the **application-level** signal — knows the difference between a managed `RECOVERY_TRIGGERED` (ZMQ IPC, expected occasionally) and a hard `FATAL_no_camera` (camera offline, needs human).
 
 A managed recovery is **expected** behaviour, not an alert; a FATAL is. Splitting the two layers prevents the alerting system from firing on every ZMQ cycle.
+
+---
+
+## 8. GPU Governance & VRAM Arbitration (Calypso Host)
+
+On the **Calypso host** (RTX 5060 Ti 16 GB), Frigate shares physical GPU resources with Ollama LLM, Demucs audio separation, Immich ML, and CAS vector embeddings. Resource allocation is governed by the suite under `frigate/gpu/` and `/etc/calypso-gpu.env`:
+
+### 8.1 VRAM Allocation & Thermal Budget
+
+| Workload / Guardrail | VRAM Budget | Target / Policy |
+| :--- | :--- | :--- |
+| **Frigate NVR (TRT)** | **6,144 MB** | Primary real-time workload (YOLOX detector + Jina CLIP embeddings). |
+| **Immich ML** | **3,072 MB** | Facial recognition and CLIP embeddings. |
+| **CAS Core / Late Classify** | **2,048 - 4,096 MB** | Batch OCR, Docling, and multimodal indexing. |
+| **Demucs** | **2,048 MB** | Voice and audio track separation. |
+| **Reserve Buffer** | **3,072 MB** | Dynamic headroom to prevent CUDA OOM. |
+| **Thermal Cap** | **150 W / 76°C** | Warn at 80°C, throttle at 76°C+, critical kill at 90°C (`gpu-throttle.sh`). |
+
+### 8.2 GPU Daemon & Tooling Architecture
+
+- **`gpu/calypso-sentinel` (`calypso-sentinel.service`)** : Host-level daemon monitoring GPU utilization, VRAM allocation, XID errors, and canonical storage health (`/mnt/storage`). Publishes live telemetry to MQTT (`calypso_frigate/maintenance/gpu-state`).
+- **`gpu/cas-gpu-gate.sh`** : Pre-flight gatekeeper invoked before batch jobs (Docling, Demucs). Verifies that at least 4,500 MiB VRAM is free and temperature $\le 76^\circ\text{C}$; silently evicts idle Ollama models (`keep_alive: 0`) if headroom is insufficient.
+- **`gpu/gpu-power-tune.sh` (`gpu-power-tune.service`)** : One-shot startup script enforcing persistence mode (`nvidia-smi -pm 1`), clock limits, and power caps (`150W`).
+- **`gpu/gpu-throttle.sh` & `gpu-watchdog.sh` (`gpu-watchdog.timer`)** : Watches for stuck GPU compute loops ($>99\%$ utilization for $>10\text{ min}$) and thermal runaway, escalating alerts via MQTT.
+- **`gpu/gpu-recovery.sh`** : Hard recovery script that isolates runaway CUDA contexts, resets failed units, and restores the Frigate stack.
+
+---
+
+## 9. Retention & Video Archive Lifecycle (`frigate-cleanup.sh`)
+
+In Frigate 0.17.1, filesystem-level retention is backed up by [`frigate-cleanup.sh`](frigate-cleanup.sh:1) (installed via [`install-frigate-cleanup.sh`](install-frigate-cleanup.sh:1)):
+- **Recordings (`recordings/<cam>/<date>/<h>/*.mp4`)** : Retained for **2 days** (short-term continuous video review).
+- **Clips (`clips/<cam>-<event>.*`)** : Retained for **14 days** (event video context).
+- **Person Snapshots (`snapshots/<cam>/<event>/*.jpg`)** : Retained for **30 days** to cover monthly Frigate+ submission cycles.
+- **Other Snapshots** : Retained for **1 day**.
+- **Exports (`exports/`)** : Retained for **90 days**.
+
+Safety guardrails prevent accidental wipe: dry-run by default, grace periods for recently written files, and strict mount point verification before execution.
