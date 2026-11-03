@@ -277,7 +277,7 @@ def probe_nfs():
 def probe_frigate():
     try:
         req = urllib.request.Request("http://127.0.0.1:5000/api/stats", headers={"User-Agent": "CalypsoSentinel"})
-        with urllib.request.urlopen(req, timeout=2.5) as r:
+        with urllib.request.urlopen(req, timeout=5.0) as r:
             data = json.loads(r.read().decode())
             pid = data.get("detectors", {}).get("onnx1", {}).get("pid", 0)
             uptime = data.get("service", {}).get("uptime", 0)
@@ -746,9 +746,10 @@ def main():
             d_procs_p2 = (state.d_procs_gt2_since is not None and (now_ts - state.d_procs_gt2_since >= 60))
 
             ha_down_p1 = (state.ha_down_since is not None and (now_ts - state.ha_down_since >= 180))
+            frigate_down_p1 = (state.frigate_fail_streak >= 3)
 
             # Check P1 conditions
-            if fatal_xids or (gpu_data is None) or d_procs_p1 or (not frigate_ok) or (state.nfs_tripped) or ha_down_p1:
+            if fatal_xids or (gpu_data is None) or d_procs_p1 or frigate_down_p1 or (state.nfs_tripped) or ha_down_p1:
                 severity = "P1"
                 status = "CRITICAL"
                 if fatal_xids or (gpu_data is None):
@@ -756,7 +757,8 @@ def main():
                     handle_fatal_gpu(fatal_xids)
             # Check P2 conditions
             elif (
-                d_procs_p2
+                (not frigate_ok)
+                or d_procs_p2
                 or (nvme_used_pct > 85.0)
                 or (not smart_ok)
                 or (not valkey_ok)
