@@ -29,6 +29,8 @@ REBOOT_HISTORY_FILE = Path("/var/lib/calypso-watchdog/gpu_reboot_history")
 RESTIC_STATUS_FILE  = Path("/home/nghia-phan/restic/status.json")
 RESTIC_LOCK_FILE    = Path("/tmp/restic_calypso_backup.lock")
 IMMICH_SQL_STATUS_FILE = Path("/mnt/storage/backups/hosts/calypso/immich_sql/status.json")
+ASUS_BACKUP_STATUS_FILE = Path("/mnt/storage/backups/hosts/asus/status.json")
+PI_MPP_BACKUP_STATUS_FILE = Path("/mnt/storage/backups/hosts/pi-mpp-solar/status.json")
 CAS_WAL_DIR = Path("/home/nghia-phan/AGENTIC_DEVELOPMENT_PROJECTS/APPLICATION-PROJECTS/CAS_Management/local_ssd/vault/index")
 
 FRIGATE_CAMERAS = [
@@ -341,6 +343,32 @@ def probe_immich_sql_backup():
         return ok, age_hours
     except Exception:
         return False, 999.0
+
+def probe_network_nodes_backups():
+    """
+    Point 10c: Verify nightly Asus RT-AX58U and Pi-MPP-Solar backups in /mnt/storage/backups/hosts/
+    succeeded and are < 28 hours old.
+    """
+    nodes = {}
+    for name, p in [("asus", ASUS_BACKUP_STATUS_FILE), ("pi_mpp_solar", PI_MPP_BACKUP_STATUS_FILE)]:
+        if not p.exists():
+            nodes[name] = {"ok": False, "age_hours": 999.0}
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            st = data.get("status", "")
+            iso_ts = data.get("timestamp", "")
+            if not iso_ts:
+                nodes[name] = {"ok": False, "age_hours": 999.0}
+                continue
+            last_dt = datetime.fromisoformat(iso_ts)
+            age_h = round((datetime.now(timezone.utc) - last_dt.astimezone(timezone.utc)).total_seconds() / 3600, 1)
+            ok = (st == "success") and (age_h <= 28.0) and (data.get("size_bytes", 0) > 1024)
+            nodes[name] = {"ok": ok, "age_hours": age_h}
+        except Exception:
+            nodes[name] = {"ok": False, "age_hours": 999.0}
+    all_ok = nodes["asus"]["ok"] and nodes["pi_mpp_solar"]["ok"]
+    return all_ok, nodes["asus"]["ok"], nodes["asus"]["age_hours"], nodes["pi_mpp_solar"]["ok"], nodes["pi_mpp_solar"]["age_hours"]
 
 def probe_failed_systemd_units():
     """
@@ -707,8 +735,9 @@ def main():
             pg_ok, valkey_ok = probe_immich_databases()
             restic_age = probe_restic()
             immich_sql_ok, immich_sql_age = probe_immich_sql_backup()
+            net_nodes_ok, asus_ok, asus_age, pi_mpp_ok, pi_mpp_age = probe_network_nodes_backups()
             failed_systemd_units = probe_failed_systemd_units()
-            backups_and_timers_ok = (restic_age <= 28.0) and immich_sql_ok and (len(failed_systemd_units) == 0)
+            backups_and_timers_ok = (restic_age <= 28.0) and immich_sql_ok and net_nodes_ok and (len(failed_systemd_units) == 0)
             cas_core_ok, cas_unhealthy_workers = probe_cas_core_deep()
             containers_ok, unhealthy_containers = probe_all_docker_containers()
             systemd_ok, unhealthy_services = probe_systemd_services()
@@ -819,6 +848,10 @@ def main():
                     "backups_and_timers_ok": backups_and_timers_ok,
                     "immich_sql_backup_ok": immich_sql_ok,
                     "immich_sql_age_hours": immich_sql_age,
+                    "asus_backup_ok": asus_ok,
+                    "asus_backup_age_hours": asus_age,
+                    "pi_mpp_backup_ok": pi_mpp_ok,
+                    "pi_mpp_backup_age_hours": pi_mpp_age,
                     "failed_systemd_units": failed_systemd_units,
                     "cas_wal_size_mb": cas_wal_mb,
                     "postgres_ok": pg_ok,
