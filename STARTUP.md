@@ -71,28 +71,26 @@ sudo timedatectl set-ntp true
 
 Frigate timestamps and event lifecycle depend on a sane wall clock.
 
-### 2.3 NAS mount
+### 2.3 Canonical Storage Mount (`/mnt/storage`)
 
-`FRIGATE_MEDIA_PATH` (from `.env`) does not have to **be** the mount point — it
-can be a subdirectory inside one. The pre-flight walks up the path until it
-finds a mount point, then verifies the directory exists (auto-creates it if
-needed) and is writable.
+`FRIGATE_MEDIA_PATH` (from `.env`) points to the local canonical video storage
+(`FRIGATE_MEDIA_PATH=/mnt/storage/media/video_archive/frigate_calypso`).
+The pre-flight verifies that the underlying volume (`/mnt/storage`) is mounted,
+and that the video directory exists and is writable.
 
 ```bash
 cat .env | grep FRIGATE_MEDIA_PATH
-df -h "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}" | tail -1
-[ -w "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}" ] && echo "WRITABLE" || echo "NOT WRITABLE"
+df -h "${FRIGATE_MEDIA_PATH:-/mnt/storage/media/video_archive/frigate_calypso}" | tail -1
+[ -w "${FRIGATE_MEDIA_PATH:-/mnt/storage/media/video_archive/frigate_calypso}" ] && echo "WRITABLE" || echo "NOT WRITABLE"
 ```
 
-If not mounted (after a host reboot, NFS may not auto-mount), re-mount:
+If not mounted (after a host reboot or maintenance), re-mount via fstab:
 ```bash
-sudo systemctl restart nfs-client.target   # or systemd-mount, depending on setup
-# or:
 sudo mount -a
 ```
 
-The script will then auto-create the subfolder if missing (e.g. `frigate_calypso`
-inside `/mnt/nas/video`) and refuse to proceed if the resulting directory is
+The script will then auto-create the subfolder if missing (`frigate_calypso`
+inside `/mnt/storage/media/video_archive`) and refuse to proceed if the resulting directory is
 read-only.
 
 ### 2.4 Camera reachability
@@ -146,8 +144,8 @@ These libs are bind-mounted into the container as `/trt-libs:ro` and registered 
 
 ```bash
 df -h . | tail -1                # ./trt-cache + .env + config.yml, expect ≥ 1 GB free
-df -h "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}" | tail -1
-                                  # NAS, expect ≥ 20 GB free for 1-day motion retention
+df -h "${FRIGATE_MEDIA_PATH:-/mnt/storage/media/video_archive/frigate_calypso}" | tail -1
+                                  # Storage, expect ≥ 20 GB free for 1-day motion retention
 ```
 
 ---
@@ -244,7 +242,7 @@ You should see at least one `start` and one `end` message in 30 s. If not, see [
 ### Step 7 — Verify recording is being written
 
 ```bash
-ls -lt "${FRIGATE_MEDIA_PATH:-/mnt/nas/video/frigate}"/recordings/allee_sur_le_cote/ 2>/dev/null | head -3
+ls -lt "${FRIGATE_MEDIA_PATH:-/mnt/storage/media/video_archive/frigate_calypso}"/recordings/allee_sur_le_cote/ 2>/dev/null | head -3
 ```
 
 **Exit criteria**: a directory and recent file exist. The exact retention depends on the `record.motion.days: 1` setting in [config.yml](config.yml).
@@ -594,7 +592,7 @@ are listed first; the 14 status-report checks follow.
 |---|---|---|---|
 | **Pre-flight 1/8** `nvidia-smi OK` | Driver not loaded; module not modprobed | `sudo modprobe nvidia nvidia-uvm nvidia-modeset nvidia-uvm-tools` | — |
 | **Pre-flight 2/8** `/dev/nvidia*` present | Modules loaded but devices missing | `ls -l /dev/nvidia*` (re-modprobe) | — |
-| **Pre-flight 3/8** `$MEDIA_PATH` mounted | NFS dropped; fstab not loaded; auto-mount not enabled | `mountpoint -q "$MEDIA_PATH" && echo OK`; if not: `sudo mount -a` | (if NFS) `--recover=remount-nas` |
+| **Pre-flight 3/8** `$MEDIA_PATH` mounted | Storage unmounted; fstab not reloaded | `mountpoint -q "$MEDIA_PATH" && echo OK`; if not: `sudo mount -a` | `--recover=remount-nas` |
 | **Pre-flight 4/8** Camera reachable | Switch down; Reolink offline; firewall block | `timeout 3 bash -c '>/dev/tcp/192.168.50.129/8554'` | — |
 | **Pre-flight 5/8** Docker daemon | `dockerd` stopped; socket missing | `systemctl status docker` | — |
 | **Pre-flight 6/8** nvidia runtime | Runtime not registered with Docker | `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker` | — |
@@ -620,7 +618,7 @@ are listed first; the 14 status-report checks follow.
 | Strategy | When to use | Command |
 |---|---|---|
 | `restart-container` | First try for any transient failure (generic 'try restarting') | `./bring-up.sh --recover=restart-container` |
-| `remount-nas` | NFS dropped; step 12/14 (Recording path) FAILs with 'not mounted' | `./bring-up.sh --recover=remount-nas` |
+| `remount-nas` | Storage unmounted; step 12/14 (Recording path) FAILs with 'not mounted' | `./bring-up.sh --recover=remount-nas` |
 | `flush-zmq` | Step 5/14 (Detect process) FAILs with TRT logs but no build error (ZMQ deadlock) | `./bring-up.sh --recover=flush-zmq` |
 | `rebuild-trt` | Step 7/14 (Object detection) reports engine build failures; TRT detector wedged | `./bring-up.sh --recover=rebuild-trt` |
 

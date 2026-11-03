@@ -13,11 +13,11 @@ flowchart LR
   subgraph EXT["External (your network)"]
     CAM["Reolink Duo 3<br/>192.168.50.129:8554<br/>RTSP / H.264 / TCP"]
     HA["Home Assistant<br/>192.168.50.125:1883<br/>Mosquitto MQTT broker"]
-    NAS["NAS<br/>/mnt/nas/video/frigate_calypso<br/>NFS / SMB / local mount"]
     WEB["Browsers<br/>(live view + UI)"]
   end
 
   subgraph HOST["Calypso host (Linux 6.17)"]
+    STORAGE["Canonical Storage (/mnt/storage)<br/>/media/video_archive/frigate_calypso<br/>Local Btrfs on LVM/RAID6"]
     DRV["NVIDIA driver 570+<br/>nvidia-uvm, nvidia-uvm-tools,<br/>nvidia-modeset kernel modules"]
     TRTL["/trt-libs<br/>(host, read-only mount)<br/>TRT 10.9.0 runtime libs"]
     TRTC["/trt-cache<br/>(host, bind mount)<br/>engine + model cache"]
@@ -44,7 +44,7 @@ flowchart LR
   DET --> REC
   DET --> SEM
   MQTTP -->|calypso_frigate/#| HA
-  REC --> NAS
+  REC --> STORAGE
   API --> WEB
   TRTL -.->|ldconfig| CAP
   TRTC <-.->|bind| DET
