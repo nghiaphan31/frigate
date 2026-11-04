@@ -723,16 +723,15 @@ cameras:
       track: [person, face]
       filters:
         person:
-          # Calibrated 2026-11-03 following DRY-RUN-01 root-cause diagnosis:
-          # Fixed critical ratio bug: Frigate defines ratio = width / height.
-          # A standing person has ratio 0.25-0.45; legacy min_ratio 1.2 forced
-          # width > height (horizontal object only), rejecting 100% of standing humans!
+          # Calibrated 2026-11-04 following DRY-RUN-02 radial walking analysis:
+          # Lowered threshold 0.55 → 0.50 and min_score 0.45 → 0.42 to catch
+          # distant 7-10m persons on 1080p stream without requiring close-up (1m).
           min_area: 150
           max_area: 117000
           min_ratio: 0.4
           max_ratio: 4.0
-          threshold: 0.55
-          min_score: 0.45
+          threshold: 0.50
+          min_score: 0.42
           mask: 
             0,0.701,0.049,0.668,0.102,0.643,0.202,0.651,0.249,0.678,0.304,0.688,0.315,0.711,0.28,0.714,0.241,0.776,0.217,0.857,0.221,0.945,0.234,1,0.001,0.995
         face:
@@ -748,9 +747,10 @@ cameras:
     snapshots:
       enabled: true
     motion:
-      # Calibrated 2026-11-03: lowered from 30/255 to 18/255 to catch distant
-      # walkers (10-20m) across the rear lawn in IR night vision.
-      threshold: 18
+      # Calibrated 2026-11-04 (DRY-RUN-02 radial walking fix):
+      # Lowered threshold 18 → 12 and contour_area 30 → 18 to trigger motion
+      # detection on distant persons (7-10m) moving radially towards the lens.
+      threshold: 12
       mask:
         # Trees and fence reflections that trigger false motion events
         - 0.087,0.123,0.065,0.241,0.072,0.32,0.095,0.365,0.155,0.411,0.198,0.384,0.231,0.336,0.245,0.301,0.222,0.262,0.22,0.215,0.208,0.163,0.189,0.131,0.158,0.122,0.13,0.12
@@ -760,7 +760,7 @@ cameras:
         - 0.535,0.258,0.558,0.264,0.555,0.321,0.529,0.314
         - 0.149,0.017,0.253,0.021,0.253,0.07,0.15,0.063
         - 0.351,0.061,0.367,0.028,0.392,0.023,0.414,0.036,0.424,0.061,0.392,0.067
-      contour_area: 30
+      contour_area: 18
       improve_contrast: true
     zones:
       prive:
@@ -768,15 +768,15 @@ cameras:
         coordinates: 
           0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,0.997,0.997
         loitering_time: 0
-        inertia: 3
+        inertia: 2
         # Add `face` so face crops inside the prive zone count as
         # zone hits (rewritten to `person` by model.labelmap for the
         # UI, but Frigate+ sees the raw face box).
         objects: [person, face]
         filters:
           person:
-            # Calibrated 2026-11-03: threshold 0.55, min_ratio 0.4 (fixed ratio bug)
-            threshold: 0.55
+            # Calibrated 2026-11-04: threshold 0.50, min_ratio 0.4
+            threshold: 0.50
             min_area: 150
             min_ratio: 0.4
             max_ratio: 4.0
