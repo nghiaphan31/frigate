@@ -730,8 +730,8 @@ cameras:
           max_area: 117000
           min_ratio: 0.4
           max_ratio: 4.0
-          threshold: 0.50
-          min_score: 0.42
+          threshold: 0.42
+          min_score: 0.35
           mask: 
             0,0.701,0.049,0.668,0.102,0.643,0.202,0.651,0.249,0.678,0.304,0.688,0.315,0.711,0.28,0.714,0.241,0.776,0.217,0.857,0.221,0.945,0.234,1,0.001,0.995
         face:
@@ -743,7 +743,7 @@ cameras:
           threshold: 0.3
           min_score: 0.3
       mask: 
-        0.002,0.005,0.994,0.005,0.999,0.158,0.752,0.207,0.695,0.113,0.657,0.321,0.527,0.321,0.535,0.152,0.522,0.118,0.48,0.124,0.459,0.198,0.411,0.164,0.389,0.11,0.318,0.107,0.263,0.054,0.254,0.104,0.248,0.287,0.233,0.354,0.166,0.416,0.098,0.379,0.075,0.345,0,0.345
+        0.002,0.005,0.994,0.005,0.999,0.158,0.752,0.207,0.695,0.113,0.657,0.321,0.527,0.321,0.535,0.152,0.522,0.118,0.48,0.124,0.459,0.198,0.411,0.164,0.389,0.11,0.318,0.107,0.263,0.054,0.254,0.104,0.248,0.287,0.233,0.285,0.166,0.285,0.098,0.285,0.075,0.285,0,0.285
     snapshots:
       enabled: true
     motion:
@@ -775,8 +775,8 @@ cameras:
         objects: [person, face]
         filters:
           person:
-            # Calibrated 2026-11-04: threshold 0.50, min_ratio 0.4
-            threshold: 0.50
+            # Calibrated 2026-11-04: threshold 0.42 for night IR sensitivity
+            threshold: 0.42
             min_area: 150
             min_ratio: 0.4
             max_ratio: 4.0
@@ -834,9 +834,9 @@ cameras:
         loitering_time: 0
     review:
       alerts:
-        required_zones: prive
+        required_zones: [prive, pool_terrace, wooden_terrace]
       detections:
-        required_zones: prive
+        required_zones: [prive, pool_terrace, wooden_terrace]
 
   # ============================================================================
   # CAMERA: vue_entree
@@ -1418,13 +1418,8 @@ cameras:
           max_area: 27000
           min_ratio: 0.5        # accept aspect variants (head-only, side)
           max_ratio: 8.0
-          threshold: 0.45
-          min_score: 0.35
-          mask:
-            - 0.51,0.342,0.512,0.547,0.658,0.478,0.599,0.257
-            - 0.68,0.36,0.74,0.36,0.74,0.72,0.67,0.72
-            - 0.265,0.37,0.36,0.37,0.36,0.62,0.265,0.62
-            - 0.265,0.63,0.355,0.63,0.355,0.96,0.265,0.96
+          threshold: 0.42
+          min_score: 0.32
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
@@ -1433,11 +1428,6 @@ cameras:
           max_ratio: 8.0
           threshold: 0.45
           min_score: 0.35
-          mask:
-            - 0.51,0.342,0.512,0.522,0.606,0.478,0.563,0.307
-            - 0.68,0.36,0.74,0.36,0.74,0.72,0.67,0.72
-            - 0.265,0.37,0.36,0.37,0.36,0.62,0.265,0.62
-            - 0.265,0.63,0.355,0.63,0.355,0.96,0.265,0.96
       mask:
         - 0.002,0.991,0,0.003,0.295,0.006,0.23,0.172,0.247,0.381,0.094,0.991
         - 0.371,0,0.792,0.012,0.713,0.589,0.67,0.429,0.645,0.432,0.599,0.278,0.538,0.094,0.495,0.018,0.404,0.018,0.399,0.054,0.374,0.051
@@ -1468,7 +1458,7 @@ cameras:
         coordinates: 
           0.266,0.43,0.255,0.305,0.25,0.239,0.257,0.173,0.28,0.109,0.302,0.061,0.326,0.05,0.348,0.03,0.37,0,0.374,0.059,0.387,0.059,0.4,0.059,0.405,0.021,0.481,0.041,0.517,0.138,0.567,0.297,0.59,0.363,0.604,0.416,0.589,0.456,0.542,0.472,0.427,0.502,0.348,0.525,0.263,0.537
         loitering_time: 0
-        inertia: 3
+        inertia: 2
         # Add face so face crops inside the prive zone count as
         # zone hits (rewritten to person by model.labelmap for the
         # UI, but Frigate+ sees the raw face box).
@@ -1477,8 +1467,8 @@ cameras:
           - face
         filters:
           person:
-            # Calibrated to 0.45 to eliminate water-reflection false positives
-            threshold: 0.45
+            # Calibrated to 0.42 for night IR sensitivity without losing walkers
+            threshold: 0.42
             min_area: 72
             min_ratio: 0.5
             max_ratio: 8.0
@@ -1559,9 +1549,9 @@ cameras:
         loitering_time: 0
     review:
       alerts:
-        required_zones: prive
+        required_zones: [prive, pool_terrace, wooden_terrace]
       detections:
-        required_zones: prive
+        required_zones: [prive, pool_terrace, wooden_terrace]
   salon:
     enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
     ffmpeg:
