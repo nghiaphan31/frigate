@@ -1240,6 +1240,53 @@ cameras:
         coordinates: 
           0.647,0.74,0.61,0.358,0.593,0,0.864,0.003,0.897,0.813,0.79,0.913
         loitering_time: 0
+      street:
+        coordinates: 
+          0.004,0.011,0.996,0.011,0.999,0.434,0.968,0.466,0.764,0.216,0.753,0.245,0.674,0.187,0.673,0.124,0.515,0.016,0.292,0.024,0.264,0.14,0.107,0.316,0.002,0.429
+        loitering_time: 0
+      8_neighbor:
+        coordinates: 0,0.503,-0.001,0.434,0.261,0.15,0.278,0.24,0.227,0.805
+        loitering_time: 0
+      12_neighbor:
+        coordinates: 0.763,0.219,0.834,0.795,0.996,0.547,0.995,0.442,0.963,0.476
+        loitering_time: 0
+      8_neighbor_wall:
+        coordinates: 0.221,0.795,0.282,0.208,0.33,0.313,0.289,0.874
+        loitering_time: 0
+      house_front:
+        coordinates: 
+          0.001,0.526,0.283,0.863,0.278,0.905,0.423,0.982,0.625,0.976,0.794,0.811,0.877,0.729,0.968,0.59,0.997,0.55,0.998,0.987,0.003,0.99
+        loitering_time: 0
+      awning_roof:
+        coordinates: 0.516,0.966,0.508,0.682,0.749,0.626,0.792,0.816,0.639,0.976
+        loitering_time: 0
+      1st_floor_nghia_bedroom_window:
+        coordinates: 0.006,0.645,0.028,0.782,0.159,0.921,0.193,0.937,0.172,0.829
+        loitering_time: 0
+      1st_floor_noemie_office_window:
+        coordinates: 0.795,0.84,0.954,0.661,0.923,0.845,0.786,0.95
+        loitering_time: 0
+      front_terrace:
+        coordinates: 
+          0.289,0.853,0.399,0.916,0.486,0.94,0.519,0.94,0.519,0.979,0.425,0.995,0.279,0.921
+        loitering_time: 0
+      front_garden:
+        coordinates: 
+          0.289,0.847,0.328,0.345,0.474,0.311,0.655,0.342,0.682,0.637,0.508,0.682,0.513,0.932
+        loitering_time: 0
+      fences:
+        coordinates: 
+          0.315,0.369,0.272,0.105,0.292,0.016,0.514,0.018,0.669,0.076,0.638,0.321,0.513,0.329
+        loitering_time: 0
+      gate:
+        coordinates: 0.636,0.311,0.659,0.187,0.757,0.253,0.726,0.366
+        loitering_time: 0
+      12_neighbor_wall:
+        coordinates: 0.721,0.361,0.764,0.219,0.832,0.792,0.797,0.824,0.749,0.624
+        loitering_time: 0
+      parking_spot_in_alley:
+        coordinates: 0.656,0.337,0.722,0.361,0.747,0.629,0.682,0.645
+        loitering_time: 0
     review:
       alerts:
         required_zones: prive
