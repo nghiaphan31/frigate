@@ -1487,27 +1487,6 @@ cameras:
             min_area: 0
             min_ratio: 0.0
             max_ratio: 8.0
-      toit:
-        # Flat roof — intruder entry from neighbour property
-        coordinates: 
-          0.171,1,0.225,0.77,0.265,0.561,0.638,0.465,0.726,0.795,0.758,0.754,0.838,0.477,0.878,1,0.796,1,0.665,1
-        loitering_time: 0
-        inertia: 3
-        objects:
-          - person
-          - face
-        filters:
-          person:
-            # Close-up intruder physics (roof is 2-4m away)
-            threshold: 0.60
-            min_area: 8000
-            min_ratio: 0.8
-            max_ratio: 8.0
-          face:
-            threshold: 0.60
-            min_area: 0
-            min_ratio: 0.0
-            max_ratio: 8.0
       piscine_vue_toit_overlap_allee_sur_cote:
         coordinates: 
           0.019,0.99,0.017,0.579,0.23,0.003,0.382,-0.003,0.336,0.616,0.286,0.645,0.223,0.99
@@ -1520,65 +1499,57 @@ cameras:
         coordinates: 
           0,0.634,0.228,0.018,0.275,0.008,0.266,0.284,0.29,0.584,0.207,0.992,0.002,0.99
         loitering_time: 0
+      12_neighbor:
+        coordinates: 
+          0.001,0.976,0.001,0.003,0.311,0.003,0.313,0.063,0.297,0.105,0.244,0.308,0.244,0.366,0.087,0.987
+        loitering_time: 0
+      8_neighbor:
+        coordinates: 
+          0.494,0,0.788,0.013,0.714,0.563,0.669,0.419,0.643,0.424,0.537,0.09
+        loitering_time: 0
+      12_neighbor_wall:
+        coordinates: 
+          0.086,0.987,0.125,0.85,0.246,0.369,0.241,0.295,0.23,0.171,0.295,0.011,0.303,0.097,0.249,0.276,0.261,0.553,0.193,0.913,0.172,0.976
+        loitering_time: 0
+      8_neighbor_wall:
+        coordinates: 0.497,0.008,0.494,0.132,0.604,0.447,0.64,0.416,0.54,0.092
+        loitering_time: 0
+      8_neighbor_1st_floor_wall:
+        coordinates: 0.71,0.571,0.792,0.021,0.846,0.013,0.92,0.363,0.818,0.905
+        loitering_time: 0
+      garage_flat_roof:
+        coordinates: 0.248,0.29,0.313,0.045,0.377,0.024,0.344,0.29
+        loitering_time: 0
+      garage_walls:
+        coordinates: 
+          0.241,0.295,0.345,0.266,0.373,0.037,0.375,0.134,0.347,0.405,0.32,0.416,0.312,0.447,0.292,0.45,0.295,0.49,0.332,0.482,0.335,0.529,0.259,0.547
+        loitering_time: 0
+      backyard_awning:
+        coordinates: 
+          0.294,0.45,0.315,0.45,0.318,0.411,0.586,0.358,0.593,0.35,0.606,0.369,0.604,0.419,0.592,0.408,0.3,0.505
+        loitering_time: 0
+      backyard_fences:
+        coordinates: 0.376,0.142,0.493,0.129,0.495,0,0.373,0.003
+        loitering_time: 0
+      pool:
+        coordinates: 
+          0.388,0.19,0.412,0.171,0.451,0.161,0.482,0.174,0.5,0.232,0.516,0.303,0.506,0.345,0.476,0.358,0.442,0.358,0.426,0.363,0.403,0.329,0.411,0.292,0.408,0.237
+        loitering_time: 0
+      pool_terrace:
+        coordinates: 
+          0.352,0.39,0.373,0.145,0.494,0.121,0.572,0.361,0.542,0.363,0.565,0.463,0.34,0.529
+        loitering_time: 0
+      house_walls:
+        coordinates: 0.851,0.011,0.997,0.013,0.996,0.979,0.798,0.997,0.914,0.369
+        loitering_time: 0
+      roof_of_house_extension_or_veranda:
+        coordinates: 0.178,0.987,0.263,0.54,0.667,0.411,0.817,0.9,0.795,0.99
+        loitering_time: 0
     review:
       alerts:
-        required_zones:
-          - prive
-          - toit
+        required_zones: prive
       detections:
-        required_zones:
-          - prive
-          - toit
-
-  # ============================================================================
-  # CAMERA: salon (indoor, no detection, motion-tracking ON)
-  # ============================================================================
-  # HARDWARE
-  #   Model:    TP-Link Tapo C210 (1/2.7" CMOS, 3 MP, 16:9 aspect, 2K QHD)
-  #             3.83 mm fixed lens, motorised pan (360°) + tilt (114°),
-  #             built-in mic, IR LED for night vision, microSD slot.
-  #   IP:       192.168.50.17
-  #   RTSP:     frigate_nghia:fG-56lui@192.168.50.17:554  (standard TP-Link port)
-  #   Location: Indoor — living room (salon)
-  #
-  # ROOM GEOMETRY  (motion-tracking is ON; the static values below are the
-  #                  DEFAULT orientation at boot. Once motion-tracking fires,
-  #                  the camera pans/tilts to follow the person and the
-  #                  actual mount orientation diverges from these defaults.)
-  #   Room size:      5 m × 7 m   (typical living room)
-  #   Mount:          Ceiling, 2.5 m above floor (corner of room, angled
-  #                   inward to cover the seating area)
-  #   Default tilt:   ~45° down from horizontal (looking at sofa area)
-  #   H-FOV:          110°       (TP-Link spec for the C210 lens)
-  #   V-FOV:          ~58°
-  #   Max walkable:   ~6 m       (across the room from mount corner)
-  #   Min walkable:   ~1 m       (just below the mount)
-  #
-  # STREAMS (standard TP-Link RTSP convention on port 554)
-  #   main: 2304×1296  (rtsp://.../stream1)  [record + audio]
-  #   sub : 640×360    (rtsp://.../stream2)  [live only]
-  #   main pixel density: 2,985,984 px total
-  #   sub  pixel density:   230,400 px total
-  #
-  # NO DETECTION (intentional, 2026-06-03)
-  #   detect.enabled: false. Two reasons:
-  #     1. The Tapo has motion-tracking ON at the device level — the
-  #        camera physically moves. The iter0 physics-derived person
-  #        filter (H_px / W_px / area) is only valid for a static
-  #        mount orientation, so it's inapplicable while the camera
-  #        is panning/tilting. A PTZ-aware spec would need to query
-  #        the onvif PTZ position at inference time; not in scope here.
-  #     2. Skipping the detect pass + NVDEC decode for the 2K main
-  #        stream keeps the indoor CPU profile flat. The 3 indoor
-  #        Tapo cams at 2K each would otherwise add ~3 × 4% CPU on
-  #        top of the 5 outdoor Reolink cams.
-  #   The motion pre-filter (step 6 of bring-up.sh) still runs, so
-  #   motion-triggered recordings continue to work (record.motion.days=1).
-  #
-  #   To enable detection later: pin the camera in a static orientation
-  #   (disable motion-tracking on the device side), or build a
-  #   PTZ-aware detection model. NOT in scope for this branch.
-  # ============================================================================
+        required_zones: prive
   salon:
     enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
     ffmpeg:
