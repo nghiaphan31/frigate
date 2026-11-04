@@ -1545,6 +1545,18 @@ cameras:
       roof_of_house_extension_or_veranda:
         coordinates: 0.178,0.987,0.263,0.54,0.667,0.411,0.817,0.9,0.795,0.99
         loitering_time: 0
+      grass_alley:
+        coordinates: 0.169,1,0.206,0.855,0.212,0.855,0.178,0.99
+        loitering_time: 0
+      rocks_alley:
+        coordinates: 0.207,0.847,0.262,0.555,0.269,0.547,0.212,0.855
+        loitering_time: 0
+      wooden_terrace:
+        coordinates: 0.342,0.513,0.549,0.45,0.549,0.463,0.343,0.532
+        loitering_time: 0
+      pond:
+        coordinates: 0.542,0.416,0.585,0.405,0.599,0.453,0.553,0.463
+        loitering_time: 0
     review:
       alerts:
         required_zones: prive
