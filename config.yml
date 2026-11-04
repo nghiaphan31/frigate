@@ -562,6 +562,50 @@ cameras:
           0.653,0,0.683,0.513,0.864,0.518,0.896,0.744,0.998,0.573,0.998,-0.005
         inertia: 3
         loitering_time: 0
+      street:
+        coordinates: 
+          0.001,0.505,0.004,0.003,0.166,0,0.094,0.326,0.106,0.345,0.069,0.613
+        loitering_time: 0
+        friendly_name: Street
+      neighbor_:
+        coordinates: 
+          0.096,0.295,0.168,-0.003,0.998,0.003,0.996,0.384,0.936,0.303,0.919,0.34,0.693,0.021,0.322,0.013
+        loitering_time: 0
+        friendly_name: 'neighbor '
+      gate:
+        coordinates: 0.069,0.621,0.107,0.34,0.156,0.432,0.123,0.711
+        loitering_time: 0
+      separating_wall_with_neighbor:
+        coordinates: 
+          0.093,0.313,0.32,-0.003,0.685,-0.003,0.92,0.326,0.87,0.437,0.546,0.329,0.299,0.369,0.156,0.437
+        loitering_time: 0
+      parking_spot_in_alley:
+        coordinates: 0.155,0.434,0.121,0.713,0.255,0.94,0.299,0.374
+        loitering_time: 0
+      grass_alley:
+        coordinates: 
+          0.257,0.932,0.328,0.997,0.688,0.995,0.856,0.826,0.801,0.403,0.701,0.358,0.549,0.334,0.298,0.374
+        loitering_time: 0
+        inertia: 3
+      house_wall:
+        coordinates: 
+          -0.001,0.511,0,0.99,0.997,0.992,0.997,0.571,0.661,0.974,0.307,0.976
+        loitering_time: 0
+      rocks_alley:
+        coordinates: 0.804,0.403,0.874,0.432,0.882,0.508,0.817,0.511
+        loitering_time: 0
+      garage_door:
+        coordinates: 0.88,0.492,0.927,0.376,0.961,0.597,0.911,0.721
+        loitering_time: 0
+      garage:
+        coordinates: 0.861,0.442,0.936,0.305,0.978,0.611,0.916,0.737
+        loitering_time: 0
+      garage_flat_roof:
+        coordinates: 0.936,0.332,0.971,0.424,0.994,0.574,0.978,0.608
+        loitering_time: 0
+      wooden_terrace:
+        coordinates: 0.822,0.513,0.885,0.508,0.915,0.724,0.857,0.797
+        loitering_time: 0
     review:
       alerts:
         required_zones: prive
