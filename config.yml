@@ -723,17 +723,14 @@ cameras:
       track: [person, face]
       filters:
         person:
-          # Calibrated 2026-11-04 following DRY-RUN-02 radial walking analysis:
-          # Lowered threshold 0.55 → 0.50 and min_score 0.45 → 0.42 to catch
-          # distant 7-10m persons on 1080p stream without requiring close-up (1m).
+          # Calibrated 2026-11-04 (DRY-RUN-05): Removed walkway mask blocking 1m-6m front path.
+          # Lowered threshold to 0.38 and min_score to 0.30 to catch dark night IR silhouettes.
           min_area: 150
           max_area: 117000
           min_ratio: 0.4
           max_ratio: 4.0
-          threshold: 0.42
-          min_score: 0.35
-          mask: 
-            0,0.701,0.049,0.668,0.102,0.643,0.202,0.651,0.249,0.678,0.304,0.688,0.315,0.711,0.28,0.714,0.241,0.776,0.217,0.857,0.221,0.945,0.234,1,0.001,0.995
+          threshold: 0.38
+          min_score: 0.30
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
@@ -775,8 +772,8 @@ cameras:
         objects: [person, face]
         filters:
           person:
-            # Calibrated 2026-11-04: threshold 0.42 for night IR sensitivity
-            threshold: 0.42
+            # Calibrated 2026-11-04: threshold 0.38 for night IR sensitivity
+            threshold: 0.38
             min_area: 150
             min_ratio: 0.4
             max_ratio: 4.0
