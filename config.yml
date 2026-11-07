@@ -725,9 +725,10 @@ cameras:
         person:
           # Calibrated 2026-11-04 (DRY-RUN-05): Removed walkway mask blocking 1m-6m front path.
           # Lowered threshold to 0.38 and min_score to 0.30 to catch dark night IR silhouettes.
+          # 2026-11-07: Relaxed min_ratio 0.40 -> 0.25 to catch slender adult walkers (0.27-0.38 observed).
           min_area: 150
           max_area: 117000
-          min_ratio: 0.4
+          min_ratio: 0.25
           max_ratio: 4.0
           threshold: 0.38
           min_score: 0.30
@@ -763,7 +764,7 @@ cameras:
       prive:
         # Play area + shed — immediate alert on entry
         coordinates: 
-          0,1,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,0.997,0.997
+          0,1.0,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,1.0,1.0
         loitering_time: 0
         inertia: 2
         # Add `face` so face crops inside the prive zone count as
@@ -773,9 +774,10 @@ cameras:
         filters:
           person:
             # Calibrated 2026-11-04: threshold 0.38 for night IR sensitivity
+            # 2026-11-07: Relaxed min_ratio 0.40 -> 0.25 to catch slender adult walkers
             threshold: 0.38
             min_area: 150
-            min_ratio: 0.4
+            min_ratio: 0.25
             max_ratio: 4.0
           face:
             # Mirror the prive filter so the missing model.labelmap
