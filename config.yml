@@ -1528,7 +1528,7 @@ cameras:
         loitering_time: 0
       pool_terrace:
         coordinates: 
-          0.542,0.363,0.565,0.515,0.34,0.545,0.352,0.39,0.373,0.145,0.494,0.121,0.572,0.361,0.542,0.363,0.506,0.345,0.516,0.303,0.5,0.232,0.482,0.174,0.451,0.161,0.412,0.171,0.388,0.19,0.408,0.237,0.411,0.292,0.403,0.329,0.426,0.363,0.442,0.358,0.476,0.358,0.542,0.363
+          0.542,0.363,0.562,0.498,0.342,0.544,0.348,0.4,0.369,0.118,0.49,0.09,0.573,0.35,0.542,0.363,0.502,0.319,0.507,0.296,0.499,0.234,0.484,0.174,0.455,0.169,0.416,0.178,0.397,0.194,0.408,0.237,0.411,0.292,0.409,0.322,0.425,0.343,0.442,0.358,0.473,0.338,0.542,0.363
         loitering_time: 0
       house_walls:
         coordinates: 0.851,0.011,0.997,0.013,0.996,0.979,0.798,0.997,0.914,0.369
@@ -1537,22 +1537,27 @@ cameras:
         coordinates: 0.178,0.987,0.263,0.55,0.667,0.480,0.817,0.9,0.795,0.99
         loitering_time: 0
       grass_alley:
-        coordinates: 0.169,1,0.206,0.855,0.212,0.855,0.178,0.99
+        coordinates: 0.159,1,0.203,0.832,0.239,0.868,0.215,1
         loitering_time: 0
+        inertia: 3
       rocks_alley:
-        coordinates: 0.207,0.847,0.262,0.555,0.269,0.547,0.212,0.855
+        coordinates: 0.203,0.836,0.267,0.491,0.292,0.509,0.236,0.875
         loitering_time: 0
+        inertia: 3
       wooden_terrace:
-        coordinates: 0.342,0.513,0.549,0.45,0.549,0.515,0.343,0.545
+        coordinates: 0.272,0.516,0.549,0.45,0.553,0.616,0.266,0.653
         loitering_time: 0
       pond:
         coordinates: 0.542,0.416,0.585,0.405,0.599,0.453,0.553,0.463
         loitering_time: 0
     review:
       alerts:
-        required_zones: [prive, pool_terrace, wooden_terrace]
+        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, 
+              grass_alley]
       detections:
-        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley]
+        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, 
+              grass_alley]
+
   salon:
     enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
     ffmpeg:

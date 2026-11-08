@@ -61,3 +61,7 @@ __pycache__/
 *.pyc
 *.pyo
 tests/__pycache__/
+
+# Studio automated backups
+config.yml.bak.*
+*.bak.*
