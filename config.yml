@@ -1565,7 +1565,6 @@ cameras:
         required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, roof_of_house_extension_or_veranda]
 
   salon:
-    enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/tapo_c210_salon_main
@@ -1637,7 +1636,6 @@ cameras:
   # (the person is above the optical axis when seated at the desk).
   # ============================================================================
   buro:
-    enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/tapo_c210_buro_main
