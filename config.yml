@@ -727,7 +727,8 @@ cameras:
           # Calibrated 2026-11-04 (DRY-RUN-05): Removed walkway mask blocking 1m-6m front path.
           # Lowered threshold to 0.38 and min_score to 0.30 to catch dark night IR silhouettes.
           # 2026-11-07: Relaxed min_ratio 0.40 -> 0.25 to catch slender adult walkers (0.27-0.38 observed).
-          min_area: 150
+          # 2026-11-09: Filter raised min_area 150 -> 400 after calibration session on veranda_roof (all human silhouettes >= 3600 px²).
+          min_area: 400
           max_area: 117000
           min_ratio: 0.25
           max_ratio: 4.0
@@ -1418,7 +1419,8 @@ cameras:
           # contract under-counted at distance, so the motion
           # pre-filter (global threshold 26) AND the area/ratio/
           # score cutoffs all rejected the small but valid detection.
-          min_area: 72          # ~50% of the 20 m footprint (158/2.2)
+          # 2026-11-09: Filter raised min_area 72 -> 500 after calibration session (distant human silhouettes on garage_flat_roof/pool_terrace >= 1200 px²).
+          min_area: 500
           max_area: 27000
           min_ratio: 0.3        # lowered from 0.5 to accept slender standing silhouettes (0.42 observed on terrain)
           max_ratio: 8.0
@@ -1475,7 +1477,7 @@ cameras:
           person:
             # Calibrated to 0.42 for night IR sensitivity without losing walkers
             threshold: 0.42
-            min_area: 72
+            min_area: 500
             min_ratio: 0.3
             max_ratio: 8.0
           face:
