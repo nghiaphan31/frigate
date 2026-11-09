@@ -830,16 +830,16 @@ cameras:
           0.522,0.995,0.505,0.606,0.515,0.335,0.576,0.397,0.998,0.392,0.996,0.993
         loitering_time: 0
       garage_flat_roof:
-        coordinates: 0.519,0.34,0.569,0.396,1,0.39,1,0.372,0.746,0.335
+        coordinates: 0.52,0.329,0.569,0.396,1,0.39,1,0.338,0.749,0.32
         loitering_time: 0
       veranda_roof:
-        coordinates: 0.213,0.26,0.247,0.251,0.538,0.287,0.543,0.339,0.213,0.31
+        coordinates: 0.213,0.26,0.244,0.239,0.536,0.251,0.543,0.339,0.213,0.31
         loitering_time: 0
     review:
       alerts:
-        required_zones: [prive, pool_terrace, wooden_terrace]
+        required_zones: [prive, pool_terrace, wooden_terrace, veranda_roof, garage_flat_roof]
       detections:
-        required_zones: [prive, pool_terrace, wooden_terrace]
+        required_zones: [prive, pool_terrace, wooden_terrace, veranda_roof, garage_flat_roof]
 
   # ============================================================================
   # CAMERA: vue_entree
@@ -912,6 +912,7 @@ cameras:
   # ZONES (zone filters mirror camera-level filter, no per-zone override)
   #   prive  — entry walkway + doorstep, immediate alert on entry
   # ============================================================================
+
   vue_entree:
     ffmpeg:
       inputs:
@@ -1513,7 +1514,7 @@ cameras:
         coordinates: 0.71,0.571,0.792,0.021,0.846,0.013,0.92,0.363,0.818,0.905
         loitering_time: 0
       garage_flat_roof:
-        coordinates: 0.234,0.29,0.309,0,0.382,0,0.344,0.29
+        coordinates: 0.218,0.324,0.309,0,0.382,0,0.352,0.303
         loitering_time: 0
         inertia: 3
       garage_walls:
@@ -1539,8 +1540,10 @@ cameras:
         coordinates: 0.851,0.011,0.997,0.013,0.996,0.979,0.798,0.997,0.914,0.369
         loitering_time: 0
       roof_of_house_extension_or_veranda:
-        coordinates: 0.178,0.987,0.263,0.55,0.667,0.480,0.817,0.9,0.795,0.99
+        coordinates: 
+          0.179,1,0.267,0.534,0.677,0.414,0.708,0.537,0.715,0.534,0.846,0.9,0.845,1
         loitering_time: 0
+        inertia: 3
       grass_alley:
         coordinates: 0.159,1,0.203,0.832,0.239,0.868,0.215,1
         loitering_time: 0
@@ -1557,11 +1560,9 @@ cameras:
         loitering_time: 0
     review:
       alerts:
-        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, 
-              grass_alley]
+        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, roof_of_house_extension_or_veranda]
       detections:
-        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, 
-              grass_alley]
+        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, roof_of_house_extension_or_veranda]
 
   salon:
     enabled: false  # Temporarily disabled while offline; set to true upon return after physical inspection
