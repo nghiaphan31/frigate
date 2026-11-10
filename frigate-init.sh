@@ -15,6 +15,32 @@
 # ==============================================================================
 set -eu
 
+# 0) Fail-fast storage pool verification (defense-in-depth).
+#    Ensures /media/frigate is mounted from the host Btrfs RAID6 storage pool
+#    and prevents 24/7 NVR recording streams from flooding the host NVMe rootfs.
+MEDIA_DIR="/media/frigate"
+echo "[frigate-init] verifying storage pool mount at ${MEDIA_DIR}..."
+
+if [ ! -d "${MEDIA_DIR}" ]; then
+    echo "[frigate-init] FATAL: Storage directory ${MEDIA_DIR} does not exist!" >&2
+    exit 1
+fi
+
+ROOT_DEV=$(stat -c %d /)
+MEDIA_DEV=$(stat -c %d "${MEDIA_DIR}")
+
+if [ "${ROOT_DEV}" -eq "${MEDIA_DEV}" ]; then
+    echo "[frigate-init] FATAL: ${MEDIA_DIR} is on container rootfs (device ${MEDIA_DEV}), not mounted from host storage!" >&2
+    exit 1
+fi
+
+if [ ! -f "${MEDIA_DIR}/.storage_pool_ready" ]; then
+    echo "[frigate-init] FATAL: Canary marker ${MEDIA_DIR}/.storage_pool_ready missing! Host Btrfs RAID6 pool is not mounted or path is on host NVMe rootfs." >&2
+    exit 1
+fi
+
+echo "[frigate-init] storage pool verified successfully (mount device: ${MEDIA_DEV}, canary verified)"
+
 # 1) Make TRT 10.9.0 (Blackwell SM 120) runtime libs visible to the dynamic
 #    linker. /trt-libs is bind-mounted from the host (see docker-compose).
 if [ -d /trt-libs ]; then
