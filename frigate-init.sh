@@ -41,6 +41,26 @@ fi
 
 echo "[frigate-init] storage pool verified successfully (mount device: ${MEDIA_DEV}, canary verified)"
 
+# 0b) Verify shared memory (/dev/shm) allocation.
+#     Frigate decodes 8 concurrent 4K camera streams in raw YUV420.
+#     A default Docker shm size (64MB) causes immediate OOM crashes.
+MIN_SHM_MB=2048
+SHM_TOTAL_MB=$(df -m /dev/shm 2>/dev/null | awk 'NR>1 {print $2}' || echo 0)
+if [ "${SHM_TOTAL_MB}" -lt "${MIN_SHM_MB}" ]; then
+    echo "[frigate-init] FATAL: /dev/shm is too small (${SHM_TOTAL_MB}MB < ${MIN_SHM_MB}MB)! Ensure shm_size is set in docker-compose." >&2
+    exit 1
+fi
+echo "[frigate-init] shared memory verified (${SHM_TOTAL_MB}MB >= ${MIN_SHM_MB}MB)"
+
+# 0c) Verify write capability on /media/frigate
+WRITE_TEST="${MEDIA_DIR}/.write_test_$$"
+if ! touch "${WRITE_TEST}" 2>/dev/null; then
+    echo "[frigate-init] FATAL: Storage directory ${MEDIA_DIR} is not writable by current user!" >&2
+    exit 1
+fi
+rm -f "${WRITE_TEST}"
+echo "[frigate-init] storage write permissions verified on ${MEDIA_DIR}"
+
 # 1) Make TRT 10.9.0 (Blackwell SM 120) runtime libs visible to the dynamic
 #    linker. /trt-libs is bind-mounted from the host (see docker-compose).
 if [ -d /trt-libs ]; then
