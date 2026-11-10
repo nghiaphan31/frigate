@@ -579,7 +579,7 @@ cameras:
         coordinates: 
           0.093,0.313,0.32,-0.003,0.685,-0.003,0.92,0.326,0.87,0.437,0.546,0.329,0.299,0.369,0.156,0.437
         loitering_time: 0
-      parking_spot_in_alley:
+      parking_alley:
         coordinates: 0.155,0.434,0.121,0.713,0.255,0.94,0.299,0.374
         loitering_time: 0
       grass_alley:
@@ -1289,7 +1289,7 @@ cameras:
       12_neighbor_wall:
         coordinates: 0.721,0.361,0.764,0.219,0.832,0.792,0.797,0.824,0.749,0.624
         loitering_time: 0
-      parking_spot_in_alley:
+      parking_alley:
         coordinates: 0.656,0.337,0.722,0.361,0.747,0.629,0.682,0.645
         loitering_time: 0
     review:
@@ -1541,7 +1541,7 @@ cameras:
       house_walls:
         coordinates: 0.851,0.011,0.997,0.013,0.996,0.979,0.798,0.997,0.914,0.369
         loitering_time: 0
-      roof_of_house_extension_or_veranda:
+      veranda_roof:
         coordinates: 
           0.179,1,0.267,0.534,0.677,0.414,0.708,0.537,0.715,0.534,0.846,0.9,0.845,1
         loitering_time: 0
@@ -1562,9 +1562,9 @@ cameras:
         loitering_time: 0
     review:
       alerts:
-        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, roof_of_house_extension_or_veranda]
+        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, veranda_roof]
       detections:
-        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, roof_of_house_extension_or_veranda]
+        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, veranda_roof]
 
   salon:
     ffmpeg:
