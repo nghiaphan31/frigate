@@ -1,7 +1,8 @@
 [Unit]
 Description=Calypso Deterministic Host Sentinel & Health Monitoring (Plan 1)
-After=network-online.target docker.service
+After=network-online.target docker.service mnt-storage.mount
 Wants=network-online.target
+RequiresMountsFor=/mnt/storage
 
 [Service]
 Type=simple

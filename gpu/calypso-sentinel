@@ -25,6 +25,7 @@ MQTT_STATE_TOPIC  = "calypso/sentinel/state"
 MQTT_AVAIL_TOPIC  = "calypso/sentinel/availability"
 
 STORAGE_MOUNT_PATH = Path("/mnt/storage")
+STORAGE_DEPENDENT_CONTAINERS = {"frigate", "calypso-samba", "cas-core"}
 REBOOT_HISTORY_FILE = Path("/var/lib/calypso-watchdog/gpu_reboot_history")
 RESTIC_STATUS_FILE  = Path("/home/nghia-phan/restic/status.json")
 RESTIC_LOCK_FILE    = Path("/tmp/restic_calypso_backup.lock")
@@ -465,7 +466,11 @@ def probe_all_docker_containers():
 
     now = time.time()
     if stopped_to_start and (now - state.last_container_restart_ts >= 300):
+        storage_mounted = os.path.ismount(str(STORAGE_MOUNT_PATH))
         for c_name in stopped_to_start:
+            if c_name in STORAGE_DEPENDENT_CONTAINERS and not storage_mounted:
+                print(f"[WARN] Skip auto-starting {c_name}: {STORAGE_MOUNT_PATH} is not mounted!", file=sys.stderr)
+                continue
             print(f"[WARN] Auto-starting stopped container {c_name}...", file=sys.stderr)
             run_cmd(["docker", "start", c_name], timeout_s=5)
         state.last_container_restart_ts = now
