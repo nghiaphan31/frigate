@@ -536,79 +536,31 @@ cameras:
             min_area: 124
             min_ratio: 0.5
             max_ratio: 4.0
-      rodage:
-        coordinates: 0.075,0.473,0.094,0.335,0.101,0.343,0.064,0.623,0.056,0.612
-        loitering_time: 10
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            threshold: 0.55
-            min_area: 124
-            min_ratio: 0.5
-            max_ratio: 4.0
-      allee_sur_cote_overlap_jardin_arriere:
-        coordinates: 
-          0.975,0.603,0.996,0.568,0.999,0.287,0.965,0.256,0.936,0.307,0.945,0.347
-        inertia: 3
-        loitering_time: 0
-      allee_sur_cote_overlap_vue_entree:
-        coordinates: 
-          0.042,0.584,0.12,0.253,0.318,0,0.653,-0.003,0.771,0.09,0.845,0.197,0.885,0.24,0.929,0.295,0.878,0,1,0.018,0.998,0.276,0.946,0.34,0.853,0.532,0.823,0.626,0.448,0.895,0.224,0.997
-        inertia: 3
-        loitering_time: 0
-      allee_sur_cote_overlap_piscine_vue_toit:
-        coordinates: 
-          0.653,0,0.683,0.513,0.864,0.518,0.896,0.744,0.998,0.573,0.998,-0.005
-        inertia: 3
-        loitering_time: 0
-      street:
+      public_street:
         coordinates: 
           0.001,0.505,0.004,0.003,0.166,0,0.094,0.326,0.106,0.345,0.069,0.613
         loitering_time: 0
-        friendly_name: Street
-      neighbor_:
-        coordinates: 
-          0.096,0.295,0.168,-0.003,0.998,0.003,0.996,0.384,0.936,0.303,0.919,0.34,0.693,0.021,0.322,0.013
-        loitering_time: 0
-        friendly_name: 'neighbor '
-      separating_wall_with_neighbor:
-        coordinates: 
-          0.093,0.313,0.32,-0.003,0.685,-0.003,0.92,0.326,0.87,0.437,0.546,0.329,0.299,0.369,0.156,0.437
-        loitering_time: 0
-      parking_alley:
+        friendly_name: Rue / Voie publique
+      alley_parking:
         coordinates: 0.069,0.621,0.107,0.34,0.299,0.374,0.255,0.94,0.121,0.713
         loitering_time: 0
-      grass_alley:
+      alley_side:
         coordinates: 
-          0.257,0.932,0.328,0.997,0.688,0.995,0.856,0.826,0.801,0.403,0.701,0.358,0.549,0.334,0.298,0.374
+          0.298,0.374,0.257,0.932,0.328,0.997,0.688,0.995,0.856,0.826,0.882,0.508,0.874,0.432,0.701,0.358,0.549,0.334
         loitering_time: 0
         inertia: 3
-      house_wall:
-        coordinates: 
-          -0.001,0.511,0,0.99,0.997,0.992,0.997,0.571,0.661,0.974,0.307,0.976
-        loitering_time: 0
-      rocks_alley:
-        coordinates: 0.804,0.403,0.874,0.432,0.882,0.508,0.817,0.511
-        loitering_time: 0
-      garage_door:
-        coordinates: 0.88,0.492,0.927,0.376,0.961,0.597,0.911,0.721
-        loitering_time: 0
-      garage:
-        coordinates: 0.861,0.442,0.936,0.305,0.978,0.611,0.916,0.737
-        loitering_time: 0
-      garage_flat_roof:
+      roof_garage_flat:
         coordinates: 0.935,0.311,1,0.39,1,0.571,0.978,0.608
         loitering_time: 0
         inertia: 3
-      wooden_terrace:
+      terrace_wood:
         coordinates: 0.822,0.513,0.885,0.508,0.915,0.724,0.857,0.797
         loitering_time: 0
     review:
       alerts:
-        required_zones: prive
+        required_zones: [prive]
       detections:
-        required_zones: rodage
+        required_zones: [public_street]
 
   # ============================================================================
   # CAMERA: jardin_arriere
@@ -766,78 +718,46 @@ cameras:
           0,1.0,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,1.0,1.0
         loitering_time: 0
         inertia: 2
-        # Add `face` so face crops inside the prive zone count as
-        # zone hits (rewritten to `person` by model.labelmap for the
-        # UI, but Frigate+ sees the raw face box).
         objects: [person, face]
         filters:
           person:
-            # Calibrated 2026-11-04: threshold 0.38 for night IR sensitivity
-            # 2026-11-07: Relaxed min_ratio 0.40 -> 0.25 to catch slender adult walkers
             threshold: 0.38
             min_area: 150
             min_ratio: 0.25
             max_ratio: 4.0
           face:
-            # Mirror the prive filter so the missing model.labelmap
-            # (see commit-message note) doesn't sneak face FPs past
-            # the prive gate either.
             threshold: 0.55
             min_area: 500
             min_ratio: 0.4
             max_ratio: 4.0
-      jardin_arriere_overlap_w_piscine_vue_toit:
-        coordinates: 
-          0.003,0.991,0.001,0.409,0.001,0.306,0.072,0.297,0.087,0.122,0.124,0.072,0.231,0.043,0.259,0.105,0.553,0.13,0.763,0.118,0.998,0.105,0.995,0.505,0.619,0.489,0.579,0.996
-        inertia: 2
-        loitering_time: 0
-      neighbor:
-        coordinates: 
-          0.003,0.001,0.996,-0.001,1,0.373,1,0.373,0.674,0.338,0.548,0.346,0.545,0.314,0.531,0.305,0.548,0.142,0.539,0.08,0.31,0.064,0.259,0.087,0.244,0.26,0.236,0.276,0.003,0.302
-        loitering_time: 0
-      pool:
+      pool_water:
         coordinates: 
           0.004,0.656,0.054,0.627,0.125,0.612,0.192,0.616,0.237,0.635,0.253,0.648,0.296,0.643,0.338,0.712,0.292,0.727,0.239,0.819,0.228,0.9,0.239,0.963,0.248,0.996,0.001,0.997
         loitering_time: 0
-      neighbor_wall:
-        coordinates: 0.001,0.305,0.003,0.616,0.237,0.499,0.242,0.281
-        loitering_time: 0
-        friendly_name: neighbor wall
-      pool_terrace:
+      terrace_pool:
         coordinates: 
           0.003,0.616,0.101,0.568,0.149,0.545,0.512,0.594,0.496,0.991,0.25,0.996,0.232,0.901,0.242,0.823,0.289,0.723,0.338,0.716,0.293,0.641,0.254,0.647,0.192,0.612,0.125,0.61,0.052,0.628,0.001,0.649
         loitering_time: 0
-      wooden_terrace:
+      terrace_wood:
         coordinates: 0.191,0.555,0.259,0.505,0.508,0.539,0.505,0.607
         loitering_time: 0
-      pond:
+      pond_water:
         coordinates: 0.144,0.537,0.188,0.559,0.259,0.506,0.214,0.495
         loitering_time: 0
-      house_extension_or_veranda_ground_floor:
-        coordinates: 
-          0.241,0.269,0.543,0.31,0.543,0.346,0.516,0.34,0.508,0.541,0.238,0.501
-        loitering_time: 0
-      house_1st_floor_walls:
-        coordinates: 0.244,0.268,0.259,0.101,0.55,0.133,0.53,0.31
-        loitering_time: 0
-      house_roof:
+      roof_house:
         coordinates: 0.258,0.095,0.311,0.06,0.539,0.082,0.548,0.13
         loitering_time: 0
-      garage_walls:
-        coordinates: 
-          0.522,0.995,0.505,0.606,0.515,0.335,0.576,0.397,0.998,0.392,0.996,0.993
-        loitering_time: 0
-      garage_flat_roof:
+      roof_garage_flat:
         coordinates: 0.52,0.329,0.569,0.396,1,0.39,1,0.338,0.749,0.32
         loitering_time: 0
-      veranda_roof:
+      roof_veranda:
         coordinates: 0.213,0.26,0.244,0.239,0.536,0.251,0.543,0.339,0.213,0.31
         loitering_time: 0
     review:
       alerts:
-        required_zones: [prive, pool_terrace, wooden_terrace, veranda_roof, garage_flat_roof]
+        required_zones: [prive, terrace_pool, terrace_wood, roof_veranda, roof_garage_flat]
       detections:
-        required_zones: [prive, pool_terrace, wooden_terrace, veranda_roof, garage_flat_roof]
+        required_zones: [prive, terrace_pool, terrace_wood, roof_veranda, roof_garage_flat]
 
   # ============================================================================
   # CAMERA: vue_entree
@@ -978,37 +898,15 @@ cameras:
         - 0.704,0,0.766,0.103,0.799,0.102,0.872,0.082,0.904,0.055,0.877,0.005,0.857,0
     zones:
       prive:
-        # Entry walkway + doorstep — immediate alert on entry
-        # POLYGON-FOOTGUN-NOTE 2026-08-02: the previous 21-vertex polygon
-        # had a bay-window cutout along the bottom edge (vertices 14-21
-        # dipping up to y=0.975). Frigate's zone match uses the bbox BOTTOM-
-        # CENTER (not the centroid), so a close-up person's feet at y=0.988
-        # fell OUTSIDE the polygon -> no zone hit -> event demoted from
-        # ALERT to detection. The 14-vertex polygon below has a flat bottom
-        # at y=1 covering the full doorstep. DO NOT re-introduce the bay
-        # window without re-verifying against a close-up test walk.
-        #
-        # HOT-RELOAD-GOTCHA 2026-08-02: PUT /api/config/set updates
-        # /api/config + the WebUI, but the detection workers cache the
-        # polygon shape at startup. A config-only change leaves them
-        # using the OLD polygon until the container is restarted
-        # (./bring-up.sh --recover=restart-container). Symptom of
-        # partial hot-reload: bbox geometrically inside the new polygon
-        # yet event.zones=[] from /api/events/<id>. Full diagnosis:
-        # tests/baselines/diagnosis-vue-entree-no-alert-2026-08-02.md
         coordinates: 
           0,0.735,0,0.519,0.328,0.548,0.328,0,0.456,0,0.685,0,0.731,0.19,0.79,0.219,0.803,0.302,0.816,0.38,0.844,0.542,1,0.543,1,1,0,1
         loitering_time: 0
         inertia: 3
-        # Add `face` so face crops inside the prive zone count as zone
-        # hits (they get rewritten to `person` by model.labelmap for the
-        # UI, but Frigate+ sees the raw face box).
         objects:
           - person
           - face
         filters:
           person:
-            # Calibrated for 640x480 sub-stream
             threshold: 0.55
             min_area: 50
             min_ratio: 0.2
@@ -1018,74 +916,22 @@ cameras:
             min_area: 0
             min_ratio: 0.2
             max_ratio: 4.0
-      vue_entree_overlap_piscine_vue_toit:
-        coordinates: 0.316,0.676,0.313,0.395,0.222,0.381,0.2,0.444,0.192,0.672
-        loitering_time: 0
-      vue_entree_overlap_jardin_devant:
-        coordinates: 0,0.408,0,0.999,0.998,0.999,0.999,0.114,0.002,0.097
-        loitering_time: 0
-      neighbor_:
-        coordinates: 
-          0,0.465,-0.001,-0.001,0.996,0.001,0.998,0.474,0.851,0.465,0.814,0.196,0.746,0.148,0.705,0.008,0.323,0.008,0.31,0.508,0.298,0.519
-        loitering_time: 0
-        friendly_name: 'neighbor '
-      sky_above_house:
-        coordinates: 
-          0.325,0.038,0.325,0.001,0.706,0.001,0.745,0.148,0.588,0.072,0.466,0.042
-        loitering_time: 0
-      house_front:
-        coordinates: 
-          0.32,0.734,0.313,0.387,0.326,0.032,0.482,0.039,0.592,0.071,0.725,0.134,0.808,0.186,0.849,0.451,0.859,0.622,0.76,0.669,0.616,0.719,0.487,0.755,0.403,0.764,0.356,0.757
-        loitering_time: 0
-      front_awning:
-        coordinates: 0.32,0.337,0.646,0.355,0.706,0.386,0.701,0.414,0.326,0.394
-        loitering_time: 0
-      front_door:
-        coordinates: 0.477,0.43,0.492,0.751,0.579,0.736,0.566,0.436
-        loitering_time: 0
-      front_ground_floor_window:
-        coordinates: 0.695,0.429,0.707,0.602,0.831,0.588,0.821,0.456
-        loitering_time: 0
-      1st_floor_noemie_office_window:
-        coordinates: 0.46,0.104,0.455,0.242,0.588,0.26,0.572,0.134
-        loitering_time: 0
-      1st_floor_nghia_bedroom_window:
-        coordinates: 0.706,0.182,0.719,0.307,0.79,0.328,0.769,0.219
-        loitering_time: 0
-      number_12_neighbor_wall:
-        coordinates: 0.303,0.517,0.303,0.586,0.156,0.686,0,0.844,0.003,0.473
-        loitering_time: 0
-        inertia: 3
-      number_8_neighbor_wall:
-        coordinates: 0.823,0.467,1,0.47,1,0.684,0.827,0.653
-        loitering_time: 0
-      parking_alley:
+      alley_parking:
         coordinates: 
           -0.001,0.839,0.093,0.743,0.183,0.667,0.319,0.679,0.319,0.726,0.259,0.997,0.001,0.997
         loitering_time: 0
-      grass_alley:
+      alley_side:
         coordinates: 0.184,0.66,0.3,0.588,0.313,0.591,0.32,0.676
         loitering_time: 0
-      front_terrace:
+      terrace_front:
         coordinates: 
           0.318,0.731,0.299,0.824,0.382,0.827,0.524,0.805,0.686,0.763,0.654,0.734,0.836,0.654,0.824,0.637,0.585,0.727,0.493,0.752,0.346,0.752
         loitering_time: 0
-      front_garden:
+      garden_front:
         coordinates: 
           0.262,0.993,0.299,0.829,0.389,0.829,0.687,0.764,0.66,0.734,0.836,0.653,0.999,0.685,0.998,0.997
         loitering_time: 0
     review:
-      # UPDATED 2026-06-05: was `required_zones: []` (every detection
-      # becomes an alert — passersby on the public sidewalk trigger
-      # iPhone notifications via the HA automation). Now gates alerts
-      # to the prive zone (driveway + doorstep) so the user is not
-      # pinged for non-property motion while armed_away.
-      #
-      # `detections` keeps `required_zones: []` to preserve the
-      # training-collection purpose: passersby still produce
-      # `detection`-type events (visible in the Frigate UI, feed
-      # Frigate+) — they just don't generate the alert that the
-      # HA→iPhone notification chain subscribes to.
       alerts:
         required_zones: [prive]
       detections:
@@ -1215,82 +1061,31 @@ cameras:
         objects: person
         filters:
           person:
-            # iter0: physics-based — matches camera-level filter
             threshold: 0.55
             min_area: 72
             min_ratio: 0.5
             max_ratio: 4.0
-      rodage:
-        # Fence line — alert only after 10 s loitering
-        coordinates: 
-          0.303,0,0.346,0,0.433,0,0.528,0,0.602,0,0.635,0,0.666,0.026,0.702,0.093,0.73,0.124,0.748,0.131,0.758,0.236,0.752,0.273,0.744,0.297,0.679,0.243,0.658,0.226,0.64,0.291,0.568,0.254,0.499,0.229,0.438,0.229,0.316,0.231,0.282,0.227,0.233,0.835,0.209,0.809,0.259,0.214,0.272,0.129
-        loitering_time: 10
-        inertia: 3
-        objects: [person]
-        filters:
-          person:
-            # iter0: physics-based — matches camera-level filter
-            threshold: 0.55
-            min_area: 72
-            min_ratio: 0.5
-            max_ratio: 4.0
-      jardin_devant_overlap_vue_entree:
-        coordinates: 
-          0,1,0,0.384,0.109,0.524,0.168,0,0.781,0.003,0.843,0.655,0.997,0.447,0.998,0.99
-        loitering_time: 0
-      jardin_devant_overlap_allee_sur_cote:
-        coordinates: 
-          0.647,0.74,0.61,0.358,0.593,0,0.864,0.003,0.897,0.813,0.79,0.913
-        loitering_time: 0
-      street:
+      public_street:
         coordinates: 
           0.004,0.011,0.996,0.011,0.999,0.434,0.968,0.466,0.764,0.216,0.753,0.245,0.674,0.187,0.673,0.124,0.515,0.016,0.292,0.024,0.264,0.14,0.107,0.316,0.002,0.429
         loitering_time: 0
-      8_neighbor:
-        coordinates: 0,0.503,-0.001,0.434,0.261,0.15,0.278,0.24,0.227,0.805
-        loitering_time: 0
-      12_neighbor:
-        coordinates: 0.763,0.219,0.834,0.795,0.996,0.547,0.995,0.442,0.963,0.476
-        loitering_time: 0
-      8_neighbor_wall:
-        coordinates: 0.221,0.795,0.282,0.208,0.33,0.313,0.289,0.874
-        loitering_time: 0
-      house_front:
-        coordinates: 
-          0.001,0.526,0.283,0.863,0.278,0.905,0.423,0.982,0.625,0.976,0.794,0.811,0.877,0.729,0.968,0.59,0.997,0.55,0.998,0.987,0.003,0.99
-        loitering_time: 0
-      awning_roof:
-        coordinates: 0.516,0.966,0.508,0.682,0.749,0.626,0.792,0.816,0.639,0.976
-        loitering_time: 0
-      1st_floor_nghia_bedroom_window:
-        coordinates: 0.006,0.645,0.028,0.782,0.159,0.921,0.193,0.937,0.172,0.829
-        loitering_time: 0
-      1st_floor_noemie_office_window:
-        coordinates: 0.795,0.84,0.954,0.661,0.923,0.845,0.786,0.95
-        loitering_time: 0
-      front_terrace:
+        friendly_name: Rue / Voie publique
+      terrace_front:
         coordinates: 
           0.289,0.853,0.399,0.916,0.486,0.94,0.519,0.94,0.519,0.979,0.425,0.995,0.279,0.921
         loitering_time: 0
-      front_garden:
+      garden_front:
         coordinates: 
           0.289,0.847,0.328,0.345,0.474,0.311,0.655,0.342,0.682,0.637,0.508,0.682,0.513,0.932
         loitering_time: 0
-      fences:
-        coordinates: 
-          0.315,0.369,0.272,0.105,0.292,0.016,0.514,0.018,0.669,0.076,0.638,0.321,0.513,0.329
-        loitering_time: 0
-      12_neighbor_wall:
-        coordinates: 0.721,0.361,0.764,0.219,0.832,0.792,0.797,0.824,0.749,0.624
-        loitering_time: 0
-      parking_alley:
+      alley_parking:
         coordinates: 0.659,0.187,0.757,0.253,0.747,0.629,0.682,0.645,0.636,0.311
         loitering_time: 0
     review:
       alerts:
-        required_zones: prive
+        required_zones: [prive]
       detections:
-        required_zones: rodage
+        required_zones: [public_street]
 
   # ============================================================================
   # CAMERA: piscine_vue_toit
@@ -1461,15 +1256,11 @@ cameras:
           0.266,0.43,0.255,0.305,0.25,0.239,0.257,0.173,0.28,0.109,0.302,0.061,0.326,0.05,0.348,0.03,0.37,0,0.374,0.059,0.387,0.059,0.4,0.059,0.405,0.021,0.481,0.041,0.517,0.138,0.567,0.297,0.59,0.363,0.604,0.416,0.589,0.456,0.542,0.515,0.427,0.535,0.348,0.545,0.263,0.55
         loitering_time: 0
         inertia: 2
-        # Add face so face crops inside the prive zone count as
-        # zone hits (rewritten to person by model.labelmap for the
-        # UI, but Frigate+ sees the raw face box).
         objects:
           - person
           - face
         filters:
           person:
-            # Calibrated to 0.42 for night IR sensitivity without losing walkers
             threshold: 0.42
             min_area: 500
             min_ratio: 0.3
@@ -1479,86 +1270,38 @@ cameras:
             min_area: 0
             min_ratio: 0.0
             max_ratio: 8.0
-      piscine_vue_toit_overlap_allee_sur_cote:
-        coordinates: 
-          0.019,0.99,0.017,0.579,0.23,0.003,0.382,-0.003,0.336,0.616,0.286,0.645,0.223,0.99
-        loitering_time: 0
-      piscine_vue_toit_overlap_jardin_arriere:
-        coordinates: 
-          0.255,0,0.145,0.295,0.193,0.429,0.252,0.424,0.159,0.824,0.119,0.99,1,1,1,0,0.738,0.018,0.707,0.308,0.609,0.003
-        loitering_time: 0
-      piscine_vue_toit_overlap_vue_entree:
-        coordinates: 
-          0,0.634,0.228,0.018,0.275,0.008,0.266,0.284,0.29,0.584,0.207,0.992,0.002,0.99
-        loitering_time: 0
-      12_neighbor:
-        coordinates: 
-          0.001,0.976,0.001,0.003,0.311,0.003,0.313,0.063,0.297,0.105,0.244,0.308,0.244,0.366,0.087,0.987
-        loitering_time: 0
-      8_neighbor:
-        coordinates: 
-          0.494,0,0.788,0.013,0.714,0.563,0.669,0.419,0.643,0.424,0.537,0.09
-        loitering_time: 0
-      12_neighbor_wall:
-        coordinates: 
-          0.086,0.987,0.125,0.85,0.246,0.369,0.241,0.295,0.23,0.171,0.295,0.011,0.303,0.097,0.249,0.276,0.261,0.553,0.193,0.913,0.172,0.976
-        loitering_time: 0
-      8_neighbor_wall:
-        coordinates: 0.497,0.008,0.494,0.132,0.604,0.447,0.64,0.416,0.54,0.092
-        loitering_time: 0
-      8_neighbor_1st_floor_wall:
-        coordinates: 0.71,0.571,0.792,0.021,0.846,0.013,0.92,0.363,0.818,0.905
-        loitering_time: 0
-      garage_flat_roof:
-        coordinates: 0.218,0.324,0.309,0,0.382,0,0.352,0.303
-        loitering_time: 0
-        inertia: 3
-      garage_walls:
-        coordinates: 
-          0.241,0.295,0.345,0.266,0.373,0.037,0.375,0.134,0.347,0.405,0.32,0.416,0.312,0.447,0.292,0.45,0.295,0.49,0.332,0.482,0.335,0.529,0.259,0.547
-        loitering_time: 0
-      backyard_awning:
-        coordinates: 
-          0.294,0.45,0.315,0.45,0.318,0.411,0.586,0.358,0.593,0.35,0.606,0.369,0.604,0.419,0.592,0.408,0.3,0.505
-        loitering_time: 0
-      backyard_fences:
-        coordinates: 0.376,0.142,0.493,0.129,0.495,0,0.373,0.003
-        loitering_time: 0
-      pool:
+      pool_water:
         coordinates: 
           0.388,0.19,0.412,0.171,0.451,0.161,0.482,0.174,0.5,0.232,0.516,0.303,0.506,0.345,0.476,0.358,0.442,0.358,0.426,0.363,0.403,0.329,0.411,0.292,0.408,0.237
         loitering_time: 0
-      pool_terrace:
+      terrace_pool:
         coordinates: 
           0.542,0.363,0.562,0.498,0.342,0.544,0.348,0.4,0.369,0.118,0.49,0.09,0.573,0.35,0.542,0.363,0.502,0.319,0.507,0.296,0.499,0.234,0.484,0.174,0.455,0.169,0.416,0.178,0.397,0.194,0.408,0.237,0.411,0.292,0.409,0.322,0.425,0.343,0.442,0.358,0.473,0.338,0.542,0.363
         loitering_time: 0
-      house_walls:
-        coordinates: 0.851,0.011,0.997,0.013,0.996,0.979,0.798,0.997,0.914,0.369
+      terrace_wood:
+        coordinates: 0.272,0.516,0.549,0.45,0.553,0.616,0.266,0.653
         loitering_time: 0
-      veranda_roof:
+      pond_water:
+        coordinates: 0.542,0.416,0.585,0.405,0.599,0.453,0.553,0.463
+        loitering_time: 0
+      roof_garage_flat:
+        coordinates: 0.218,0.324,0.309,0,0.382,0,0.352,0.303
+        loitering_time: 0
+        inertia: 3
+      roof_veranda:
         coordinates: 
           0.179,1,0.267,0.534,0.677,0.414,0.708,0.537,0.715,0.534,0.846,0.9,0.845,1
         loitering_time: 0
         inertia: 3
-      grass_alley:
-        coordinates: 0.159,1,0.203,0.832,0.239,0.868,0.215,1
+      alley_side:
+        coordinates: 0.159,1.0,0.267,0.491,0.292,0.509,0.215,1.0
         loitering_time: 0
         inertia: 3
-      rocks_alley:
-        coordinates: 0.203,0.836,0.267,0.491,0.292,0.509,0.236,0.875
-        loitering_time: 0
-        inertia: 3
-      wooden_terrace:
-        coordinates: 0.272,0.516,0.549,0.45,0.553,0.616,0.266,0.653
-        loitering_time: 0
-      pond:
-        coordinates: 0.542,0.416,0.585,0.405,0.599,0.453,0.553,0.463
-        loitering_time: 0
     review:
       alerts:
-        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, veranda_roof]
+        required_zones: [prive, terrace_pool, terrace_wood, alley_side, roof_veranda]
       detections:
-        required_zones: [prive, pool_terrace, wooden_terrace, rocks_alley, grass_alley, piscine_vue_toit_overlap_allee_sur_cote, veranda_roof]
+        required_zones: [prive, terrace_pool, terrace_wood, alley_side, roof_veranda]
 
   salon:
     ffmpeg:
