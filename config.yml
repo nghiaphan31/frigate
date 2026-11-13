@@ -524,18 +524,6 @@ cameras:
     snapshots:
       enabled: true
     zones:
-      prive:
-        coordinates: 
-          0.276,1,0,1,0,0.64,0.082,0.74,0.136,0.346,0.173,0.29,0.214,0.238,0.314,0.112,0.323,0,0.478,0,0.65,0,0.682,0.179,0.756,0.25,0.824,0.31,0.881,0.373,0.914,0.402,0.938,0.362,0.95,0.331,0.963,0.395,0.972,0.439,0.989,0.588,1,0.573,0.999,0.996
-        loitering_time: 0
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.55
-            min_area: 124
-            min_ratio: 0.5
-            max_ratio: 4.0
       public_street:
         coordinates: 
           0,0.542,0.004,0.003,0.166,0,0.1,0.308,0.139,0.38,0.106,0.718
@@ -561,7 +549,7 @@ cameras:
         inertia: 3
     review:
       alerts:
-        required_zones: [prive]
+        required_zones: [alley_parking, alley_side, roof_garage_flat, terrace_wood]
       detections:
         required_zones: [public_street]
 
@@ -715,35 +703,16 @@ cameras:
       contour_area: 18
       improve_contrast: true
     zones:
-      prive:
-        # Play area + shed — immediate alert on entry
-        coordinates: 
-          0,1.0,0.002,0.354,0.239,0.343,0.26,0.044,0.287,0.071,0.304,0.092,0.314,0.115,0.524,0.124,0.537,0.166,0.544,0.143,0.606,0.157,0.693,0.118,0.748,0.21,1,0.164,1.0,1.0
-        loitering_time: 0
-        inertia: 2
-        objects: [person, face]
-        filters:
-          person:
-            threshold: 0.38
-            min_area: 150
-            min_ratio: 0.25
-            max_ratio: 4.0
-          face:
-            threshold: 0.55
-            min_area: 500
-            min_ratio: 0.4
-            max_ratio: 4.0
       pool_water:
         coordinates: 
           0.004,0.656,0.054,0.627,0.125,0.612,0.192,0.616,0.237,0.635,0.253,0.648,0.296,0.643,0.338,0.712,0.292,0.727,0.239,0.819,0.228,0.9,0.239,0.963,0.248,0.996,0.001,0.997
         loitering_time: 0
       terrace_pool:
-        coordinates: 
-          0.003,0.616,0.101,0.568,0.149,0.545,0.534,0.61,0.558,1,0.235,1,0.217,0.908,0.232,0.818,0.289,0.723,0.338,0.716,0.294,0.662,0.255,0.663,0.191,0.632,0.125,0.623,0.059,0.645,0,0.679
+        coordinates: 0.003,0.616,0.101,0.568,0.149,0.545,0.534,0.61,0.558,1,0.235,1,0.217,0.908,0.232,0.818,0.289,0.723,0.33,0.724,0.3,0.693,0.249,0.697,0.193,0.674,0.131,0.668,0.066,0.68,0,0.724
         loitering_time: 0
         inertia: 3
       terrace_wood:
-        coordinates: 0.186,0.558,0.269,0.504,0.524,0.538,0.535,0.607
+        coordinates: 0.181,0.568,0.269,0.504,0.524,0.538,0.53,0.619
         loitering_time: 0
         inertia: 3
       pond_water:
@@ -765,11 +734,9 @@ cameras:
         inertia: 3
     review:
       alerts:
-        required_zones: [prive, terrace_pool, terrace_wood, roof_veranda, 
-              roof_garage_flat]
+        required_zones: [terrace_pool, terrace_wood, roof_veranda, roof_garage_flat, pool_water, pond_water, roof_house]
       detections:
-        required_zones: [prive, terrace_pool, terrace_wood, roof_veranda, 
-              roof_garage_flat]
+        required_zones: [terrace_pool, terrace_wood, roof_veranda, roof_garage_flat]
 
   # ============================================================================
   # CAMERA: vue_entree
@@ -909,25 +876,6 @@ cameras:
         - 0.975,0.602,0.998,0.604,0.996,0.286,0.962,0.29,0.968,0.342,0.924,0.39,0.906,0.406,0.932,0.452,0.92,0.477,0.921,0.525,0.937,0.548,0.964,0.553
         - 0.704,0,0.766,0.103,0.799,0.102,0.872,0.082,0.904,0.055,0.877,0.005,0.857,0
     zones:
-      prive:
-        coordinates: 
-          0,0.735,0,0.519,0.328,0.548,0.328,0,0.456,0,0.685,0,0.731,0.19,0.79,0.219,0.803,0.302,0.816,0.38,0.844,0.542,1,0.543,1,1,0,1
-        loitering_time: 0
-        inertia: 3
-        objects:
-          - person
-          - face
-        filters:
-          person:
-            threshold: 0.55
-            min_area: 50
-            min_ratio: 0.2
-            max_ratio: 4.0
-          face:
-            threshold: 0.55
-            min_area: 0
-            min_ratio: 0.2
-            max_ratio: 4.0
       alley_parking:
         coordinates: 
           0,0.764,0.089,0.68,0.126,0.648,0.324,0.676,0.328,0.715,0.259,0.997,0.001,0.997
@@ -949,7 +897,7 @@ cameras:
         inertia: 3
     review:
       alerts:
-        required_zones: [prive]
+        required_zones: [alley_parking, alley_side, terrace_front, garden_front]
       detections:
         required_zones: []
 
@@ -1068,19 +1016,6 @@ cameras:
       mask: 
         0.647,0.095,0.64,0.188,0.653,0.229,0.675,0.211,0.682,0.129,0.671,0.077
     zones:
-      prive:
-        # Front garden — immediate alert on entry
-        coordinates: 
-          0,0.664,0.259,0.92,0.272,0.651,0.283,0.586,0.289,0.514,0.293,0.466,0.299,0.354,0.311,0.291,0.339,0.344,0.472,0.336,0.578,0.348,0.641,0.362,0.663,0.267,0.691,0.284,0.727,0.31,0.75,0.309,0.76,0.403,0.772,0.488,0.803,0.781,0.82,0.908,1,0.675,1,0.756,1,0.812,1,0.882,1,1,0,1
-        loitering_time: 0
-        inertia: 3
-        objects: person
-        filters:
-          person:
-            threshold: 0.55
-            min_area: 72
-            min_ratio: 0.5
-            max_ratio: 4.0
       public_street:
         coordinates: 
           0.004,0.011,0.996,0.011,0.999,0.434,0.968,0.466,0.773,0.276,0.764,0.216,0.732,0.342,0.645,0.295,0.673,0.124,0.656,0.111,0.632,0.253,0.502,0.213,0.313,0.203,0.264,0.14,0.107,0.316,0.002,0.429
@@ -1093,13 +1028,11 @@ cameras:
         loitering_time: 0
         inertia: 3
       garden_front:
-        coordinates: 
-          0.278,0.855,0.316,0.235,0.479,0.24,0.638,0.284,0.646,0.342,0.688,0.705,0.513,0.777,0.517,0.932,0.39,0.926
+        coordinates: 0.278,0.855,0.316,0.235,0.479,0.24,0.638,0.284,0.66,0.322,0.688,0.705,0.513,0.777,0.517,0.932,0.39,0.926
         loitering_time: 0
         inertia: 3
       alley_parking:
-        coordinates: 
-          0.646,0.271,0.731,0.329,0.812,0.829,0.801,0.832,0.76,0.673,0.684,0.719,0.636,0.303
+        coordinates: 0.646,0.271,0.731,0.329,0.812,0.829,0.801,0.832,0.76,0.673,0.67,0.708,0.636,0.303
         loitering_time: 0
         inertia: 3
       roof_awning:
@@ -1108,7 +1041,7 @@ cameras:
         inertia: 3
     review:
       alerts:
-        required_zones: [prive]
+        required_zones: [garden_front, terrace_front, alley_parking, roof_awning]
       detections:
         required_zones: [public_street]
 
@@ -1275,26 +1208,6 @@ cameras:
       contour_area: 10
       improve_contrast: true
     zones:
-      prive:
-        # Pool + garden
-        coordinates: 
-          0.266,0.43,0.255,0.305,0.25,0.239,0.257,0.173,0.28,0.109,0.302,0.061,0.326,0.05,0.348,0.03,0.37,0,0.374,0.059,0.387,0.059,0.4,0.059,0.405,0.021,0.481,0.041,0.517,0.138,0.567,0.297,0.59,0.363,0.604,0.416,0.589,0.456,0.542,0.515,0.427,0.535,0.348,0.545,0.263,0.55
-        loitering_time: 0
-        inertia: 2
-        objects:
-          - person
-          - face
-        filters:
-          person:
-            threshold: 0.42
-            min_area: 500
-            min_ratio: 0.3
-            max_ratio: 8.0
-          face:
-            threshold: 0.45
-            min_area: 0
-            min_ratio: 0.0
-            max_ratio: 8.0
       pool_water:
         coordinates: 
           0.388,0.19,0.412,0.171,0.451,0.161,0.482,0.174,0.5,0.232,0.516,0.303,0.506,0.345,0.476,0.358,0.442,0.358,0.426,0.363,0.403,0.329,0.411,0.292,0.408,0.237
@@ -1325,11 +1238,9 @@ cameras:
         inertia: 3
     review:
       alerts:
-        required_zones: [prive, terrace_pool, terrace_wood, alley_side, 
-              roof_veranda]
+        required_zones: [terrace_pool, terrace_wood, roof_garage_flat, roof_veranda, alley_side]
       detections:
-        required_zones: [prive, terrace_pool, terrace_wood, alley_side, 
-              roof_veranda]
+        required_zones: [terrace_pool, terrace_wood, roof_garage_flat, roof_veranda, alley_side]
 
   salon:
     ffmpeg:
