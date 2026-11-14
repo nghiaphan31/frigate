@@ -1017,7 +1017,7 @@ cameras:
         # Left neighbor driveway / right property boundary
         - 0,0.523,0.233,0.822,0.285,0.224,0.641,0.29,0.655,0.245,0.743,0.305,0.757,0.245,0.829,0.825,0.998,0.61,0.997,0.006,0.003,0.006
         # Ground garden spotlight and electrical cable along left wall
-        - 0.245,0.750,0.335,0.750,0.335,1.000,0.245,1.000
+        - 0.245,0.750,0.335,0.750,0.335,1,0.245,1
         # Trash bin / planter box corner near gate
         - 0.410,0.250,0.490,0.250,0.490,0.460,0.410,0.460
     snapshots:
@@ -1202,7 +1202,7 @@ cameras:
         # Veranda skylight frame and right wall corner
         - 0.665,0.450,0.735,0.450,0.735,0.720,0.665,0.720
         # Veranda flat roof bottom right corner
-        - 0.620,0.900,0.720,0.900,0.720,1.000,0.620,1.000
+        - 0.620,0.900,0.720,0.900,0.720,1,0.620,1
     snapshots:
       enabled: true
     motion:
