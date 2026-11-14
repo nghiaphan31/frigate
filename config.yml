@@ -665,15 +665,15 @@ cameras:
       filters:
         person:
           # Calibrated 2026-11-04 (DRY-RUN-05): Removed walkway mask blocking 1m-6m front path.
-          # Lowered threshold to 0.38 and min_score to 0.30 to catch dark night IR silhouettes.
           # 2026-11-07: Relaxed min_ratio 0.40 -> 0.25 to catch slender adult walkers (0.27-0.38 observed).
           # 2026-11-09: Filter raised min_area 150 -> 400 after calibration session on veranda_roof (all human silhouettes >= 3600 px²).
+          # 2026-11-14: Threshold raised 0.38 -> 0.55, min_score 0.30 -> 0.45 to eliminate night IR noise/statue artefacts.
           min_area: 400
           max_area: 117000
           min_ratio: 0.25
           max_ratio: 4.0
-          threshold: 0.38
-          min_score: 0.30
+          threshold: 0.55
+          min_score: 0.45
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
@@ -683,7 +683,12 @@ cameras:
           threshold: 0.3
           min_score: 0.3
       mask: 
-        0.002,0.005,0.994,0.005,0.999,0.158,0.752,0.207,0.743,0.204,0.73,0.303,0.547,0.309,0.55,0.131,0.544,0.076,0.524,0.073,0.484,0.071,0.446,0.067,0.405,0.059,0.326,0.048,0.263,0.054,0.254,0.104,0.213,0.261,0.21,0.284,0.166,0.285,0.098,0.285,0.075,0.285,0,0.285
+        # Sky, neighbor houses and upper tree line
+        - 0.002,0.005,0.994,0.005,0.999,0.158,0.752,0.207,0.743,0.204,0.73,0.303,0.547,0.309,0.55,0.131,0.544,0.076,0.524,0.073,0.484,0.071,0.446,0.067,0.405,0.059,0.326,0.048,0.263,0.054,0.254,0.104,0.213,0.261,0.21,0.284,0.166,0.285,0.098,0.285,0.075,0.285,0,0.285
+        # Garden decor / statue on terrace_pool (night IR false positive)
+        - 0.120,0.500,0.180,0.500,0.180,0.660,0.120,0.660
+        # IR reflection orb on terrace_wood
+        - 0.420,0.500,0.500,0.500,0.500,0.630,0.420,0.630
     snapshots:
       enabled: true
     motion:
@@ -709,11 +714,11 @@ cameras:
         loitering_time: 0
       terrace_pool:
         coordinates: 0.003,0.616,0.101,0.568,0.149,0.545,0.534,0.61,0.558,1,0.235,1,0.217,0.908,0.232,0.818,0.289,0.723,0.33,0.724,0.3,0.693,0.249,0.697,0.193,0.674,0.131,0.668,0.066,0.68,0,0.724
-        loitering_time: 0
+        loitering_time: 1
         inertia: 3
       terrace_wood:
         coordinates: 0.181,0.568,0.269,0.504,0.524,0.538,0.53,0.619
-        loitering_time: 0
+        loitering_time: 1
         inertia: 3
       pond_water:
         coordinates: 0.144,0.537,0.188,0.559,0.267,0.502,0.214,0.495
@@ -1009,7 +1014,12 @@ cameras:
           threshold: 0.55
           min_score: 0.45
       mask: 
-        0,0.523,0.233,0.822,0.285,0.224,0.641,0.29,0.655,0.245,0.743,0.305,0.757,0.245,0.829,0.825,0.998,0.61,0.997,0.006,0.003,0.006
+        # Left neighbor driveway / right property boundary
+        - 0,0.523,0.233,0.822,0.285,0.224,0.641,0.29,0.655,0.245,0.743,0.305,0.757,0.245,0.829,0.825,0.998,0.61,0.997,0.006,0.003,0.006
+        # Ground garden spotlight and electrical cable along left wall
+        - 0.245,0.750,0.335,0.750,0.335,1.000,0.245,1.000
+        # Trash bin / planter box corner near gate
+        - 0.410,0.250,0.490,0.250,0.490,0.460,0.410,0.460
     snapshots:
       enabled: true
     motion:
@@ -1025,11 +1035,11 @@ cameras:
       terrace_front:
         coordinates: 
           0.271,0.842,0.399,0.916,0.486,0.94,0.519,0.94,0.521,1,0.425,0.995,0.344,1,0.267,0.934
-        loitering_time: 0
+        loitering_time: 1
         inertia: 3
       garden_front:
         coordinates: 0.278,0.855,0.316,0.235,0.479,0.24,0.638,0.284,0.66,0.322,0.688,0.705,0.513,0.777,0.517,0.932,0.39,0.926
-        loitering_time: 0
+        loitering_time: 1
         inertia: 3
       alley_parking:
         coordinates: 0.646,0.271,0.731,0.329,0.812,0.829,0.801,0.832,0.76,0.673,0.67,0.708,0.636,0.303
@@ -1167,12 +1177,13 @@ cameras:
           # pre-filter (global threshold 26) AND the area/ratio/
           # score cutoffs all rejected the small but valid detection.
           # 2026-11-09: Filter raised min_area 72 -> 500 after calibration session (distant human silhouettes on garage_flat_roof/pool_terrace >= 1200 px²).
+          # 2026-11-14: Threshold raised 0.42 -> 0.52, min_score 0.32 -> 0.38 to eliminate pergola/tree noise and shadow flickers.
           min_area: 500
           max_area: 27000
           min_ratio: 0.3        # lowered from 0.5 to accept slender standing silhouettes (0.42 observed on terrain)
           max_ratio: 8.0
-          threshold: 0.42
-          min_score: 0.32
+          threshold: 0.52
+          min_score: 0.38
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
@@ -1184,6 +1195,14 @@ cameras:
       mask:
         - 0.002,0.991,0,0.003,0.295,0.006,0.23,0.172,0.247,0.381,0.094,0.991
         - 0.371,0,0.792,0.012,0.713,0.589,0.67,0.429,0.645,0.432,0.599,0.278,0.538,0.094,0.495,0.018,0.404,0.018,0.399,0.054,0.374,0.051
+        # Railing / pergola beam intersection with palm tree
+        - 0.490,0.300,0.615,0.300,0.615,0.590,0.490,0.590
+        # Water puddle / reflection on veranda flat roof membrane
+        - 0.250,0.600,0.360,0.600,0.360,0.780,0.250,0.780
+        # Veranda skylight frame and right wall corner
+        - 0.665,0.450,0.735,0.450,0.735,0.720,0.665,0.720
+        # Veranda flat roof bottom right corner
+        - 0.620,0.900,0.720,0.900,0.720,1.000,0.620,1.000
     snapshots:
       enabled: true
     motion:
@@ -1215,10 +1234,11 @@ cameras:
       terrace_pool:
         coordinates: 
           0.542,0.363,0.562,0.498,0.342,0.544,0.348,0.4,0.369,0.118,0.49,0.09,0.573,0.35,0.542,0.363,0.502,0.319,0.507,0.296,0.499,0.234,0.484,0.174,0.455,0.169,0.416,0.178,0.397,0.194,0.408,0.237,0.411,0.292,0.409,0.322,0.425,0.343,0.442,0.358,0.473,0.338,0.542,0.363
-        loitering_time: 0
+        loitering_time: 1
+        inertia: 3
       terrace_wood:
         coordinates: 0.272,0.516,0.549,0.45,0.552,0.548,0.266,0.611
-        loitering_time: 0
+        loitering_time: 1
         inertia: 3
       pond_water:
         coordinates: 0.542,0.416,0.585,0.405,0.599,0.453,0.553,0.463
@@ -1230,7 +1250,7 @@ cameras:
       roof_veranda:
         coordinates: 
           0.179,1,0.267,0.534,0.677,0.414,0.708,0.537,0.715,0.534,0.846,0.9,0.845,1
-        loitering_time: 0
+        loitering_time: 1
         inertia: 3
       alley_side:
         coordinates: 0.159,1,0.267,0.491,0.298,0.477,0.215,1
