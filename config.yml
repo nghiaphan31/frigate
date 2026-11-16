@@ -297,6 +297,9 @@ audio:
     - breaking
     - shatter
     - bang
+    - fire_alarm
+    - smoke_detector
+    - siren
   filters:
     speech:
       threshold: 0.65
@@ -320,6 +323,12 @@ audio:
       threshold: 0.65
     bang:
       threshold: 0.70
+    fire_alarm:
+      threshold: 0.60
+    smoke_detector:
+      threshold: 0.60
+    siren:
+      threshold: 0.65
 
 # ----------------------------------------------------------------------------
 # go2rtc — internal re-streamer (see ARCHITECTURE.md §4.2)
@@ -1045,13 +1054,9 @@ cameras:
         coordinates: 0.646,0.271,0.731,0.329,0.812,0.829,0.801,0.832,0.76,0.673,0.67,0.708,0.636,0.303
         loitering_time: 0
         inertia: 3
-      roof_awning:
-        coordinates: 0.519,1,0.512,0.774,0.77,0.679,0.815,0.861,0.69,1
-        loitering_time: 0
-        inertia: 3
     review:
       alerts:
-        required_zones: [garden_front, terrace_front, alley_parking, roof_awning]
+        required_zones: [garden_front, terrace_front, alley_parking]
       detections:
         required_zones: [public_street]
 
