@@ -686,7 +686,9 @@ cameras:
           min_score: 0.45
           # 2026-11-18: Masque bottom_center sur vitrage intérieur cuisine/véranda (strictement au-dessus de terrace_wood).
           # Ne PAS utiliser motion.mask ici afin de préserver le réveil motion lorsqu'un intrus passe devant la baie sur terrace_wood.
-          mask: 0.226,0.323,0.52,0.335,0.52,0.544,0.222,0.518
+          mask:
+            - 0.226,0.323,0.52,0.335,0.52,0.544,0.222,0.518
+            - 0.281,0.15,0.278,0.234,0.326,0.239,0.33,0.151
         face:
           # Permissive override of the auto-generated 0.7/0.7 face filter
           min_area: 0
