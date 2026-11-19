@@ -1040,6 +1040,9 @@ cameras:
           max_ratio: 2.00
           threshold: 0.72
           min_score: 0.55
+          # 2026-11-19: Masque bottom_center sur souche/tronc du palmier côté mur gauche (FP plein soleil 11:35-11:39 sans rogner l'herbe/allée)
+          mask:
+            - 0.275,0.430,0.345,0.430,0.345,0.495,0.275,0.495
       mask:
         # Left neighbor driveway / right property boundary (extended bottom-left to 0,0.860 to cover remaining neighbor wedge)
         - 0,0.860,0.227,0.885,0.285,0.224,0.641,0.29,0.655,0.245,0.743,0.305,0.741,0.295,0.819,0.943,1,0.665,0.997,0.006,0.003,0.006
