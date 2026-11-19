@@ -709,6 +709,8 @@ cameras:
         # 2026-11-18: PVC gutter downspout FP (#4) and foreground garage wall night IR glare (#15/#16)
         - 0.565,0.580,0.615,0.580,0.615,0.745,0.565,0.745
         - 0.780,0.760,0.998,0.760,0.998,0.998,0.780,0.998
+        # 2026-11-19: Neighbor upper-right roof parapet corner (rain/IR FP at 02:53-04:23)
+        - 0.875,0.160,0.925,0.160,0.925,0.315,0.875,0.315
     snapshots:
       enabled: true
     motion:
@@ -1219,6 +1221,8 @@ cameras:
         - 0.371,0,0.792,0.012,0.713,0.589,0.67,0.429,0.645,0.432,0.599,0.278,0.538,0.094,0.495,0.018,0.404,0.018,0.399,0.054,0.374,0.051
         # Railing / pergola beam intersection with palm tree
         - 0.490,0.300,0.615,0.300,0.615,0.590,0.490,0.590
+        # 2026-11-19: Palm/bamboo foliage gap between existing masks (rain/IR FP at 03:33-04:52)
+        - 0.615,0.245,0.670,0.245,0.670,0.445,0.615,0.445
         # Water puddle / reflection on veranda flat roof membrane
         - 0.250,0.600,0.360,0.600,0.360,0.780,0.250,0.780
         # Veranda skylight frame and right wall corner
@@ -1273,7 +1277,11 @@ cameras:
         coordinates: 
           0.179,1,0.267,0.534,0.677,0.414,0.708,0.537,0.715,0.534,0.846,0.9,0.845,1
         loitering_time: 1
-        inertia: 3
+        inertia: 4
+        # 2026-11-19: Suppress wet awning foot/glare FPs (0.61-0.66) without masking terrace access
+        filters:
+          person:
+            threshold: 0.68
       alley_side:
         coordinates: 0.159,1,0.267,0.491,0.298,0.477,0.215,1
         loitering_time: 0
