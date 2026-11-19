@@ -1255,6 +1255,13 @@ cameras:
       threshold: 8
       contour_area: 10
       improve_contrast: true
+      mask:
+        # Left neighbor property + top-left OSD timestamp (19/11/2026 HH:MM:SS)
+        - 0,0.991,0,0.003,0.295,0.003,0.215,0.324,0.215,0.450,0.200,0.650,0.145,0.991
+        # Upper background sky/neighbor trees + right building wall + top-right OSD label
+        - 0.388,0,1.0,0,1.0,0.90,0.865,0.90,0.725,0.48,0.675,0.410,0.645,0.425,0.599,0.278,0.538,0.094,0.495,0.018,0.404,0.018,0.399,0.054,0.385,0.051
+        # Swimming pool water interior (ripples/sky reflections, strict inset inside terrace_pool)
+        - 0.412,0.195,0.451,0.175,0.480,0.185,0.496,0.235,0.504,0.298,0.496,0.330,0.472,0.335,0.442,0.350,0.415,0.320,0.414,0.240
     zones:
       pool_water:
         coordinates: 
