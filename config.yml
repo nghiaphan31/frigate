@@ -537,6 +537,7 @@ cameras:
       mask:
         # Top-left OSD clock (DD/MM/YYYY HH:MM:SS DAY)
         - 0,0,0.220,0,0.220,0.095,0,0.095
+    zones:
       public_street:
         coordinates: 
           0,0.542,0.004,0.003,0.166,0,0.1,0.308,0.139,0.38,0.106,0.718
