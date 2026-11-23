@@ -645,7 +645,7 @@ On the **Calypso host** (RTX 5060 Ti 16 GB), Frigate shares physical GPU resourc
 
 ### 8.2 GPU Daemon & Tooling Architecture
 
-- **`gpu/calypso-sentinel` (`calypso-sentinel.service`)** : Host-level daemon monitoring GPU utilization, VRAM allocation, XID errors, and canonical storage health (`/mnt/storage`). Publishes live telemetry to MQTT (`calypso_frigate/maintenance/gpu-state`).
+- **`gpu/calypso-sentinel` (`calypso-sentinel.service`)** : Host-level daemon monitoring GPU utilization, VRAM allocation, XID errors, and canonical storage health (`/mnt/storage` + `.storage_pool_ready` canary, guarding `frigate`, `calypso-samba`, `cas-core`, and `cas-immich-server` against starting without the RAID6 mount). Publishes live telemetry to MQTT (`calypso_frigate/maintenance/gpu-state`).
 - **`gpu/cas-gpu-gate.sh`** : Pre-flight gatekeeper invoked before batch jobs (Docling, Demucs). Verifies that at least 4,500 MiB VRAM is free and temperature $\le 76^\circ\text{C}$; silently evicts idle Ollama models (`keep_alive: 0`) if headroom is insufficient.
 - **`gpu/gpu-power-tune.sh` (`gpu-power-tune.service`)** : One-shot startup script enforcing persistence mode (`nvidia-smi -pm 1`), clock limits, and power caps (`150W`).
 - **`gpu/gpu-throttle.sh` & `gpu-watchdog.sh` (`gpu-watchdog.timer`)** : Watches for stuck GPU compute loops ($>99\%$ utilization for $>10\text{ min}$) and thermal runaway, escalating alerts via MQTT.
