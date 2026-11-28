@@ -99,9 +99,9 @@ class SentinelState:
         self.last_severity = "P3"
         # Swap churn delta (S03)
         self.last_vmstat = {}
-        # D-state dwell tracking (S01: P2 > 2 procs for > 60s, P1 > 5 procs for > 120s)
+        # D-state dwell tracking (S01: P2 > 2 procs for > 60s, P1 > 15 procs & PSI IO >= 75% for > 300s)
         self.d_procs_gt2_since = None
-        self.d_procs_gt5_since = None
+        self.d_procs_gt15_since = None
         # GPU fatal debounce — B1: 3 consecutive strikes required
         self.gpu_fatal_strikes    = 0
         self.last_gpu_fatal_time  = 0
@@ -769,12 +769,12 @@ def main():
             severity = "P3"
             status = "HEALTHY"
 
-            # D-state dwell tracking (S01: P2 > 2 procs for > 60s, P1 > 5 procs for > 120s)
-            if d_procs > 5:
-                if state.d_procs_gt5_since is None:
-                    state.d_procs_gt5_since = now_ts
+            # D-state dwell tracking (S01: P2 > 2 procs for > 60s, P1 > 15 procs & PSI IO >= 75% for > 300s)
+            if d_procs > 15 and psi["io_full_avg60"] >= 75.0:
+                if state.d_procs_gt15_since is None:
+                    state.d_procs_gt15_since = now_ts
             else:
-                state.d_procs_gt5_since = None
+                state.d_procs_gt15_since = None
 
             if d_procs > 2:
                 if state.d_procs_gt2_since is None:
@@ -782,7 +782,7 @@ def main():
             else:
                 state.d_procs_gt2_since = None
 
-            d_procs_p1 = (state.d_procs_gt5_since is not None and (now_ts - state.d_procs_gt5_since >= 120))
+            d_procs_p1 = (state.d_procs_gt15_since is not None and (now_ts - state.d_procs_gt15_since >= 300))
             d_procs_p2 = (state.d_procs_gt2_since is not None and (now_ts - state.d_procs_gt2_since >= 60))
 
             ha_down_p1 = (state.ha_down_since is not None and (now_ts - state.ha_down_since >= 180))
